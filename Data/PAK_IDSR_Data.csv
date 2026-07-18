@@ -1,0 +1,343 @@
+Disease,Province,Cases,Week,Year,Source link,Source title,date,datetime_loaded
+AD (Non-Cholera),Balochistan,4879,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),GB,1137,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),ICT,452,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),KP,37725,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),Sindh,40873,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),Total,85516,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,Balochistan,1253,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,KP,5023,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,Sindh,40159,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Malaria,Total,46435,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,Balochistan,3690,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,GB,225,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,ICT,992,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,KP,2461,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,Sindh,18127,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ILI,Total,25495,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,Balochistan,13,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,GB,78,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,ICT,7,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,KP,442,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,Sindh,9303,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+TB,Total,9929,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,Balochistan,754,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,GB,498,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,ICT,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,KP,467,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,Sindh,5931,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+ALRI < 5 years,Total,7665,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,Balochistan,128,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,GB,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,KP,1204,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,Sindh,3849,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Animal / Dog Bite,Total,5182,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,Balochistan,650,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,GB,72,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,KP,1026,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,Sindh,2700,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+B. Diarrhea,Total,4448,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",Balochistan,37,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",ICT,62,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",KP,117,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",Sindh,2783,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+"VH (B, C & D)",Total,3148,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,Balochistan,263,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,GB,63,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,ICT,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,KP,509,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,Sindh,728,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Typhoid,Total,1568,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,Balochistan,442,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,GB,58,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,KP,340,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,Sindh,322,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+SARI,Total,1277,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,Balochistan,28,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,KP,382,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,Sindh,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CL,Total,413,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),Balochistan,5,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),GB,30,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),KP,118,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),Sindh,216,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AVH (A & E),Total,371,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,Balochistan,10,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,GB,7,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,ICT,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,KP,284,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,Sindh,55,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Measles,Total,357,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,Balochistan,17,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,GB,6,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,ICT,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,KP,103,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,Sindh,47,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Mumps,Total,174,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,Balochistan,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,GB,12,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,ICT,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,KP,125,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,Sindh,12,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Chickenpox/ Varicella,Total,157,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),Balochistan,122,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),GB,7,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),KP,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),Sindh,15,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AWD (S. Cholera),Total,144,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,Balochistan,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,KP,23,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,Sindh,28,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Dengue,Total,54,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,GB,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,KP,11,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,Sindh,29,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Meningitis,Total,45,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,GB,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,KP,11,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,Sindh,16,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AFP,Total,29,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,Balochistan,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,GB,6,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,KP,4,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,Sindh,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Pertussis,Total,13,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,KP,6,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,Sindh,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+HIV/AIDS,Total,9,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,Balochistan,4,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,KP,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,Sindh,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Gonorrhea,Total,6,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,Balochistan,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,KP,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,Sindh,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Syphilis,Total,5,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,Balochistan,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,KP,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+VL,Total,4,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,KP,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,Sindh,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Leprosy,Total,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,KP,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+NT,Total,3,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,KP,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Brucellosis,Total,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),KP,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Diphtheria (Probable),Total,2,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,Balochistan,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,KP,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+CCHF,Total,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),Balochistan,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),GB,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),ICT,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),KP,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),Sindh,0,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+Rubella (CRS),Total,1,26,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/Public Health Bulletin IDSRS Weekly Report-26-2026.pdf,IDSRS Week 26 Bulletin (2026),2026-07-01,2026-07-18T08:40:34Z
+AD (Non-Cholera),Balochistan,5585,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AD (Non-Cholera),GB,1312,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AD (Non-Cholera),ICT,513,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AD (Non-Cholera),KP,43134,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AD (Non-Cholera),Sindh,49361,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AD (Non-Cholera),Total,99905,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,Balochistan,2151,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,ICT,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,KP,6189,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,Sindh,52944,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Malaria,Total,61288,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,Balochistan,6993,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,GB,320,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,ICT,1009,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,KP,3102,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,Sindh,23169,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ILI,Total,34593,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,Balochistan,43,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,GB,77,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,ICT,12,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,KP,269,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,Sindh,11846,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+TB,Total,12247,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,Balochistan,1168,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,GB,624,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,KP,586,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,Sindh,7941,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+ALRI < 5 years,Total,10319,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,Balochistan,152,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,GB,2,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,KP,1339,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,Sindh,4054,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Animal / Dog Bite,Total,5547,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,Balochistan,787,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,GB,60,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,ICT,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,KP,1176,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,Sindh,3283,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+B. Diarrhea,Total,5310,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",Balochistan,432,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",ICT,65,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",KP,123,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",Sindh,3365,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+"VH (B, C & D)",Total,3985,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,Balochistan,276,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,GB,62,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,ICT,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,KP,647,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,Sindh,857,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Typhoid,Total,1843,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,Balochistan,292,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,GB,66,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,KP,268,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,Sindh,218,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+SARI,Total,844,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,Balochistan,13,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,GB,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,ICT,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,KP,439,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,Sindh,78,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Measles,Total,535,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),Balochistan,18,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),KP,208,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),Sindh,291,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AVH (A & E),Total,517,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,Balochistan,406,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,KP,45,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,Sindh,41,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Dengue,Total,492,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,Balochistan,42,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,KP,281,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,Sindh,5,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CL,Total,328,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),Balochistan,153,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),GB,6,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),KP,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),Sindh,18,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AWD (S. Cholera),Total,177,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,Balochistan,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,GB,6,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,KP,14,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,Sindh,46,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Meningitis,Total,67,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,Balochistan,23,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,KP,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,Sindh,10,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Gonorrhea,Total,34,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,GB,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,KP,15,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,Sindh,5,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+AFP,Total,21,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,Balochistan,11,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,KP,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,Sindh,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Pertussis,Total,16,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,KP,3,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,Sindh,12,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+HIV/AIDS,Total,15,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,KP,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,Sindh,9,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Leprosy,Total,9,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,Balochistan,6,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,KP,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,Sindh,2,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rabies,Total,8,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,KP,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,Sindh,5,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Syphilis,Total,5,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),Balochistan,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),KP,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),Sindh,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Rubella (CRS),Total,4,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,KP,3,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,Sindh,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+Brucellosis,Total,3,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,KP,3,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,Sindh,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+CCHF,Total,3,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,Balochistan,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,GB,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,ICT,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,KP,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,Sindh,0,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
+VL,Total,1,25,2026,https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-25-2026 (1).pdf,IDSRS Week 25 Bulletin (2026),2026-06-24,2026-07-18T08:43:51Z
