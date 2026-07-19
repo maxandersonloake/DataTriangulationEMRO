@@ -1,11 +1,17 @@
 
 # Perform NIH Pakistan Weekly Bulletin extraction
 #   To Do: 
-#    - better identification of key table (rather than relying on it being labelled table 1)
-#    - Understand how the fuzzy matching actually works
+#    - better identification of table of interest (rather than relying on it being labelled table 1)
 #    - email mandersonloake@gmail.com with any unexpected outputs (or if output is good)
 #    - fix up dates matching each week (currently assumes week 1 = 01-01 to 01-07)
 #    - add data validation step
+#    - If extract_all == FALSE, only extract for weeks missing from dataset
+#    - Punjab delayed reporting?
+
+
+# Questions:
+#    - Rubella same as rubella (crs)?
+#    - Diphtheria (probable) same as dipththeria?
 
 library(xml2)
 library(rvest)
@@ -33,6 +39,7 @@ column_lookup <- list(
   Sindh        = c("sindh"),
   Total        = c("total", "totals", "grand total")
 )
+column_lookup <- column_lookup |> lapply(tolower)
 
 # Flexible lookup in case disease names change spelling/punctuatuion
 disease_lookup <- list(
@@ -46,6 +53,7 @@ disease_lookup <- list(
   "Animal / Dog Bite"       = c("animal / dog bite", "animal/dog bite", "animal bite", "dog bite", "animal & dog bite"),
   "B. Diarrhea"             = c("b. diarrhea", "b diarrhea", "bloody diarrhea", "bloody diarrhoea", "b. diarrhoea"),
   "VH (B, C & D)"           = c("vh (b, c & d)", "vh b c d", "viral hepatitis (b, c & d)", "vh (b,c&d)"),
+  "VH (B & C)"             = c("vh (b & c)", "vh (b&c)", "vh b&c", "vh b c", "viral hepatitis (b & c)", "viral hepatitis (b&c)"),
   "Typhoid"                 = c("typhoid", "typhoid fever"),
   "SARI"                    = c("sari", "severe acute respiratory infection", "severe acute respiratory illness"),
   "CL"                      = c("cl", "cutaneous leishmaniasis"),
@@ -67,10 +75,16 @@ disease_lookup <- list(
   "Leprosy"                 = c("leprosy"),
   "NT"                      = c("nt", "neonatal tetanus"),
   "Brucellosis"             = c("brucellosis"),
-  "Diphtheria (Probable)"   = c("diphtheria (probable)", "diphtheria probable"),
+  "Diphtheria (Probable)"   = c("diphtheria (probable)", "diphtheria probable", "diphtheria"),
   "CCHF"                    = c("cchf", "crimean congo hemorrhagic fever", "crimean-congo haemorrhagic fever"),
-  "Rubella (CRS)"           = c("rubella (crs)", "rubella crs", "congenital rubella syndrome")
+  "Rubella (CRS)"           = c("rubella (crs)", "rubella crs", "congenital rubella syndrome"),
+  "Rabies"                  = c("rabies"),
+  "COVID-19"                = c("covid-19", "covid 19", "covid19", "sars-cov-2"),
+  "Mpox"                    = c("mpox", "monkeypox"),
+  "Anthrax"                 = c("anthrax"),
+  "Chikungunya"             = c("chikungunya")
 )
+disease_lookup <- disease_lookup |> lapply(tolower)
 
 get_bulletin_links <- function(url) {
   # Retrieve bulletin PDF links and their displayed titles from the
@@ -160,7 +174,7 @@ download_pdf_text <- function(url) {
     )
     
     pdftools::pdf_text(tmp)
-    dat = pdftools::pdf_data(tmp)
+    
   }, error = function(e) {
     
     warning("Failed to process PDF: ", url)
@@ -206,34 +220,30 @@ fuzzy_match <- function(raw, variant_map, max_dist = 2){
   }
   
   # ---- 2. Prefix match (flagged) ------------------------------------------
-  # e.g. "baloch" -> "balochistan". Guard against very short strings
-  # producing spurious/ambiguous prefix hits.
   if(nchar(clean) >= 4){
     
     prefix_hits <- which(startsWith(names(variant_map), clean))
     
-    if(length(prefix_hits) == 1){
+    if(length(prefix_hits) > 0){
       
-      matched_name <- names(variant_map)[prefix_hits]
-      canonical    <- unname(variant_map[prefix_hits])
+      canonicals <- unique(unname(variant_map[prefix_hits]))
       
-      message(sprintf('Prefix matched "%s" -> "%s" (canonical: "%s")',
-                      raw, matched_name, canonical))
+      if(length(canonicals) == 1){
+        
+        message(sprintf('Prefix matched "%s" -> "%s" (canonical: "%s")',
+                        raw, names(variant_map)[prefix_hits[1]], canonicals))
+        
+        return(canonicals)
+      }
       
-      return(canonical)
-    }
-    
-    if(length(prefix_hits) > 1){
-      message(sprintf('Ambiguous prefix match for "%s": multiple candidates (%s) — skipping prefix match',
-                      raw, paste(names(variant_map)[prefix_hits], collapse = ", ")))
+      if(length(canonicals) > 1){
+        stop(sprintf('Ambiguous prefix match for "%s": matches multiple different diseases (%s)',
+                     raw, paste(canonicals, collapse = ", ")))
+      }
     }
   }
   
   # ---- 3. Distance-based fuzzy match (flagged) ----------------------------
-  # Tolerance scales with string length:
-  #   <= 4 chars : 0 errors (exact only — already caught above, so no-op here)
-  #   5-7 chars  : 1 error allowed
-  #   8+ chars   : 2 errors allowed
   n <- nchar(clean)
   tol <- dplyr::case_when(
     n <= 4 ~ 0,
@@ -243,17 +253,22 @@ fuzzy_match <- function(raw, variant_map, max_dist = 2){
   tol <- min(tol, max_dist)
   
   dists <- stringdist(clean, names(variant_map), method = "osa")
-  best  <- which.min(dists)
+  best_dist <- min(dists)
   
-  if(dists[best] <= tol){
+  if(best_dist <= tol){
     
-    matched_name <- names(variant_map)[best]
-    canonical    <- unname(variant_map[best])
+    best_idx   <- which(dists == best_dist)
+    canonicals <- unique(unname(variant_map[best_idx]))
+    
+    if(length(canonicals) > 1){
+      stop(sprintf('Ambiguous fuzzy match for "%s": matches multiple different diseases (%s) at distance %d',
+                   raw, paste(canonicals, collapse = ", "), best_dist))
+    }
     
     message(sprintf('Fuzzy matched "%s" -> "%s" (canonical: "%s", distance: %d)',
-                    raw, matched_name, canonical, dists[best]))
+                    raw, names(variant_map)[best_idx[1]], canonicals, best_dist))
     
-    return(canonical)
+    return(canonicals)
   }
   
   NA_character_
@@ -261,62 +276,221 @@ fuzzy_match <- function(raw, variant_map, max_dist = 2){
 
 match_column_name  <- function(x) fuzzy_match(x, column_variant_map,  max_dist = 2)
 match_disease_name <- function(x) fuzzy_match(x, disease_variant_map, max_dist = 2)
+is_exact_disease_match <- function(raw, variant_map = disease_variant_map){
+  tolower(trimws(raw)) %in% names(variant_map)
+}
 
 merge_wrapped_lines <- function(lines, n_cols){
   
-  # If the disease name runs over two/three lines then messes up table extraction
-  # This detects it and fixes it
+  # Disease names sometimes wrap across two (or three) lines in the source PDF.
+  # Pure-text (non-data) lines are tokenized at the WORD level (not just on
+  # double-spaces), since footnote/disclaimer text is often single-spaced and
+  # glued to a genuine name continuation on the same line (e.g.
+  # "(Probable) Punjab Data delayed due to non-reporting by HF" needs to
+  # split into "(Probable)" + separate footnote words to be handled correctly).
+  #
+  # Approach:
+  #   Pass 1: data lines anchor rows as before. Non-data lines contribute
+  #           word-level tokens to a "floater run" between two rows.
+  #   Pass 2: for a run between two rows, find the single split point
+  #           minimising combined match score of both sides (as before).
+  #           For a TRAILING run (nothing after it), search for the
+  #           shortest prefix that best improves the previous row's match
+  #           score; anything beyond that point is treated as noise
+  #           (footnote/disclaimer text) and discarded with a warning,
+  #           rather than being force-attached or turned into a phantom row.
   
-  get_tokens <- function(x){
+  get_tokens_coarse <- function(x){
     t <- str_split(str_trim(x), "\\s{2,}")[[1]]
     t[nzchar(t)]
   }
-  
+  get_tokens_fine <- function(x){
+    t <- str_split(str_trim(x), "\\s+")[[1]]
+    t[nzchar(t)]
+  }
   is_numeric_tok <- function(tok) grepl("^(NR|[0-9,]+)$", tok)
+  bracket_open   <- function(text) str_count(text, "\\(") > str_count(text, "\\)")
   
-  n <- length(lines)
-  i <- 1
-  out <- character(0)
+  score_name <- function(name, variant_map = disease_variant_map){
+    clean <- tolower(trimws(name))
+    if(nchar(clean) == 0) return(Inf)
+    if(clean %in% names(variant_map)) return(0)
+    dists <- stringdist(clean, names(variant_map), method = "osa")
+    min(dists)
+  }
   
-  while(i <= n){
-    
-    name_parts  <- character(0)
-    data_tokens <- character(0)
-    
-    # Keep consuming lines, splitting each into name vs. numeric tokens,
-    # until we've collected all the data columns we need.
-    while(i <= n && length(data_tokens) < n_cols - 1){
-      tokens <- get_tokens(lines[i])
-      is_num <- is_numeric_tok(tokens)
-      name_parts  <- c(name_parts, tokens[!is_num])
-      data_tokens <- c(data_tokens, tokens[is_num])
-      i <- i + 1
-    }
-    
-    # Peek ahead: if the very next line is pure name-text with NO numbers,
-    # it's a trailing continuation of the name we just finished
-    # (handles "Name1 / data / Name2" sandwich pattern).
-    if(i <= n){
-      next_tokens <- get_tokens(lines[i])
-      if(length(next_tokens) > 0 && !any(is_numeric_tok(next_tokens))){
-        name_parts <- c(name_parts, next_tokens)
-        i <- i + 1
-      }
-    }
-    
-    full_name <- paste(name_parts, collapse = " ")
-    
-    if(length(data_tokens) == n_cols - 1 && nchar(full_name) > 0){
-      out <- c(out, paste(c(full_name, data_tokens), collapse = "   "))
-    } else if(length(name_parts) > 0 || length(data_tokens) > 0){
-      warning("Could not assemble complete row near: ", full_name)
+  # ---- Pass 1: data-anchored rows + name-only floater runs -----------------
+  rows <- list()
+  runs <- list()
+  
+  current_run <- character(0)
+  
+  flush_run <- function(){
+    if(length(current_run) > 0){
+      runs[[length(runs) + 1]] <<- list(after_row = length(rows), tokens = current_run)
+      current_run <<- character(0)
     }
   }
   
-  out
+  for(ln in lines){
+    
+    coarse_tokens <- get_tokens_coarse(ln)
+    if(length(coarse_tokens) == 0) next
+    
+    is_num <- is_numeric_tok(coarse_tokens)
+    
+    if(any(is_num)){
+      leading_name <- coarse_tokens[!is_num]
+      data_tokens  <- coarse_tokens[is_num]
+      
+      flush_run()
+      
+      if(length(data_tokens) != n_cols - 1){
+        stop("Data line has ", length(data_tokens), " value(s), expected ",
+             n_cols - 1, ": ", paste(coarse_tokens, collapse = " "))
+      }
+      
+      rows[[length(rows) + 1]] <- list(name_parts = leading_name, data_tokens = data_tokens)
+      
+    } else {
+      # Pure-text line -- use WORD-level tokens so any footnote text glued
+      # to a genuine name fragment can be separated later.
+      current_run <- c(current_run, get_tokens_fine(ln))
+    }
+  }
+  flush_run()
+  
+  # ---- Pass 2: resolve each run -----------------------------------------
+  for(run in runs){
+    
+    left_idx  <- run$after_row
+    right_idx <- run$after_row + 1
+    tok       <- run$tokens
+    m         <- length(tok)
+    
+    has_left  <- left_idx  >= 1 && left_idx  <= length(rows)
+    has_right <- right_idx >= 1 && right_idx <= length(rows)
+    
+    left_base  <- if(has_left)  paste(rows[[left_idx]]$name_parts,  collapse = " ") else ""
+    right_base <- if(has_right) paste(rows[[right_idx]]$name_parts, collapse = " ") else ""
+    
+    if(!has_left && !has_right){
+      next  # nothing to attach to either side -- drop (shouldn't normally happen)
+    }
+    
+    if(!has_left){
+      # Nothing before the first row -- attach everything to the right.
+      rows[[right_idx]]$name_parts <- c(tok, rows[[right_idx]]$name_parts)
+      next
+    }
+    
+    if(!has_right){
+      
+      # TRAILING run: search every possible prefix length. If ANY prefix
+      # produces an exact match against the lookup, take the shortest such
+      # prefix immediately (an exact match is always preferable to a merely
+      # "improved" fuzzy score). Otherwise fall back to whichever prefix
+      # gives the best (lowest) fuzzy score. Anything beyond the chosen
+      # split point is discarded as noise (footnote/disclaimer text).
+      
+      best_s     <- 0
+      best_score <- score_name(left_base)
+      exact_found <- (best_score == 0)
+      
+      for(s in seq_len(m)){
+        
+        candidate <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
+        sc <- score_name(candidate)
+        
+        if(sc == 0){
+          # Exact match -- take it immediately, no need to keep searching.
+          best_s      <- s
+          best_score  <- 0
+          exact_found <- TRUE
+          break
+        }
+        
+        if(!exact_found && sc < best_score){
+          best_score <- sc
+          best_s     <- s
+        }
+      }
+      
+      if(best_s > 0){
+        rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
+      }
+      if(best_s < m){
+        warning("Discarding trailing text as noise: ", paste(tok[(best_s + 1):m], collapse = " "))
+      }
+      next
+    }
+    
+    # ---- Both sides present: split-point search as before ----------------
+    min_split    <- 0
+    running_left <- left_base
+    while(min_split < m && bracket_open(running_left)){
+      min_split    <- min_split + 1
+      running_left <- paste(running_left, tok[min_split])
+    }
+    
+    best_s     <- min_split
+    best_score <- Inf
+    
+    for(s in min_split:m){
+      left_name  <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
+      right_name <- if(s < m) paste(c(tok[(s + 1):m], right_base), collapse = " ") else right_base
+      
+      score <- score_name(left_name) + score_name(right_name)
+      
+      if(score < best_score){
+        best_score <- score
+        best_s     <- s
+      }
+    }
+    
+    if(best_s > 0){
+      rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
+    }
+    if(best_s < m){
+      rows[[right_idx]]$name_parts <- c(tok[(best_s + 1):m], rows[[right_idx]]$name_parts)
+    }
+  }
+  
+  # ---- Reassemble into the original flat-string row format ------------------
+  vapply(rows, function(r){
+    full_name <- paste(r$name_parts, collapse = " ")
+    paste(c(full_name, r$data_tokens), collapse = "   ")
+  }, character(1))
 }
 
-# ---- Row extraction (newline-based, as originally written) -------------
+
+split_glued_token <- function(token, lookup = column_lookup){
+  
+  clean <- tolower(token)
+  
+  # Try every pair of (start_variant, end_variant) to see if the token is
+  # exactly two known column names concatenated with no space between them.
+  all_variants <- unlist(lookup, use.names = FALSE)
+  all_variants <- all_variants[order(-nchar(all_variants))]  # longest first, avoids partial matches
+  
+  for(v1 in all_variants){
+    if(startsWith(clean, v1)){
+      
+      remainder <- substring(clean, nchar(v1) + 1)
+      remainder <- trimws(remainder)
+      
+      if(nchar(remainder) == 0) next  # token WAS just v1 alone, nothing to split
+      
+      for(v2 in all_variants){
+        if(remainder == v2){
+          return(c(v1, v2))
+        }
+      }
+    }
+  }
+  
+  NULL  # could not decompose into two known tokens
+}
 
 extract_table_rows <- function(pdf_text){
   
@@ -326,20 +500,68 @@ extract_table_rows <- function(pdf_text){
   lines <- str_split(page, "\\n")[[1]]
   lines <- lines[nzchar(trimws(lines))]
   
-  start <- grep("Disease|AJK|Punjab|Sindh|Total", lines, ignore.case = TRUE)
+  header_keywords <- c("Disease", "AJK", "Balochistan", "GB", "ICT", "KP", "Punjab", "Sindh", "Total")
+  
+  keyword_counts <- vapply(lines, function(ln){
+    sum(sapply(header_keywords, function(k) grepl(k, ln, ignore.case = TRUE)))
+  }, integer(1))
+  
+  start <- which(keyword_counts >= 4)
   if(length(start) == 0) return(NULL)
   
   header_line   <- lines[start[1]]
   header_tokens <- str_split(str_trim(header_line), "\\s{2,}")[[1]]
   matched_cols  <- vapply(header_tokens, match_column_name, character(1))
   
+  if(!("Disease" %in% matched_cols)){
+    header_tokens <- c("Disease", header_tokens)
+    matched_cols  <- c("Disease", matched_cols)
+  }
+  
   if(any(is.na(matched_cols))){
-    warning("Unmatched column header(s): ",
-            paste(header_tokens[is.na(matched_cols)], collapse = ", "))
+    
+    new_tokens  <- list()
+    new_matches <- list()
+    
+    for(idx in seq_along(header_tokens)){
+      
+      if(!is.na(matched_cols[idx])){
+        new_tokens[[idx]]  <- header_tokens[idx]
+        new_matches[[idx]] <- matched_cols[idx]
+        next
+      }
+      
+      split_attempt <- split_glued_token(header_tokens[idx])
+      
+      if(!is.null(split_attempt)){
+        resolved <- vapply(split_attempt, match_column_name, character(1))
+        if(!any(is.na(resolved))){
+          message(sprintf('Split glued header token "%s" -> %s',
+                          header_tokens[idx], paste(split_attempt, collapse = " + ")))
+          new_tokens[[idx]]  <- split_attempt
+          new_matches[[idx]] <- resolved
+          next
+        }
+      }
+      
+      new_tokens[[idx]]  <- header_tokens[idx]
+      new_matches[[idx]] <- NA_character_
+    }
+    
+    header_tokens <- unlist(new_tokens)
+    matched_cols  <- unlist(new_matches)
+    
+    if(any(is.na(matched_cols))){
+      stop("Unmatched column header(s): ",
+              paste(header_tokens[is.na(matched_cols)], collapse = ", "))
+    }
   }
   
   rows <- lines[(start[1] + 1):length(lines)]
-  rows <- rows[!grepl("Figure", rows, ignore.case = TRUE)]
+  figure_idx <- which(grepl("^\\s*Figure", rows, ignore.case = TRUE))
+  if(length(figure_idx) > 0){
+    rows <- rows[seq_len(min(figure_idx) - 1)]
+  }
   rows <- rows[!grepl("Page\\s*\\|", rows, ignore.case = TRUE)]   # <-- drop footer lines
   rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols))
   
@@ -370,7 +592,7 @@ convert_cases_table <- function(extracted, year, week, link){
   good_rows <- rows[split_lengths == length(matched_cols)]
   
   if(any(split_lengths != length(matched_cols))){
-    warning(sum(split_lengths != length(matched_cols)),
+    stop(sum(split_lengths != length(matched_cols)),
             " row(s) dropped due to unexpected column count: ",
             paste(rows[split_lengths != length(matched_cols)], collapse = " | "))
   }
@@ -442,7 +664,7 @@ convert_cases_table <- function(extracted){
   
   unresolved <- data |> filter(Disease == Disease_raw & !(Disease %in% names(disease_lookup)))
   if(nrow(unresolved) > 0){
-    warning(sprintf(
+    stop(sprintf(
       "%d disease name(s) unmatched, kept as-is: %s",
       nrow(unresolved), paste(unique(unresolved$Disease_raw), collapse = "; ")
     ))
@@ -511,13 +733,43 @@ extract_PAK_data_main(extract_all = FALSE){
   link_metadata = extract_report_date(links)
   
   if (extract_all){
-    # Will extract data from all reports
-    for (i_row in 1:nrow(link_metadata)){
-      link = link_metadata$link[i_row]
-      pdf_text = download_pdf_text(link)
-      rows = extract_table_rows(pdf_text)
-      cases_table = convert_cases_table(rows)
-      write_cases_to_csv(cases_table, metadata = link_metadata[i_row,], file_loc = 'Data/PAK_IDSR_Data.csv')
+    
+    failed_log <- "Data/failed_reports.txt"
+      
+    
+    for (i_row in 154:nrow(link_metadata)){
+      
+      week <- link_metadata$week[i_row]
+      year <- link_metadata$year[i_row]
+      link <- link_metadata$link[i_row]
+      
+      print(paste0('Loading report: Week ', week, ' ', year))
+      
+      pdf_text <- download_pdf_text(link)
+      
+      if (is.null(pdf_text)){
+        fs::dir_create(fs::path_dir(failed_log))
+        write(sprintf("[%s] Week %s, %s — %s: %s",
+                      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                      week, year, link, 'Cannot load link'), file = failed_log, append = file.exists(failed_log))
+        next
+      } 
+      
+      rows <- extract_table_rows(pdf_text)
+      if (is.null(rows)){
+        fs::dir_create(fs::path_dir(failed_log))
+        write(sprintf("[%s] Week %s, %s — %s: %s",
+                      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                      week, year, link, 'Cannot extract rows'), file = failed_log, append = file.exists(failed_log))
+        next
+      } 
+      
+      cases_table <- convert_cases_table(rows)
+      
+      write_cases_to_csv(cases_table, link_metadata[i_row,], file_loc = 'Data/PAK_IDSR_Data.csv')
+      
+      }
+      
     }
     
   } else {
@@ -526,3 +778,5 @@ extract_PAK_data_main(extract_all = FALSE){
   }
 }
 
+# week 13, 2025. Punjab* AWD (S.
+# Week 34 2024 Meningi s
