@@ -8,15 +8,10 @@
 #    - If extract_all == FALSE, only extract for weeks missing from dataset
 #    - Punjab delayed reporting?
 
+
 # Questions:
 #    - Rubella same as rubella (crs)?
-#    - Diphtheria (probable) same as diphtheria?
-#    - Punjab delayed reporting
-#    - Week on x axis or date?
-#    - Compliance table ideas
-#    - Interpretation of none reported (leave off plot? - currently have as 0s on table)
-#    - 30% increase colouring?
-
+#    - Diphtheria (probable) same as dipththeria?
 
 library(xml2)
 library(rvest)
@@ -155,21 +150,17 @@ extract_report_date <- function(link_df) {
     )
 }
 
-download_pdf_text <- function(url) {
-  # Download a PDF and extract its text.
+download_pdf <- function(url) {
+  # Download a PDF to a temp file.
   # Args:
   #   url: URL of the PDF.
   # Returns:
-  #   A character vector containing the text from each page, or NULL if the
-  #   download or extraction fails.
+  #   Path to the downloaded temp file, or NULL if the download fails.
   
-  # Get url into correct format for reading, e.g., replaces spaces with %20
   url <- utils::URLencode(url)
-  
-  # Temporary file for the downloaded PDF
   tmp <- tempfile(fileext = ".pdf")
   
-  tryCatch({
+  result <- tryCatch({
     
     download.file(
       url = url,
@@ -178,21 +169,14 @@ download_pdf_text <- function(url) {
       quiet = TRUE
     )
     
-    pdftools::pdf_text(tmp)
+    tmp
     
   }, error = function(e) {
-    
-    warning("Failed to process PDF: ", url)
-    
+    warning("Failed to download PDF: ", url)
     NULL
-    
-  }, finally = {
-    
-    if (file.exists(tmp)) {
-      unlink(tmp)
-    }
-    
   })
+  
+  result
 }
 
 # ---- Generic fuzzy matcher builder -------------------------------------
@@ -285,377 +269,289 @@ is_exact_disease_match <- function(raw, variant_map = disease_variant_map){
   tolower(trimws(raw)) %in% names(variant_map)
 }
 
-merge_wrapped_lines <- function(lines, n_cols){
+extract_pdf_table_data <- function(page_data, sidebar_gap = 40){
   
-  # Disease names sometimes wrap across two (or three) lines in the source PDF.
-  # Pure-text (non-data) lines are tokenized at the WORD level (not just on
-  # double-spaces), since footnote/disclaimer text is often single-spaced and
-  # glued to a genuine name continuation on the same line (e.g.
-  # "(Probable) Punjab Data delayed due to non-reporting by HF" needs to
-  # split into "(Probable)" + separate footnote words to be handled correctly).
+  # -------------------------------------------------------------------------
+  # Extracts a disease-surveillance table from pdftools::pdf_data() output.
   #
-  # In addition, the Total column is frequently NOT baseline-aligned with the
-  # rest of its row -- it looks like it's vertically centered against the
-  # full (possibly multi-line) row height, so it can print on its own line,
-  # landing before, between, or after the row's other lines in the extracted
-  # text stream. These "stray total" lines have exactly one numeric token and
-  # no name text.
+  # ROWS: the Disease column's own words are linked into per-disease name
+  # entries (splitting on a data-driven y-gap, then merging adjacent
+  # fragments where doing so produces an exact match against the disease
+  # lookup that neither fragment achieves alone -- resolves cases like
+  # "AD (Non-" / "Cholera)" where the y-gap alone is ambiguous). Each
+  # resulting disease entry's MEAN y becomes a canonical row center. Every
+  # other word in the table (all data values) is then assigned to whichever
+  # row center is nearest, bounded by the midpoint to the next-nearest row.
   #
-  # Approach:
-  #   Pass 1: data lines anchor rows as before. A data line with n_cols-1
-  #           tokens is a complete row. A data line with n_cols-2 tokens is
-  #           treated as a row that's missing its Total (placeholder NA).
-  #           A line with a single bare numeric token and no name text is
-  #           queued as a stray total rather than forced into a row.
-  #           Non-data lines contribute word-level tokens to a "floater run"
-  #           between two rows (name-wrap handling, unchanged).
-  #   Pass 2: for a run between two rows, find the single split point
-  #           minimising combined match score of both sides (as before).
-  #           For a TRAILING run (nothing after it), search for the
-  #           shortest prefix that best improves the previous row's match
-  #           score; anything beyond that point is discarded as noise.
-  #   Pass 3: resolve stray totals -- each is assigned to whichever
-  #           Total-missing row is nearest to it (by row index / "look
-  #           above or below"), preferring the row immediately preceding it.
+  # COLUMNS: header words give one x-position per known column
+  # (unambiguous, since each header word appears exactly once). The Disease
+  # column's x-position is derived separately from where genuine disease
+  # names start (using rows that carry real numeric data as an anchor, to
+  # exclude any sidebar/caption text sharing the page). Every word is then
+  # assigned to whichever column center is nearest, bounded by the midpoint
+  # to the next-nearest column -- mirroring the row logic exactly.
+  # -------------------------------------------------------------------------
   
-  get_tokens_coarse <- function(x){
-    t <- str_split(str_trim(x), "\\s{2,}")[[1]]
-    t[nzchar(t)]
+  data_driven_gap_cutoff <- function(gaps, fallback = 4, tol_fraction = 0.6){
+    nonzero <- gaps[gaps > 0]
+    if(length(nonzero) == 0) return(fallback)
+    rounded  <- round(nonzero)
+    mode_gap <- as.numeric(names(sort(table(rounded), decreasing = TRUE))[1])
+    max(mode_gap * tol_fraction, fallback)
   }
-  get_tokens_fine <- function(x){
-    t <- str_split(str_trim(x), "\\s+")[[1]]
-    t[nzchar(t)]
-  }
-  is_numeric_tok <- function(tok) grepl("^(NR|[0-9,]+)$", tok)
-  bracket_open   <- function(text) str_count(text, "\\(") > str_count(text, "\\)")
   
   score_name <- function(name, variant_map = disease_variant_map){
     clean <- tolower(trimws(name))
     if(nchar(clean) == 0) return(Inf)
     if(clean %in% names(variant_map)) return(0)
-    dists <- stringdist(clean, names(variant_map), method = "osa")
-    min(dists)
+    min(stringdist(clean, names(variant_map), method = "osa"))
   }
   
-  # ---- Pass 1: data-anchored rows + name-only floater runs -----------------
-  rows <- list()
-  runs <- list()
-  stray_totals <- list()
-  
-  current_run <- character(0)
-  
-  flush_run <- function(){
-    if(length(current_run) > 0){
-      runs[[length(runs) + 1]] <<- list(after_row = length(rows), tokens = current_run)
-      current_run <<- character(0)
+  # Given sorted centers (row or column), build midpoint boundaries and
+  # return a function assigning any value to the nearest bucket.
+  make_bucket_assigner <- function(centers_sorted, ids_sorted){
+    if(length(centers_sorted) == 1){
+      return(function(v) rep(ids_sorted, length(v)))
     }
+    midpoints  <- (centers_sorted[-1] + centers_sorted[-length(centers_sorted)]) / 2
+    boundaries <- c(-Inf, midpoints, Inf)
+    function(v) ids_sorted[findInterval(v, boundaries)]
   }
   
-  row_missing_total <- function(r){
-    n <- length(r$data_tokens)
-    n > 0 && is.na(r$data_tokens[n])
-  }
+  d <- page_data
+  d$text_lower <- tolower(d$text)
+  d$x_center   <- d$x + d$width / 2
   
-  for(ln in lines){
-    
-    coarse_tokens <- get_tokens_coarse(ln)
-    if(length(coarse_tokens) == 0) next
-    
-    is_num <- is_numeric_tok(coarse_tokens)
-    
-    if(any(is_num)){
-      leading_name <- coarse_tokens[!is_num]
-      data_tokens  <- coarse_tokens[is_num]
-      
-      if(length(leading_name) == 0 && length(data_tokens) == 1){
-        # A lone numeric token with no name text -- almost certainly a
-        # Total value that has drifted onto its own line. Queue it; it
-        # gets attached to a row in the resolution pass below rather than
-        # being forced in here (we don't yet reliably know which row it
-        # belongs to).
-        stray_totals[[length(stray_totals) + 1]] <- list(
-          after_row = length(rows),
-          value     = data_tokens
-        )
-        next
-      }
-      
-      flush_run()
-      
-      if(length(data_tokens) == n_cols - 1){
-        
-        rows[[length(rows) + 1]] <- list(name_parts = leading_name, data_tokens = data_tokens)
-        
-      } else if(length(data_tokens) == n_cols - 2){
-        
-        # Missing exactly one value -- almost always Total, which (per the
-        # note above) often prints on a separate line. Create the row now
-        # with a placeholder NA; it gets filled in by the stray-total
-        # resolution pass.
-        rows[[length(rows) + 1]] <- list(
-          name_parts  = leading_name,
-          data_tokens = c(data_tokens, NA_character_)
-        )
-        
-      } else {
-        stop("Data line has ", length(data_tokens), " value(s), expected ",
-             n_cols - 1, " (or ", n_cols - 2, " with Total on its own line): ",
-             paste(coarse_tokens, collapse = " "))
-      }
-      
-    } else {
-      # Pure-text line -- use WORD-level tokens so any footnote text glued
-      # to a genuine name fragment can be separated later.
-      current_run <- c(current_run, get_tokens_fine(ln))
-    }
-  }
-  flush_run()
-  
-  # ---- Pass 2: resolve each name-wrap run --------------------------------
-  for(run in runs){
-    
-    left_idx  <- run$after_row
-    right_idx <- run$after_row + 1
-    tok       <- run$tokens
-    m         <- length(tok)
-    
-    has_left  <- left_idx  >= 1 && left_idx  <= length(rows)
-    has_right <- right_idx >= 1 && right_idx <= length(rows)
-    
-    left_base  <- if(has_left)  paste(rows[[left_idx]]$name_parts,  collapse = " ") else ""
-    right_base <- if(has_right) paste(rows[[right_idx]]$name_parts, collapse = " ") else ""
-    
-    if(!has_left && !has_right){
-      next  # nothing to attach to either side -- drop (shouldn't normally happen)
-    }
-    
-    if(!has_left){
-      # Nothing before the first row -- attach everything to the right.
-      rows[[right_idx]]$name_parts <- c(tok, rows[[right_idx]]$name_parts)
-      next
-    }
-    
-    if(!has_right){
-      
-      # TRAILING run: search every possible prefix length. If ANY prefix
-      # produces an exact match against the lookup, take the shortest such
-      # prefix immediately (an exact match is always preferable to a merely
-      # "improved" fuzzy score). Otherwise fall back to whichever prefix
-      # gives the best (lowest) fuzzy score. Anything beyond the chosen
-      # split point is discarded as noise (footnote/disclaimer text).
-      
-      best_s     <- 0
-      best_score <- score_name(left_base)
-      exact_found <- (best_score == 0)
-      
-      for(s in seq_len(m)){
-        
-        candidate <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
-        sc <- score_name(candidate)
-        
-        if(sc == 0){
-          best_s      <- s
-          best_score  <- 0
-          exact_found <- TRUE
-          break
-        }
-        
-        if(!exact_found && sc < best_score){
-          best_score <- sc
-          best_s     <- s
-        }
-      }
-      
-      if(best_s > 0){
-        rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
-      }
-      if(best_s < m){
-        warning("Discarding trailing text as noise: ", paste(tok[(best_s + 1):m], collapse = " "))
-        print(paste("Discarding trailing text as noise:", paste(tok[(best_s + 1):m], collapse = " ")))
-      }
-      next
-    }
-    
-    # ---- Both sides present: split-point search as before ----------------
-    min_split    <- 0
-    running_left <- left_base
-    while(min_split < m && bracket_open(running_left)){
-      min_split    <- min_split + 1
-      running_left <- paste(running_left, tok[min_split])
-    }
-    
-    best_s     <- min_split
-    best_score <- Inf
-    
-    for(s in min_split:m){
-      left_name  <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
-      right_name <- if(s < m) paste(c(tok[(s + 1):m], right_base), collapse = " ") else right_base
-      
-      score <- score_name(left_name) + score_name(right_name)
-      
-      if(score < best_score){
-        best_score <- score
-        best_s     <- s
-      }
-    }
-    
-    if(best_s > 0){
-      rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
-    }
-    if(best_s < m){
-      rows[[right_idx]]$name_parts <- c(tok[(best_s + 1):m], rows[[right_idx]]$name_parts)
-    }
-  }
-  
-  # ---- Pass 3: resolve stray Total values (values on their own line) ----
-  if(length(stray_totals) > 0){
-    
-    pending <- which(vapply(rows, row_missing_total, logical(1)))
-    
-    for(st in stray_totals){
-      
-      if(length(pending) == 0){
-        warning("Found a stray total value with no row left to attach it to: ", st$value)
-        print("Found a stray total value with no row left to attach it to: ", st$value)
-        next
-      }
-      
-      # "Look above or below": attach to whichever pending row is nearest
-      # (by row index) to the point in the source where this value was
-      # encountered. Ties favor the row above (lower index), since totals
-      # more often print just after their row than just before the next.
-      dist    <- abs(pending - st$after_row)
-      nearest <- pending[which.min(dist)]
-      
-      rows[[nearest]]$data_tokens[length(rows[[nearest]]$data_tokens)] <- st$value
-      pending <- pending[pending != nearest]
-    }
-  }
-  
-  still_missing <- which(vapply(rows, row_missing_total, logical(1)))
-  if(length(still_missing) > 0){
-    warning("Row(s) still missing a Total value after stray-total resolution: ",
-            paste(vapply(rows[still_missing], function(r) paste(r$name_parts, collapse = " "), character(1)),
-                  collapse = "; "))
-    print("Row(s) still missing a Total value after stray-total resolution: ",
-            paste(vapply(rows[still_missing], function(r) paste(r$name_parts, collapse = " "), character(1)),
-                  collapse = "; "))
-  }
-  
-  # ---- Reassemble into the original flat-string row format ------------------
-  vapply(rows, function(r){
-    full_name <- paste(r$name_parts, collapse = " ")
-    paste(c(full_name, r$data_tokens), collapse = "   ")
+  # ---- 1. Locate header row, map words to canonical columns -----------------
+  d$col_match <- vapply(d$text, function(t){
+    m <- suppressMessages(tryCatch(match_column_name(t), error = function(e) NA_character_))
+    if(is.na(m)) "" else m
   }, character(1))
-}
-
-
-split_glued_token <- function(token, lookup = column_lookup){
   
-  clean <- tolower(token)
+  header_candidates <- d[d$col_match != "", ]
+  if(nrow(header_candidates) == 0) stop("Could not locate header row (no column keywords found).")
   
-  # Try every pair of (start_variant, end_variant) to see if the token is
-  # exactly two known column names concatenated with no space between them.
-  all_variants <- unlist(lookup, use.names = FALSE)
-  all_variants <- all_variants[order(-nchar(all_variants))]  # longest first, avoids partial matches
+  header_y <- as.integer(names(sort(table(header_candidates$y), decreasing = TRUE))[1])
+  header_words <- header_candidates[header_candidates$y == header_y, ]
+  header_words <- header_words[order(header_words$x_center), ]
+  header_words <- header_words[!duplicated(header_words$col_match), ]  # one x per column
   
-  for(v1 in all_variants){
-    if(startsWith(clean, v1)){
-      
-      remainder <- substring(clean, nchar(v1) + 1)
-      remainder <- trimws(remainder)
-      
-      if(nchar(remainder) == 0) next  # token WAS just v1 alone, nothing to split
-      
-      for(v2 in all_variants){
-        if(remainder == v2){
-          return(c(v1, v2))
-        }
-      }
-    }
+  header_row_all <- d[d$y == header_y, ]
+  unmatched_header_words <- header_row_all$text[header_row_all$col_match == ""]
+  if(length(unmatched_header_words) > 0){
+    warning("Unrecognized column header word(s) on header row: ",
+            paste(unmatched_header_words, collapse = ", "))
   }
   
-  NULL  # could not decompose into two known tokens
-}
-
-extract_table_rows <- function(pdf_text){
+  # ---- 2. Isolate table body --------------------------------------------------
+  footer_y <- suppressWarnings(min(d$y[d$text_lower %in% c("page", "figure")], na.rm = TRUE))
+  if(!is.finite(footer_y) || footer_y <= header_y) footer_y <- max(d$y) + 1
   
-  page <- pdf_text[grepl("Table\\s*1\\b", pdf_text, ignore.case = TRUE)]
-  if(length(page) == 0) return(NULL)
+  body <- d[d$y > header_y & d$y < footer_y, ]
+  if(nrow(body) == 0) stop("No table body content found below header row.")
   
-  lines <- str_split(page, "\\n")[[1]]
-  lines <- lines[nzchar(trimws(lines))]
+  # ---- 3. Determine Disease column's true x position -------------------------
+  # Candidate Disease-column words: anything left of the first real header
+  # column (with margin). Among these, only trust the x of words that sit
+  # on a line WITH numeric data -- that anchors the true disease-name start,
+  # excluding sidebar/caption text (which never shares a line with numbers).
+  first_header_x <- min(header_words$x_center)
+  is_num <- grepl("^(NR|[0-9,]+)$", body$text)
   
-  header_keywords <- c("Disease", "AJK", "Balochistan", "GB", "ICT", "KP", "Punjab", "Sindh", "Total")
+  candidate_name_words <- body[body$x_center < first_header_x - sidebar_gap/2 & !is_num, ]
+  numeric_rows_y <- unique(body$y[is_num])
+  anchor_words   <- candidate_name_words[candidate_name_words$y %in% numeric_rows_y, ]
   
-  keyword_counts <- vapply(lines, function(ln){
-    sum(sapply(header_keywords, function(k) grepl(k, ln, ignore.case = TRUE)))
-  }, integer(1))
-  
-  start <- which(keyword_counts >= 4)
-  if(length(start) == 0) return(NULL)
-  
-  header_line   <- lines[start[1]]
-  header_tokens <- str_split(str_trim(header_line), "\\s{2,}")[[1]]
-  matched_cols  <- vapply(header_tokens, match_column_name, character(1))
-  
-  if(!("Disease" %in% matched_cols)){
-    header_tokens <- c("Disease", header_tokens)
-    matched_cols  <- c("Disease", matched_cols)
+  if(nrow(anchor_words) > 0){
+    disease_x <- as.numeric(names(sort(table(round(anchor_words$x_center, -1)), decreasing = TRUE))[1])
+  } else {
+    warning("No disease-name words found on a data-bearing line; using fallback position.")
+    disease_x <- first_header_x - sidebar_gap
   }
   
-  if(any(is.na(matched_cols))){
-    
-    new_tokens  <- list()
-    new_matches <- list()
-    
-    for(idx in seq_along(header_tokens)){
-      
-      if(!is.na(matched_cols[idx])){
-        new_tokens[[idx]]  <- header_tokens[idx]
-        new_matches[[idx]] <- matched_cols[idx]
+  # ---- 4. Build column boundaries + assign every word to a column -----------
+  col_centers <- c(disease_x, header_words$x_center)
+  col_ids     <- c("Disease", header_words$col_match)
+  ord <- order(col_centers)
+  col_centers <- col_centers[ord]
+  col_ids     <- col_ids[ord]
+  
+  assign_column <- make_bucket_assigner(col_centers, col_ids)
+  body$column <- assign_column(body$x_center)
+  
+  # Discard sidebar text: Disease-column words sitting well left of the
+  # anchored disease_x (i.e. words that only got bucketed into the Disease
+  # column because there's nothing closer, but are really off in a sidebar).
+  body <- body[!(body$column == "Disease" & !grepl("^(NR|[0-9,]+)$", body$text) &
+                   body$x_center < disease_x - sidebar_gap), ]
+  
+  # ---- 5. Link Disease-column words into per-disease row entries ------------
+  name_words <- body[body$column == "Disease", ]
+  name_words <- name_words[order(name_words$y, name_words$x_center), ]
+  
+  if(nrow(name_words) == 0) stop("No disease-name text found in Disease column.")
+  
+  y_diffs   <- c(0, diff(name_words$y))
+  gap_cut   <- data_driven_gap_cutoff(y_diffs[y_diffs > 0])
+  name_words$run_id <- cumsum(y_diffs >= gap_cut)
+  
+  run_summary <- name_words |>
+    dplyr::group_by(run_id) |>
+    dplyr::summarise(mean_y = mean(y), name = paste(text, collapse = " "), .groups = "drop")
+  
+  # Merge adjacent runs where combining produces an exact lookup match that
+  # neither run achieves alone (resolves ambiguous wraps like "AD (Non-" /
+  # "Cholera)" where the y-gap alone can't distinguish wrap vs new row).
+  i <- 1
+  merged <- list()
+  while(i <= nrow(run_summary)){
+    current_name <- run_summary$name[i]
+    current_y    <- run_summary$mean_y[i]
+    if(i < nrow(run_summary)){
+      combined_name <- paste(current_name, run_summary$name[i + 1])
+      if(score_name(combined_name) == 0 && score_name(current_name) > 0){
+        merged[[length(merged) + 1]] <- data.frame(
+          mean_y = mean(c(current_y, run_summary$mean_y[i + 1])),
+          name   = combined_name
+        )
+        i <- i + 2
         next
       }
-      
-      split_attempt <- split_glued_token(header_tokens[idx])
-      
-      if(!is.null(split_attempt)){
-        resolved <- vapply(split_attempt, match_column_name, character(1))
-        if(!any(is.na(resolved))){
-          message(sprintf('Split glued header token "%s" -> %s',
-                          header_tokens[idx], paste(split_attempt, collapse = " + ")))
-          new_tokens[[idx]]  <- split_attempt
-          new_matches[[idx]] <- resolved
-          next
-        }
-      }
-      
-      new_tokens[[idx]]  <- header_tokens[idx]
-      new_matches[[idx]] <- NA_character_
     }
-    
-    header_tokens <- unlist(new_tokens)
-    matched_cols  <- unlist(new_matches)
-    
-    if(any(is.na(matched_cols))){
-      stop("Unmatched column header(s): ",
-              paste(header_tokens[is.na(matched_cols)], collapse = ", "))
-    }
+    merged[[length(merged) + 1]] <- data.frame(mean_y = current_y, name = current_name)
+    i <- i + 1
+  }
+  run_summary <- do.call(rbind, merged)
+  run_summary <- run_summary[order(run_summary$mean_y), ]
+  run_summary$row_id <- seq_len(nrow(run_summary))
+  
+  # ---- 6. Build row boundaries from these canonical row centers -------------
+  assign_row <- make_bucket_assigner(run_summary$mean_y, run_summary$row_id)
+  
+  # ---- 7. Assign all DATA words (non-Disease) to rows ------------------------
+  data_words <- body[body$column != "Disease", ]
+  if(nrow(data_words) == 0) stop("No data values found in table body.")
+  
+  data_words$row_id <- assign_row(data_words$y)
+  
+  cell_counts <- table(data_words$row_id, data_words$column)
+  if(any(cell_counts > 1)){
+    bad <- which(cell_counts > 1, arr.ind = TRUE)
+    warning("Some (row, column) cells received more than one value -- ",
+            "Affected: ", paste(sprintf("row %s / %s", rownames(cell_counts)[bad[,1]],
+                                        colnames(cell_counts)[bad[,2]]), collapse = "; "))
   }
   
-  rows <- lines[(start[1] + 1):length(lines)]
-  figure_idx <- which(grepl("^\\s*Figure", rows, ignore.case = TRUE))
-  if(length(figure_idx) > 0){
-    rows <- rows[seq_len(min(figure_idx) - 1)]
-  }
-  rows <- rows[!grepl("Page\\s*\\|", rows, ignore.case = TRUE)]   # <-- drop footer lines
-  rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols))
+  # ---- 8. Pivot data words wide, attach disease names ------------------------
+  wide <- data_words |>
+    dplyr::select(row_id, column, text) |>
+    dplyr::group_by(row_id, column) |>
+    dplyr::summarise(text = paste(text, collapse = ""), .groups = "drop") |>
+    tidyr::pivot_wider(names_from = column, values_from = text)
   
-  list(
-    rows    = rows,
-    columns = matched_cols
-  )
+  wide$Disease_raw <- run_summary$name[match(wide$row_id, run_summary$row_id)]
+  
+  # ---- 9. Fuzzy-match disease names, warn on anything unresolved ------------
+  wide$Disease <- vapply(wide$Disease_raw, function(nm){
+    if(is.na(nm)) return(NA_character_)
+    suppressMessages(tryCatch(match_disease_name(nm), error = function(e) NA_character_))
+  }, character(1))
+  
+  unresolved <- wide[is.na(wide$Disease) & !is.na(wide$Disease_raw), ]
+  if(nrow(unresolved) > 0){
+    warning("Unrecognized/unexpected disease name(s), kept as raw text: ",
+            paste(unique(unresolved$Disease_raw), collapse = "; "))
+    wide$Disease <- dplyr::coalesce(wide$Disease, wide$Disease_raw)
+  }
+  
+  no_name <- wide[is.na(wide$Disease_raw), ]
+  if(nrow(no_name) > 0){
+    warning(nrow(no_name), " data row(s) have no matched disease name at all.")
+  }
+  
+  wide |>
+    dplyr::select(-row_id, -Disease_raw) |>
+    dplyr::select(Disease, dplyr::everything())
 }
+
+# extract_table_rows <- function(pdf_text){
+#   
+#   page <- pdf_text[grepl("Table\\s*1\\b", pdf_text, ignore.case = TRUE)]
+#   if(length(page) == 0) return(NULL)
+#   
+#   lines <- str_split(page, "\\n")[[1]]
+#   lines <- lines[nzchar(trimws(lines))]
+#   
+#   header_keywords <- c("Disease", "AJK", "Balochistan", "GB", "ICT", "KP", "Punjab", "Sindh", "Total")
+#   
+#   keyword_counts <- vapply(lines, function(ln){
+#     sum(sapply(header_keywords, function(k) grepl(k, ln, ignore.case = TRUE)))
+#   }, integer(1))
+#   
+#   start <- which(keyword_counts >= 4)
+#   if(length(start) == 0) return(NULL)
+#   
+#   header_line   <- lines[start[1]]
+#   header_tokens <- str_split(str_trim(header_line), "\\s{2,}")[[1]]
+#   matched_cols  <- vapply(header_tokens, match_column_name, character(1))
+#   
+#   if(!("Disease" %in% matched_cols)){
+#     header_tokens <- c("Disease", header_tokens)
+#     matched_cols  <- c("Disease", matched_cols)
+#   }
+#   
+#   if(any(is.na(matched_cols))){
+#     
+#     new_tokens  <- list()
+#     new_matches <- list()
+#     
+#     for(idx in seq_along(header_tokens)){
+#       
+#       if(!is.na(matched_cols[idx])){
+#         new_tokens[[idx]]  <- header_tokens[idx]
+#         new_matches[[idx]] <- matched_cols[idx]
+#         next
+#       }
+#       
+#       split_attempt <- split_glued_token(header_tokens[idx])
+#       
+#       if(!is.null(split_attempt)){
+#         resolved <- vapply(split_attempt, match_column_name, character(1))
+#         if(!any(is.na(resolved))){
+#           message(sprintf('Split glued header token "%s" -> %s',
+#                           header_tokens[idx], paste(split_attempt, collapse = " + ")))
+#           new_tokens[[idx]]  <- split_attempt
+#           new_matches[[idx]] <- resolved
+#           next
+#         }
+#       }
+#       
+#       new_tokens[[idx]]  <- header_tokens[idx]
+#       new_matches[[idx]] <- NA_character_
+#     }
+#     
+#     header_tokens <- unlist(new_tokens)
+#     matched_cols  <- unlist(new_matches)
+#     
+#     if(any(is.na(matched_cols))){
+#       stop("Unmatched column header(s): ",
+#               paste(header_tokens[is.na(matched_cols)], collapse = ", "))
+#     }
+#   }
+#   
+#   rows <- lines[(start[1] + 1):length(lines)]
+#   figure_idx <- which(grepl("^\\s*Figure", rows, ignore.case = TRUE))
+#   if(length(figure_idx) > 0){
+#     rows <- rows[seq_len(min(figure_idx) - 1)]
+#   }
+#   rows <- rows[!grepl("Page\\s*\\|", rows, ignore.case = TRUE)]   # <-- drop footer lines
+#   rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols))
+#   
+#   list(
+#     rows    = rows,
+#     columns = matched_cols
+#   )
+# }
 
 convert_cases_table <- function(extracted, year, week, link){
   
@@ -730,9 +626,6 @@ convert_cases_table <- function(extracted){
   
   if(any(split_lengths != length(matched_cols))){
     warning(sum(split_lengths != length(matched_cols)), 
-            " row(s) dropped due to unexpected column count: ",
-            paste(rows[split_lengths != length(matched_cols)], collapse = " | "))
-    print(sum(split_lengths != length(matched_cols)), 
             " row(s) dropped due to unexpected column count: ",
             paste(rows[split_lengths != length(matched_cols)], collapse = " | "))
   }
@@ -826,7 +719,7 @@ extract_PAK_data_main(extract_all = FALSE){
     failed_log <- "Data/failed_reports.txt"
       
     
-    for (i_row in 63:nrow(link_metadata)){ # Issue with 163. 
+    for (i_row in 1:63){ # Issue with 163. 
       
       week <- link_metadata$week[i_row]
       year <- link_metadata$year[i_row]
@@ -834,26 +727,57 @@ extract_PAK_data_main(extract_all = FALSE){
       
       print(paste0('Loading report: Week ', week, ' ', year))
       
-      pdf_text <- download_pdf_text(link)
+      tmp <- download_pdf(link)
       
-      if (is.null(pdf_text)){
+      if (is.null(tmp)){
         fs::dir_create(fs::path_dir(failed_log))
         write(sprintf("[%s] Week %s, %s — %s: %s",
                       format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-                      week, year, link, 'Cannot load link'), file = failed_log, append = file.exists(failed_log))
+                      week, year, link, 'Cannot load link'),
+              file = failed_log, append = file.exists(failed_log))
         next
-      } 
+      }
       
-      rows <- extract_table_rows(pdf_text)
-      if (is.null(rows)){
+      pdf_pages <- pdftools::pdf_text(tmp)
+      
+      target_page_idx <- grep("Table\\s*1\\b", pdf_pages, ignore.case = TRUE)[1]
+      
+      if (is.na(target_page_idx)){
+        unlink(tmp)
         fs::dir_create(fs::path_dir(failed_log))
         write(sprintf("[%s] Week %s, %s — %s: %s",
                       format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
-                      week, year, link, 'Cannot extract rows'), file = failed_log, append = file.exists(failed_log))
+                      week, year, link, 'Table 1 not found in PDF'),
+              file = failed_log, append = file.exists(failed_log))
         next
-      } 
+      }
       
-      cases_table <- convert_cases_table(rows)
+      pdf_data_all <- pdftools::pdf_data(tmp)
+      page_data    <- pdf_data_all[[target_page_idx]]
+      
+      unlink(tmp)   # clean up now that both extractions are done
+      
+      table_out <- extract_pdf_table_data(page_data)
+      print(table_out, m = 30)
+      
+      # if (is.null(pdf_text)){
+      #   fs::dir_create(fs::path_dir(failed_log))
+      #   write(sprintf("[%s] Week %s, %s — %s: %s",
+      #                 format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      #                 week, year, link, 'Cannot load link'), file = failed_log, append = file.exists(failed_log))
+      #   next
+      # } 
+      # 
+      # rows <- extract_table_rows(pdf_text)
+      # if (is.null(rows)){
+      #   fs::dir_create(fs::path_dir(failed_log))
+      #   write(sprintf("[%s] Week %s, %s — %s: %s",
+      #                 format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      #                 week, year, link, 'Cannot extract rows'), file = failed_log, append = file.exists(failed_log))
+      #   next
+      # } 
+      # 
+      # cases_table <- convert_cases_table(rows)
       
       write_cases_to_csv(cases_table, link_metadata[i_row,], file_loc = 'Data/PAK_IDSR_Data.csv')
       
