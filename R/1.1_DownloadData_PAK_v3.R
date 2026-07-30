@@ -28,6 +28,29 @@ library(fs)
 
 # ---- Lookups ----------------------------------------------------------
 
+# Some PDF fonts drop the "ti" ligature glyph entirely during text
+# extraction (a poppler/pdftools quirk with certain embedded font subsets),
+# either removing it outright or leaving a single space in its place --
+# e.g. "National" extracts as "Na onal", "Baltistan" as "Bal stan". Which
+# words are affected seems to depend on which font subset that block of
+# text happens to use, so rather than loosening fuzzy-match distance
+# tolerances everywhere (risking confusion between genuinely different
+# short terms elsewhere), any lookup term containing "ti" gets defensive
+# extra variants added so a broken extraction still resolves via an
+# exact/near-exact match.
+add_ligature_variants <- function(lookup){
+  lapply(lookup, function(variants){
+    extra <- unlist(lapply(variants, function(v){
+      if(!grepl("ti", v, fixed = TRUE)) return(character(0))
+      c(
+        str_squish(gsub("ti", " ", v, fixed = TRUE)),  # ligature dropped, space left behind
+        gsub("ti", "", v, fixed = TRUE)                # ligature dropped entirely
+      )
+    }))
+    unique(c(variants, extra))
+  })
+}
+
 # Flexible lookup in case column names change
 # (Capitalisation does not matter)
 column_lookup <- list(
@@ -41,7 +64,7 @@ column_lookup <- list(
   Sindh        = c("sindh"),
   Total        = c("total", "totals", "grand total")
 )
-column_lookup <- column_lookup |> lapply(tolower)
+column_lookup <- column_lookup |> lapply(tolower) |> add_ligature_variants()
 
 # Flexible lookup in case disease names change spelling/punctuatuion
 disease_lookup <- list(
@@ -86,7 +109,7 @@ disease_lookup <- list(
   "Anthrax"                 = c("anthrax"),
   "Chikungunya"             = c("chikungunya")
 )
-disease_lookup <- disease_lookup |> lapply(tolower)
+disease_lookup <- disease_lookup |> lapply(tolower) |> add_ligature_variants()
 
 # Flexible lookup for the region names used in the compliance table.
 # NOTE: the compliance table never appears to include Punjab (see the
@@ -102,7 +125,7 @@ region_lookup <- list(
   Sindh        = c("sindh"),
   National     = c("national", "pakistan", "overall")
 )
-region_lookup <- region_lookup |> lapply(tolower)
+region_lookup <- region_lookup |> lapply(tolower) |> add_ligature_variants()
 
 get_bulletin_links <- function(url) {
   # Retrieve bulletin PDF links and their displayed titles from the
@@ -179,13 +202,22 @@ extract_report_date <- function(link_df) {
     )
 }
 
-download_pdf_text <- function(url) {
-  # Download a PDF and extract its text.
+download_pdf <- function(url) {
+  # Download a PDF and extract both its text and its word-level layout data.
   # Args:
   #   url: URL of the PDF.
   # Returns:
-  #   A character vector containing the text from each page, or NULL if the
-  #   download or extraction fails.
+  #   A list with:
+  #     - text: character vector, the text of each page (as from
+  #       pdftools::pdf_text()) -- used for the disease-counts table, which
+  #       has a variable row count and is well suited to line-based parsing.
+  #     - data: a list of data frames, one per page, each with one row per
+  #       word and its x/y bounding-box position (as from
+  #       pdftools::pdf_data()) -- used for the compliance table, which has
+  #       a fixed, known row set but whose columns can drift onto separate
+  #       text lines in ways that defeat line-based heuristics (see
+  #       extract_compliance_rows()).
+  #   Returns NULL if the download or extraction fails.
   
   # Get url into correct format for reading, e.g., replaces spaces with %20
   url <- utils::URLencode(url)
@@ -202,7 +234,10 @@ download_pdf_text <- function(url) {
       quiet = TRUE
     )
     
-    pdftools::pdf_text(tmp)
+    list(
+      text = pdftools::pdf_text(tmp),
+      data = pdftools::pdf_data(tmp)
+    )
     
   }, error = function(e) {
     
@@ -843,73 +878,304 @@ write_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/PAK_IDSR_
 
 # ---- Compliance table -----------------------------------------------------
 #
-# Unlike the disease-counts table, the compliance table has no consistent
-# label ("Table 1" etc.) and is preceded by a variable amount of title/bullet
-# text (see the 3 examples: sometimes a title + 3 bullets, sometimes nothing
-# at all). What IS consistent across all seen examples is:
+# The compliance table has no consistent label ("Table 1" etc.), is preceded
+# by a variable amount of title/bullet text, and -- unlike the disease-counts
+# table -- its exact column layout can be unreliable in the underlying PDF:
+# individual cells (in observed real bulletins, sometimes a row's Expected/
+# Received values, sometimes its Total-equivalent) can render on a
+# completely separate text line from the rest of their own row, in ways
+# that don't follow one single consistent pattern. Trying to keep chasing
+# each new drift pattern with text-line heuristics doesn't scale, so this
+# uses word-level (x, y) coordinates from pdftools::pdf_data() instead:
+# each word is bucketed into a column purely by its x-position (relative to
+# the header labels' x-positions), then within each column the words are
+# read top-to-bottom by y. Because each of the 4 columns is processed
+# independently, it doesn't matter which physical text line a value prints
+# on, or whether a cell's text itself is split into multiple word-tokens
+# (e.g. a dropped "ti" ligature turning "National" into two word-tokens,
+# "Na" and "onal", both still land in the Region column and still end up
+# concatenated back together within that row's y-cluster).
+#
+# What IS consistent across all seen examples:
 #   - It appears somewhere in the first few pages of the bulletin.
 #   - Its header row mentions "Region", "Expected", "Received" and
-#     "Compliance" (in that column order).
+#     "Compliance", left-to-right in that order.
 #   - Its last row is always the "National" total.
-# So rather than anchoring on a label, we scan the first few pages for a
-# line matching that header signature, wherever it happens to sit relative
-# to any preceding text.
 
-extract_compliance_rows <- function(pdf_text, max_pages = 5){
+extract_compliance_rows <- function(pdf_data, max_pages = 5){
   
-  header_keywords <- c("Region", "Expected", "Received", "Compliance")
-  n_search_pages  <- min(max_pages, length(pdf_text))
+  header_labels  <- c("Region", "Expected", "Received", "Compliance")
+  n_search_pages <- min(max_pages, length(pdf_data))
+  diagnostics    <- character(0)
   
-  # The compliance table sometimes runs across a page break (e.g. the first
-  # 5 regions on one page, "Sindh" and "National" continuing at the top of
-  # the next page with NO header repeated). Searching page-by-page would
-  # lose that continuation entirely, so instead we concatenate the first
-  # few pages into one block of lines and search/parse across all of them
-  # together. Page footers ("Page | 3") and blank lines can legitimately
-  # land in the middle of that combined block (right at the page boundary),
-  # so they're filtered out wherever they occur rather than used as a
-  # truncation point.
-  combined_lines <- unlist(lapply(seq_len(n_search_pages), function(p){
-    lines <- str_split(pdf_text[p], "\\n")[[1]]
-    lines[nzchar(trimws(lines))]
-  }))
-  combined_lines <- combined_lines[
-    !grepl("^\\s*Page\\s*\\|\\s*\\d+\\s*$", combined_lines, ignore.case = TRUE)
-  ]
-  
-  start <- find_header_line(combined_lines, header_keywords, min_matches = 3)
-  if(is.na(start)){
-    stop("No compliance table found in the first ", n_search_pages,
-         " page(s) of this bulletin — expected a table with Region/Expected/",
-         "Received/Compliance columns ending in a National row.")
+  for(p in seq_len(n_search_pages)){
+    
+    words <- pdf_data[[p]]
+    if(is.null(words) || nrow(words) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: empty page", p))
+      next
+    }
+    
+    # ---- Locate the header row -------------------------------------------
+    kw_hit <- vapply(words$text, function(t){
+      any(vapply(header_labels, function(k) grepl(k, t, ignore.case = TRUE), logical(1)))
+    }, logical(1))
+    header_words <- words[kw_hit, ]
+    if(nrow(header_words) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: no Region/Expected/Received/Compliance keywords found", p))
+      next
+    }
+    
+    # Bullet-point prose before the table often repeats a header word (e.g.
+    # "compliance" appearing several times in "The national compliance
+    # rate..." etc.), so the y band with the most raw keyword hits is often
+    # NOT the header. Instead, cluster keyword hits by y-proximity and take
+    # whichever cluster contains the most DISTINCT header labels together
+    # -- that's what actually identifies a genuine header row.
+    header_words <- header_words[order(header_words$y), ]
+    row_break <- c(TRUE, diff(header_words$y) > 8)
+    header_words$cluster <- cumsum(row_break)
+    
+    label_of <- function(txt){
+      hits <- header_labels[vapply(header_labels, function(k) grepl(k, txt, ignore.case = TRUE), logical(1))]
+      if(length(hits) == 0) NA_character_ else hits[1]
+    }
+    header_words$label <- vapply(header_words$text, label_of, character(1))
+    
+    cluster_scores <- tapply(header_words$label, header_words$cluster, function(l) length(unique(l)))
+    if(max(cluster_scores) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: header keywords found but never clustered together (max %d distinct labels at one y)", p, max(cluster_scores)))
+      next
+    }
+    best_cluster <- names(cluster_scores)[which.max(cluster_scores)]
+    
+    header_words <- header_words[header_words$cluster == best_cluster, ]
+    header_y     <- mean(header_words$y)
+    if(nrow(header_words) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: header cluster had fewer than 3 labels after filtering", p))
+      next
+    }
+    
+    col_x <- setNames(rep(NA_real_, length(header_labels)), header_labels)
+    for(lbl in header_labels){
+      hit <- header_words[grepl(lbl, header_words$text, ignore.case = TRUE), ]
+      if(nrow(hit) > 0) col_x[lbl] <- min(hit$x)
+    }
+    # Columns should read left-to-right in exactly this order; if any
+    # header label is missing, or they aren't in increasing x order, this
+    # isn't (or isn't reliably) the table we're looking for.
+    if(any(is.na(col_x))){
+      diagnostics <- c(diagnostics, sprintf("page %d: header found but missing one of Region/Expected/Received/Compliance", p))
+      next
+    }
+    if(is.unsorted(col_x)){
+      diagnostics <- c(diagnostics, sprintf("page %d: header labels found but not in left-to-right Region/Expected/Received/Compliance order", p))
+      next
+    }
+    
+    # ---- Bucket everything below the header row -----------------------
+    # The table can run across a page break (e.g. the first 5 regions on
+    # one page, "Sindh" and "National" continuing at the top of the next
+    # page with NO header repeated there). So rather than restrict body to
+    # just this page, pull in up to 2 subsequent pages' content too, each
+    # shifted by a large y-offset so it sorts strictly after this page's
+    # remaining content -- the region/numeric logic below doesn't care
+    # which page a word came from, only its relative order.
+    y_offset_unit <- 100000
+    body_parts <- list(words[words$y > header_y + 8, ])
+    n_continuation_pages <- min(2, length(pdf_data) - p)
+    if(n_continuation_pages > 0){
+      for(k in seq_len(n_continuation_pages)){
+        next_page <- pdf_data[[p + k]]
+        if(!is.null(next_page) && nrow(next_page) > 0){
+          next_page$y <- next_page$y + k * y_offset_unit
+          body_parts[[length(body_parts) + 1]] <- next_page
+        }
+      }
+    }
+    body <- bind_rows(body_parts)
+    if(nrow(body) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: nothing found below the header row", p))
+      next
+    }
+    
+    is_num <- grepl("^[0-9,]+$", body$text)
+    
+    # ---- Region column: non-numeric tokens -----------------------------
+    # This step doesn't depend on x-boundaries at all (every non-numeric
+    # token is unconditionally Region), so it's used to establish the real
+    # table's row count and y-range FIRST, before tackling the 3 numeric
+    # columns below.
+    region_words <- body[!is_num, ]
+    region_words <- region_words[order(region_words$y), ]
+    if(nrow(region_words) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: no region-name text found below the header", p))
+      next
+    }
+    
+    # First, group into tight physical-line clusters (words on the exact
+    # same line, e.g. "Khyber" + "Pakhtunkhwa").
+    row_break <- c(TRUE, diff(region_words$y) > 8)
+    region_words$row_id <- cumsum(row_break)
+    
+    line_tbl <- region_words |>
+      group_by(row_id) |>
+      summarise(name = paste(text, collapse = " "), y = min(y), .groups = "drop") |>
+      arrange(y)
+    
+    # Drop obvious footer/page-marker fragments (e.g. a page number like
+    # "Page | 3" has its digit filtered out as numeric, leaving a stray
+    # "Page |" line here) before the greedy region matching below. Left
+    # in, such a line can accumulate together with subsequent genuinely
+    # good lines (e.g. "Sindh", "National") before the noise-reset
+    # threshold is reached, discarding all of them together as one bad
+    # buffer instead of just the footer itself. Its y is also recorded so
+    # any numeric token at that same y (e.g. the page-number digit itself,
+    # which survives the is_num filter) can later be excluded from the
+    # numeric x-clustering below -- otherwise it becomes a contaminating
+    # outlier that skews where the column boundaries are drawn.
+    footer_mask <- grepl("^\\s*Page\\b", line_tbl$name, ignore.case = TRUE) | line_tbl$name == "|"
+    footer_ys   <- line_tbl$y[footer_mask]
+    line_tbl    <- line_tbl[!footer_mask, ]
+    if(nrow(line_tbl) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: region text found but produced no line groups", p))
+      next
+    }
+    
+    # A region name can wrap across two (or more) physical lines (e.g.
+    # "Islamabad Capital" / "Territory", with its Expected/Received/
+    # Compliance values sitting at a y roughly BETWEEN the two name lines
+    # -- vertically centered against the two-line-tall cell). The gap
+    # between those two name lines is often indistinguishable from the gap
+    # between two genuinely different rows, since both are just "the next
+    # line down" at the same fixed line height. So rather than trust that
+    # gap, physical lines are greedily accumulated in y-order and tested
+    # against the known region vocabulary: once the accumulated text
+    # resolves to a valid region, that closes the row. If 3 lines
+    # accumulate without a match, it's almost certainly noise (stray
+    # footer/prose text caught in this y-range), so the buffer is dropped
+    # and accumulation restarts from the next line.
+    rows_acc <- list()
+    buf      <- character(0)
+    buf_y    <- NA_real_
+    is_exact_region_match <- function(x) tolower(trimws(x)) %in% names(region_variant_map)
+    for(i in seq_len(nrow(line_tbl))){
+      if(length(buf) == 0) buf_y <- line_tbl$y[i]
+      buf <- c(buf, line_tbl$name[i])
+      candidate <- paste(buf, collapse = " ")
+      
+      # An EXACT match is required to close a row here, not the lenient
+      # prefix/fuzzy matching match_region_name() normally allows -- e.g.
+      # "Islamabad Capital" alone already prefix-matches the full
+      # "islamabad capital territory" lookup entry, which would wrongly
+      # close the row before "Territory" (the actual next physical line)
+      # is ever consumed. Only once 3 lines have accumulated without an
+      # exact hit does the lenient matcher get a last try, in case a
+      # genuinely fuzzy/abbreviated multi-line name needs it.
+      if(is_exact_region_match(candidate)){
+        rows_acc[[length(rows_acc) + 1]] <- list(name = candidate, y = buf_y, region = match_region_name(candidate))
+        buf <- character(0)
+        if(rows_acc[[length(rows_acc)]]$region == "National") break
+      } else if(length(buf) >= 3){
+        resolved <- tryCatch(match_region_name(candidate), error = function(e) NA_character_)
+        if(!is.na(resolved)){
+          rows_acc[[length(rows_acc) + 1]] <- list(name = candidate, y = buf_y, region = resolved)
+          if(resolved == "National") break
+        }
+        buf <- character(0)
+      }
+    }
+    
+    if(length(rows_acc) == 0 || rows_acc[[length(rows_acc)]]$region != "National"){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: matched %d region row(s) (%s) but never reached National",
+        p, length(rows_acc),
+        if(length(rows_acc) > 0) paste(vapply(rows_acc, function(r) r$region, character(1)), collapse = ", ") else "none"
+      ))
+      next
+    }
+    
+    region_tbl <- tibble(
+      name = vapply(rows_acc, function(r) r$name, character(1)),
+      y    = vapply(rows_acc, function(r) r$y,    numeric(1))
+    )
+    n_rows <- nrow(region_tbl)
+    
+    # ---- Numeric columns: cluster by x within the real table's y-range ----
+    # Numeric columns are commonly right-aligned, so a short value (e.g. a
+    # 2-digit "23") can sit noticeably further right within its column than
+    # a long one (e.g. a 4-digit "2315") in the same column -- sometimes
+    # far enough right to cross a boundary based on the HEADER label's x
+    # position, which is typically left-aligned. So rather than trust
+    # header-derived boundaries, the actual numeric x-positions are
+    # clustered directly: restricting to y <= the National row's y (which
+    # excludes footer/page-number junk below the table) and splitting on
+    # the two largest gaps in x should cleanly separate Expected/Received/
+    # Compliance regardless of alignment or digit-count quirks.
+    y_cutoff <- region_tbl$y[n_rows] + 15
+    numeric_words <- body[is_num & body$y <= y_cutoff, ]
+    if(length(footer_ys) > 0){
+      near_footer <- vapply(numeric_words$y, function(yy) any(abs(yy - footer_ys) <= 8), logical(1))
+      numeric_words <- numeric_words[!near_footer, ]
+    }
+    if(nrow(numeric_words) < n_rows * 3){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: found all %d region rows (through National) but only %d numeric value(s) above it -- expected at least %d",
+        p, n_rows, nrow(numeric_words), n_rows * 3
+      ))
+      next
+    }
+    
+    ux <- sort(unique(numeric_words$x))
+    if(length(ux) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: numeric values found but only %d distinct x-position(s) among them", p, length(ux)))
+      next
+    }
+    gaps <- diff(ux)
+    top_gap_idx <- order(gaps, decreasing = TRUE)[seq_len(min(2, length(gaps)))]
+    x_breaks <- sort(ux[top_gap_idx] + gaps[top_gap_idx] / 2)
+    if(length(x_breaks) < 2){
+      diagnostics <- c(diagnostics, sprintf("page %d: couldn't split numeric values into 3 distinct x-clusters", p))
+      next
+    }
+    
+    numeric_words$column <- c("Expected", "Received", "Compliance")[
+      findInterval(numeric_words$x, x_breaks) + 1
+    ]
+    
+    get_column_values <- function(col_name){
+      cw <- numeric_words[numeric_words$column == col_name, ]
+      cw <- cw[order(cw$y), ]
+      cw$text
+    }
+    expected_vals   <- get_column_values("Expected")
+    received_vals   <- get_column_values("Received")
+    compliance_vals <- get_column_values("Compliance")
+    
+    if(length(expected_vals) < n_rows || length(received_vals) < n_rows ||
+       length(compliance_vals) < n_rows){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: after x-clustering, columns had %d/%d/%d values (Expected/Received/Compliance) but needed %d each",
+        p, length(expected_vals), length(received_vals), length(compliance_vals), n_rows
+      ))
+      next
+    }
+    
+    rows_out <- paste(
+      region_tbl$name,
+      expected_vals[seq_len(n_rows)],
+      received_vals[seq_len(n_rows)],
+      compliance_vals[seq_len(n_rows)],
+      sep = "   "
+    )
+    
+    return(list(rows = rows_out, columns = header_labels))
   }
   
-  matched_cols <- c("Region", "Expected", "Received", "Compliance")
-  
-  rows <- combined_lines[(start + 1):length(combined_lines)]
-  
-  # A genuine new section (the disease-counts Table 1, or a Figure) marks
-  # the end of anything that should be read as compliance-table content.
-  # Reaching one of these before finding a National row (checked below)
-  # means the table is genuinely missing/malformed, not just page-split.
-  stop_idx <- which(grepl("^\\s*(Figure|Table\\s*1\\b)", rows, ignore.case = TRUE))
-  if(length(stop_idx) > 0){
-    rows <- rows[seq_len(min(stop_idx) - 1)]
-  }
-  
-  rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols), variant_map = region_variant_map)
-  
-  # The table always ends at (and includes) the National row -- trim
-  # anything picked up after it.
-  national_idx <- which(grepl("national", rows, ignore.case = TRUE))
-  if(length(national_idx) == 0){
-    stop("Found what looks like a compliance table header, but no National ",
-         "row followed it within the first ", n_search_pages, " page(s) — ",
-         "check whether the table runs onto a later page than expected.")
-  }
-  rows <- rows[seq_len(national_idx[1])]
-  
-  list(rows = rows, columns = matched_cols)
+  stop("No compliance table found in the first ", n_search_pages,
+       " page(s) of this bulletin — expected a table with Region/Expected/",
+       "Received/Compliance columns ending in a National row.",
+       if(length(diagnostics) > 0) paste0("\nDiagnostics:\n  - ", paste(diagnostics, collapse = "\n  - ")) else "")
 }
 
 convert_compliance_table <- function(extracted){
@@ -1009,14 +1275,14 @@ process_one_bulletin <- function(week, year, link, title,
   
   print(paste0('Loading report: Week ', week, ' ', year))
   
-  pdf_text <- download_pdf_text(link)
-  if(is.null(pdf_text)){
+  pdf <- download_pdf(link)
+  if(is.null(pdf)){
     log_failure('Cannot load link')
     return(invisible(NULL))
   }
   
   # ---- Disease-counts table ----
-  extracted <- tryCatch(extract_table_rows(pdf_text), error = function(e) e)
+  extracted <- tryCatch(extract_table_rows(pdf$text), error = function(e) e)
   if(inherits(extracted, "error") || is.null(extracted)){
     log_failure(paste('Cannot extract disease table rows:',
                       if(inherits(extracted, "error")) conditionMessage(extracted) else "not found"))
@@ -1030,7 +1296,7 @@ process_one_bulletin <- function(week, year, link, title,
   }
   
   # ---- Compliance table ----
-  compliance_extracted <- tryCatch(extract_compliance_rows(pdf_text), error = function(e) e)
+  compliance_extracted <- tryCatch(extract_compliance_rows(pdf$data), error = function(e) e)
   if(inherits(compliance_extracted, "error")){
     log_failure(paste('Cannot extract compliance table:', conditionMessage(compliance_extracted)))
   } else {
