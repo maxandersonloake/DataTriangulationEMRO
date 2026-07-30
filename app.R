@@ -276,9 +276,9 @@ ui <- tagList(
         div(
           class = "info-card",
           h4("About this dashboard"),
-          p("This dashboard supports the Integrated Disease Surveillance and Response (IDSR) programme for ",
-            strong("Pakistan"), ", triangulating weekly case notifications with reporting-site compliance data ",
-            "published by Pakistan's National Institute of Health (NIH) in the weekly IDSR bulletins."),
+          p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern Medierranean (EMRO)
+            in monitoring disease case reporting from Pakistan, provided by the 
+            Integrated Disease Surveillance and Response (IDSR) bulletins."),
           p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
             "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, and ",
             strong("Weekly summary table"), " for the full week-by-week breakdown.")
@@ -288,8 +288,7 @@ ui <- tagList(
           h4("Data sources and limitations"),
           tags$ul(
             tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are predominantly ",
-                    "suspected cases identified using standard syndromic case definitions at the point of care. ",
-                    "They are not laboratory-confirmed unless stated otherwise in the source bulletin, and should be ",
+                    "suspected cases rather than laboratory-confirmed, and should be identified",
                     "interpreted as an early-warning signal rather than a confirmed burden estimate."),
             tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every week. ",
                     "The \u201cCompliance %\u201d reflects the share of expected reports actually received for a region ",
@@ -301,8 +300,6 @@ ui <- tagList(
                     "assumes non-reporting sites have a similar case rate to reporting sites, which may not hold, ",
                     "particularly during active outbreaks or access constraints \u2014 treat projected figures as a rough ",
                     "estimate, not a precise figure."),
-            tags$li(strong("Revisions: "), "Weekly figures may be revised in later bulletins as more complete data ",
-                    "arrives; recent weeks are more likely to change than older ones."),
             tags$li(strong("Geographic coverage: "), "Regions reflect those published in the NIH IDSR bulletins ",
                     "(Balochistan, Gilgit-Baltistan, Islamabad Capital Territory, Khyber Pakhtunkhwa, Sindh, and Azad ",
                     "Jammu & Kashmir). Where a region has no data for a given week this is shown as a gap rather than ",
@@ -451,22 +448,14 @@ ui <- tagList(
         div(
           class = "info-card",
           h4("Primary data source"),
-          p("Weekly IDSR bulletins are published by Pakistan's National Institute of Health (NIH):"),
-          tags$a(href = "https://www.nih.org.pk/idsr-bulletin/", target = "_blank",
-                 "https://www.nih.org.pk/idsr-bulletin/")
-        ),
-        div(
-          class = "info-card",
-          h4("WHO Eastern Mediterranean Region"),
-          tags$a(href = "https://www.emro.who.int/pak/programmes/disease-surveillance-and-response.html",
-                 target = "_blank",
-                 "WHO EMRO \u2014 Pakistan disease surveillance and response")
+          p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
+          tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
+                 "https://www.nih.org.pk/phb/weekly-bulletin")
         ),
         div(
           class = "info-card",
           h4("Contact"),
-          p("For questions about this dashboard, its data pipeline, or the WHO brand guidance it follows, ",
-            "contact the WHO Health Emergencies Programme (WHE) Data Management and Analytics (DMA) team.")
+          p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
         )
       )
     )
