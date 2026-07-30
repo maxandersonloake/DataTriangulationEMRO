@@ -288,7 +288,7 @@ ui <- tagList(
           h4("Data sources and limitations"),
           tags$ul(
             tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are predominantly ",
-                    "suspected cases rather than laboratory-confirmed, and should be identified",
+                    "suspected cases rather than laboratory-confirmed, and should be ",
                     "interpreted as an early-warning signal rather than a confirmed burden estimate."),
             tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every week. ",
                     "The \u201cCompliance %\u201d reflects the share of expected reports actually received for a region ",
