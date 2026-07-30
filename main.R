@@ -11,11 +11,14 @@ if (!requireNamespace("renv", quietly = TRUE)) {
 }
 
 #renv::snapshot()
-renv::restore()
+#renv::restore()
+rsconnect::writeManifest()
 
 #######################
 #### Download Data ####
 #######################
 
 source("R/1.1_DownloadData_PAK.R")
+
+
 

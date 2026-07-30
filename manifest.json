@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "locale": "en_US",
+  "platform": "4.5.3",
+  "metadata": {
+    "appmode": "shiny",
+    "primary_rmd": null,
+    "primary_html": null,
+    "content_category": null,
+    "has_parameters": false
+  },
+  "environment": {
+    "r": {
+      "requires": "~=4.5.0"
+    }
+  },
+  "packages": {
+    "renv": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "renv",
+        "Type": "Package",
+        "Title": "Project Environments",
+        "Version": "1.2.3",
+        "Authors@R": "c(\n    person(\"Kevin\", \"Ushey\", role = c(\"aut\", \"cre\"), email = \"kevin@rstudio.com\",\n           comment = c(ORCID = \"0000-0003-2880-7407\")),\n    person(\"Hadley\", \"Wickham\", role = c(\"aut\"), email = \"hadley@rstudio.com\",\n           comment = c(ORCID = \"0000-0003-4757-117X\")),\n    person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"))\n    )",
+        "Description": "A dependency management toolkit for R. Using 'renv', you can create\n    and manage project-local R libraries, save the state of these libraries to\n    a 'lockfile', and later restore your library as required. Together, these\n    tools can help make your projects more isolated, portable, and reproducible.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://rstudio.github.io/renv/, https://github.com/rstudio/renv",
+        "BugReports": "https://github.com/rstudio/renv/issues",
+        "Imports": "utils",
+        "Suggests": "BiocManager, cli, compiler, covr, cpp11, curl, devtools,\ngenerics, gitcreds, jsonlite, jsonvalidate, knitr, miniUI,\nmodules, packrat, pak, R6, remotes, reticulate, rmarkdown,\nrstudioapi, shiny, testthat, uuid, waldo, yaml, webfakes",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.3",
+        "VignetteBuilder": "knitr",
+        "Config/Needs/website": "tidyverse/tidytemplate",
+        "Config/testthat/edition": "3",
+        "Config/testthat/parallel": "true",
+        "Config/testthat/start-first": "bioconductor,python,install,restore,snapshot,retrieve,remotes",
+        "NeedsCompilation": "no",
+        "Packaged": "2026-05-16 18:11:48 UTC; kevin",
+        "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>),\n  Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>),\n  Posit Software, PBC [cph, fnd]",
+        "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2026-05-16 21:50:15 UTC",
+        "Built": "R 4.5.3; ; 2026-07-14 09:45:09 UTC; windows",
+        "RemoteType": "standard",
+        "RemotePkgRef": "renv",
+        "RemoteRef": "renv",
+        "RemoteRepos": "https://cran.rstudio.com",
+        "RemoteSha": "1.2.3"
+      }
+    }
+  },
+  "files": {
+    ".Rprofile": {
+      "checksum": "0ccc697282cafc6847d0003847e85886"
+    },
+    "app.R": {
+      "checksum": "216cf98d9ea4be78966a848aad1f9bf5"
+    },
+    "dashboard/app.R": {
+      "checksum": "2a947f86895c7dfe05fe59bf65f99972"
+    },
+    "dashboard/Data/pakistan_admin1.geojson": {
+      "checksum": "a3b0f7d40f3af5a13e0f5078f057c6b5"
+    },
+    "dashboard/README.md": {
+      "checksum": "bfe93279be89ca5c23cee99054db7e66"
+    },
+    "dashboard/README_dashboard.md": {
+      "checksum": "c9c031a1c597712d867452415ca0deee"
+    },
+    "dashboard/www/who_brand.css": {
+      "checksum": "a87bc16c50908635bc17ddba4daf3c9d"
+    },
+    "Dashboard_v1/who_dashboard/app.R": {
+      "checksum": "249b40941660801086ba9c5bc5ddb041"
+    },
+    "Dashboard_v1/who_dashboard/README.md": {
+      "checksum": "bb823afe58f4525ec2700a5ba4a038c3"
+    },
+    "Dashboard_v1/who_dashboard/www/logo.png": {
+      "checksum": "e5142f9c9544447ffbd73fe1368a05f9"
+    },
+    "Dashboard_v1/who_dashboard/www/logo_eng.png": {
+      "checksum": "853948af152beb4e3ef48ef8458de453"
+    },
+    "Dashboard_v1/who_dashboard/www/who_brand.css": {
+      "checksum": "63691df1a8189d2ced82406c382f103e"
+    },
+    "Data/failed_reports.txt": {
+      "checksum": "5c04e3caa283a57a780f60abb2e96df2"
+    },
+    "Data/failed_reports_Extracted_2026_07_19.txt": {
+      "checksum": "607a7140c607808c3a1a4b2072ae0a30"
+    },
+    "Data/PAK_IDSR_Compliance.csv": {
+      "checksum": "69b341be5343b5a2ef22b9691b9f2eb9"
+    },
+    "Data/PAK_IDSR_Data.csv": {
+      "checksum": "94cbba3673bfdb16f0f47061ee4b14b6"
+    },
+    "Data/PAK_IDSR_Data_Extracted_2026_07_19.csv": {
+      "checksum": "357e806d51343c051ccae2565b75a5c1"
+    },
+    "Data/pakistan_admin1.geojson": {
+      "checksum": "a3b0f7d40f3af5a13e0f5078f057c6b5"
+    },
+    "main.R": {
+      "checksum": "44856e55bd3e9879c05a0db72d386a37"
+    },
+    "R/1.1_DownloadData_PAK.R": {
+      "checksum": "b9bac480a8c4e86f62c8d22710bcf390"
+    },
+    "R/1.1_DownloadData_PAK_v2.R": {
+      "checksum": "aff82498f56229091f2e9592d85265bf"
+    },
+    "R/1.1_DownloadData_PAK_v3.R": {
+      "checksum": "16e1dfc1984df1b0a9f39b1f9da78686"
+    },
+    "R/3_RShinyDashboard.R": {
+      "checksum": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "README.md": {
+      "checksum": "c82463ee2aa1319ea6136508ece563d4"
+    },
+    "README_dashboard.md": {
+      "checksum": "897b93a1d3630a35aa3815392f5b7ca4"
+    },
+    "renv.lock": {
+      "checksum": "025fe21a3fa5c9fa2b95380c27a2dab9"
+    },
+    "www/logo.png": {
+      "checksum": "e5142f9c9544447ffbd73fe1368a05f9"
+    },
+    "www/who_brand.css": {
+      "checksum": "6e1d157f9cdd5c17656e183959b6d5f9"
+    }
+  },
+  "users": null
+}
