@@ -36,7 +36,7 @@ body { background-color: #FFFFFF; color: #222222; }
   background-color: #FFFFFF;
   border-bottom: 3px solid var(--who-navy);
 }
-.who-header img { height: 56px; }
+.who-header img { height: 92px; border: none; outline: none; box-shadow: none; }
 .who-header-text { text-align: left; }
 .who-title { font-size: 34px; font-weight: 700; color: var(--who-navy); line-height: 1.15; }
 .who-subtitle { font-size: 15px; color: #555555; margin-top: 2px; }
@@ -92,6 +92,12 @@ a:hover { color: var(--who-navy); }
   font-size: 13.5px;
 }
 .qv-box strong { color: var(--who-navy); }
+
+/* CUSUM alert severity levels: pale / medium / dark red */
+.qv-box-l1 { border-left-color: #F4A9AD; background-color: #FDF1F1; }
+.qv-box-l2 { border-left-color: var(--who-red); background-color: #FDE3E4; }
+.qv-box-l3 { border-left-color: var(--who-red-dark); background-color: #F9D0D2; }
+.qv-box-l3 strong { color: var(--who-red-dark); }
 .qv-none {
   border-left: 6px solid var(--who-green);
   background-color: #F1F8E4;
@@ -143,8 +149,18 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
 }
 .viz-panel h4 {
   margin-top: 0;
-  margin-bottom: 12px;
+  margin-bottom: 2px;
   font-size: 17px;
+}
+.viz-subtitle {
+  font-size: 13px;
+  color: #555555;
+  margin-bottom: 12px;
+}
+
+/* Small buffer so tab content never sits flush against the navbar */
+.tab-content > .tab-pane {
+  padding-top: 4px;
 }
 .viz-panel-controls {
   margin-top: 12px;

@@ -47,7 +47,23 @@ who_magenta <- "#A6228C"
 DATA_PATH       <- "Data/PAK_IDSR_Data.csv"
 COMPLIANCE_PATH <- "Data/PAK_IDSR_Compliance.csv"
 
-THRESHOLD_PCT <- 30  # % increase vs previous 3-week average that triggers a "quick view" flag
+# ---- Alert detection method ------------------------------------
+# Modified CDC EARS-style CUSUM/C2 aberration detection method (Hutwagner
+# et al., "Comparing Aberration Detection Methods with Simulated Data",
+# https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/). A rolling 9-week
+# lookback window is used, but the 2 most recent weeks adjacent to the
+# current week are dropped (a "guard band") so the baseline isn't
+# contaminated by cases that may belong to the same emerging cluster as
+# the current week. The mean (mu) and standard deviation (sigma) of the
+# remaining 7 baseline weeks define escalating alert thresholds:
+#   T1 = mu + 2*sigma  (pale red)    T2 = mu + 3*sigma (medium red)
+#   T3 = mu + 4*sigma  (dark red)
+# At least 10 total weeks of history (9 lookback weeks + the current week)
+# are required before a location/disease series is evaluated.
+CUSUM_LOOKBACK    <- 9
+CUSUM_GUARD_BAND  <- 2
+CUSUM_BASELINE_N  <- CUSUM_LOOKBACK - CUSUM_GUARD_BAND  # 7
+CUSUM_MIN_POINTS  <- 10
 
 # Filename only, relative to the www/ folder next to app.R.
 LOGO_FILENAME <- "logo.png"
@@ -142,58 +158,109 @@ get_all_disease_series <- function(location) {
     select(Disease, Year, Week, Reported = Cases, Projected, Compliance)
 }
 
-# ---- Helper: % change vs mean of previous 3 weeks --------------------------
-pct_change_vs_prev3 <- function(series, year, week, value_col = "Reported") {
-  cur <- series[[value_col]][series$Year == year & series$Week == week]
-  if (length(cur) == 0 || is.na(cur[1])) return(NA_real_)
-  cur <- cur[1]
 
-  prev <- series[[value_col]][series$Year == year & series$Week %in% (week - 3):(week - 1)]
-  prev <- prev[!is.na(prev)]
-  if (length(prev) == 0) return(NA_real_)
 
-  avg_prev <- mean(prev, na.rm = TRUE)
-  if (is.na(avg_prev) || avg_prev == 0) return(NA_real_)
+# ---- Helper: CUSUM/C2-style aberration stats at a specific (year, week) --
+# `series` must be a single disease/location series covering ALL available
+# years, arranged ascending by Year then Week (as produced by
+# get_all_disease_series() %>% filter(Disease == ...), or get_trend_data()).
+# Because the lookback is positional (the 9 rows immediately before the
+# target row) rather than restricted to the same calendar year, a target
+# week early in a year -- e.g. week 2 -- correctly pulls its baseline from
+# the tail end of the PREVIOUS year's data rather than being treated as
+# having no history. Returns NULL if there isn't enough history before this
+# week (need CUSUM_MIN_POINTS rows up to and including it) or the baseline
+# has zero variance (a flat baseline can't produce a meaningful SD-based
+# threshold).
+compute_cusum_stats_at <- function(series, year, week, value_col = "Reported") {
+  series <- series %>% arrange(Year, Week)
+  idx <- which(series$Year == year & series$Week == week)
+  if (length(idx) == 0) return(NULL)
+  idx <- idx[length(idx)]
+  if (idx < CUSUM_MIN_POINTS) return(NULL)
 
-  (cur - avg_prev) / avg_prev * 100
+  values <- series[[value_col]]
+  current <- values[idx]
+  window9 <- values[(idx - CUSUM_LOOKBACK):(idx - 1)]        # 9 pts before current (can span into prior year)
+  baseline <- window9[seq_len(CUSUM_BASELINE_N)]              # drop 2 most recent adjacent pts, keep prior 7
+  if (is.na(current) || any(is.na(baseline))) return(NULL)
+
+  mu    <- mean(baseline)
+  sigma <- sd(baseline)
+  if (is.na(sigma) || sigma == 0) return(NULL)
+
+  T1 <- mu + 2 * sigma
+  T2 <- mu + 3 * sigma
+  T3 <- mu + 4 * sigma
+  level <- if (current > T3) 3L else if (current > T2) 2L else if (current > T1) 1L else 0L
+
+  list(current = current, mu = mu, sigma = sigma, z = (current - mu) / sigma,
+       T1 = T1, T2 = T2, T3 = T3, level = level, year = year, week = week)
 }
 
-# ---- Helper: alerts -- every (location, disease) combo >= threshold ------
-# Returns one row per location/disease pair that individually crosses the
-# threshold, each evaluated at that location's own most recent reporting
-# week. The Alerts tab groups these by disease and lists locations inline
-# (e.g. "Pertussis: National (300% increase), ICT (42% increase)").
-compute_alerts_long <- function(value_col = "Reported", threshold = THRESHOLD_PCT) {
+# Convenience wrapper: evaluate the LAST (most recent) row of a series --
+# used by the Alerts tab, which always looks at each location's latest week.
+compute_cusum_stats <- function(series, value_col = "Reported") {
+  series <- series %>% arrange(Year, Week)
+  n <- nrow(series)
+  if (n == 0) return(NULL)
+  compute_cusum_stats_at(series, series$Year[n], series$Week[n], value_col = value_col)
+}
+
+# Convenience wrapper: just the z-score (in SD units) at a specific week, or
+# NA if there isn't enough history / a usable baseline. Used to colour the
+# map and the weekly summary table.
+cusum_z_at <- function(series, year, week, value_col = "Reported") {
+  stats <- compute_cusum_stats_at(series, year, week, value_col = value_col)
+  if (is.null(stats)) NA_real_ else stats$z
+}
+
+# ---- Helper: alerts -- every (location, disease) combo above threshold ----
+# Returns one row per location/disease pair whose most recent reporting
+# week exceeds T1 (mu + 2*sigma) under the CUSUM/C2 method above, each
+# evaluated at that location's own most recent reporting week. The Alerts
+# tab groups these by disease and lists locations inline (e.g. "Pertussis:
+# National (6.8SD), ICT (2.4SD)").
+compute_alerts_long <- function(value_col = "Reported") {
   rows <- lapply(location_choices, function(loc) {
     series <- get_all_disease_series(loc)
     if (nrow(series) == 0) return(NULL)
-    yr <- max(series$Year, na.rm = TRUE)
-    wk <- max(series$Week[series$Year == yr], na.rm = TRUE)
     diseases_here <- sort(unique(series$Disease))
 
-    pct_vals <- sapply(diseases_here, function(dis) {
-      pct_change_vs_prev3(series %>% filter(Disease == dis), yr, wk, value_col = value_col)
+    res <- lapply(diseases_here, function(dis) {
+      s <- series %>% filter(Disease == dis) %>% arrange(Year, Week)
+      stats <- compute_cusum_stats(s, value_col = value_col)
+      if (is.null(stats) || stats$level == 0L) return(NULL)
+      data.frame(
+        Location = loc, Disease = dis, Year = stats$year, Week = stats$week,
+        Current = stats$current, Mu = stats$mu, Sigma = stats$sigma,
+        Z = stats$z, Level = stats$level, stringsAsFactors = FALSE
+      )
     })
-
-    data.frame(Location = loc, Disease = diseases_here, Year = yr, Week = wk,
-               PctChange = as.numeric(pct_vals), stringsAsFactors = FALSE)
+    bind_rows(res)
   })
   out <- bind_rows(rows)
-  out <- out %>% filter(!is.na(PctChange), PctChange >= threshold)
+  if (is.null(out) || nrow(out) == 0) return(data.frame(
+    Location = character(), Disease = character(), Year = integer(), Week = integer(),
+    Current = numeric(), Mu = numeric(), Sigma = numeric(), Z = numeric(), Level = integer(),
+    stringsAsFactors = FALSE
+  ))
 
   # Order locations within a disease the same way they appear in
   # location_choices (National first, then districts alphabetically)
   out$Location <- factor(out$Location, levels = location_choices)
-  out %>% arrange(Disease, Location)
+  out %>% arrange(Disease, desc(Level), desc(Z))
 }
 
-# ---- Shared diverging colour scale for % change tables --------------------
-# Deliberately wide neutral band: ordinary week-to-week noise (within
-# +-30%) stays plain white. Colour only appears for genuinely large moves,
-# and only reaches fully-saturated colour beyond +-100%.
-PCT_BREAKS   <- c(-100, -60, -30, 30, 60, 100)
-PCT_BG_PAL   <- c("#1B7837", "#5AAE61", "#C7E9C0", "#FFFFFF", "#FBD9DB", "#F0868B", "#D7263D")
-PCT_FONT_PAL <- c("#FFFFFF", "#111111", "#111111", "#111111", "#111111", "#111111", "#FFFFFF")
+# ---- Shared diverging colour scale for SD-from-baseline tables ------------
+# Same CUSUM/C2 method as the Alerts tab (rolling 9-week window, 2-week
+# guard band, 7-week baseline). Deliberately wide neutral band: a week
+# within +-2 SD of its expected baseline stays plain white. Colour escalates
+# through the same pale/medium/dark tiers used on the Alerts tab, mirrored
+# for below-baseline weeks in green.
+SD_BREAKS   <- c(-4, -3, -2, 2, 3, 4)
+SD_BG_PAL   <- c("#1B7837", "#5AAE61", "#C7E9C0", "#FFFFFF", "#F8C9CB", who_red, who_red_dark)
+SD_FONT_PAL <- c("#FFFFFF", "#111111", "#111111", "#111111", "#111111", "#FFFFFF", "#FFFFFF")
 
 # ---- Fixed year -> colour map ----------------------------------------------
 # Assigned once from every year present in the data (most recent = WHO Navy,
@@ -233,7 +300,7 @@ pak_regions_sf <- load_pak_regions()
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=6"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=7"),
     tags$title("WHO EMRO | Pakistan IDSR Dashboard")
   ),
 
@@ -246,7 +313,8 @@ ui <- tagList(
     class = "who-header",
     style = "display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; padding:18px 28px; background-color:#FFFFFF; border-bottom:3px solid #00205C;",
     if (!is.null(logo_uri)) {
-      tags$img(src = logo_uri, alt = "World Health Organization", style = "height:78px;")
+      tags$img(src = logo_uri, alt = "World Health Organization",
+               style = "height:92px; border:none; outline:none; box-shadow:none;")
     } else {
       div(
         style = "color:#EF3842; border:2px dashed #EF3842; padding:6px 10px; font-size:12px;",
@@ -310,8 +378,9 @@ ui <- tagList(
           class = "info-card",
           h4("How to use this dashboard"),
           tags$ol(
-            tags$li("Alerts: a scan across every region and disease for any combination exceeding a 30% rise ",
-                    "versus its trailing 3-week average."),
+            tags$li("Alerts: a scan across every region and disease for any combination whose most recent week ",
+                    "is more than 2 standard deviations above its expected baseline, using a CUSUM-style ",
+                    "aberration detection method."),
             tags$li("Data visualisation: choose a disease and region, toggle between reported / projected / both ",
                     "case counts, and show or hide individual years. The map highlights whichever region is selected."),
             tags$li("Weekly summary table: review the full week-by-week table with conditional shading for a chosen ",
@@ -325,7 +394,7 @@ ui <- tagList(
     tabPanel(
       "Alerts",
       div(
-        style = "padding-bottom: 40px;",
+        style = "padding-top: 22px; padding-bottom: 40px;",
         sidebarLayout(
           sidebarPanel(
             width = 3,
@@ -337,9 +406,18 @@ ui <- tagList(
             tags$hr(),
             tags$p(
               style = "font-size: 12px; color: #555;",
-              "Lists every disease with at least one location (National or a district) ",
-              strong(paste0(THRESHOLD_PCT, "% or more")), " above its own trailing 3-week average, each evaluated ",
-              "at that location's most recent reporting week."
+              "Lists every disease with at least one location (National or a district) whose most recent ",
+              "reporting week is ", strong("more than 2 standard deviations"), " above its expected baseline, ",
+              "using a CUSUM/C2-style aberration detection method: a rolling 9-week lookback window, with the ",
+              "2 weeks immediately preceding the current week dropped, and the mean/SD of the remaining 7 ",
+              "weeks used as the baseline. At least 10 weeks of history are required."
+            ),
+            tags$p(
+              style = "font-size: 12px; color: #555;",
+              "Method: ", tags$a(
+                href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
+                "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data"
+              )
             )
           ),
           mainPanel(
@@ -366,7 +444,8 @@ ui <- tagList(
             div(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:20px 22px 16px 22px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-              h4("Weekly case trend", style = "margin-top:0; margin-bottom:12px; font-size:17px;"),
+              h4("Weekly case trend", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              uiOutput("trend_subtitle"),
               plotlyOutput("trend_plot", height = "420px"),
               div(
                 class = "viz-panel-controls",
@@ -391,7 +470,8 @@ ui <- tagList(
             div(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:20px 22px 16px 22px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-              h4("Percent change to rolling 3-week average, by region", style = "margin-top:0; margin-bottom:12px; font-size:17px;"),
+              h4("Deviation from expected baseline (SD), by region", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              uiOutput("map_subtitle"),
               plotOutput("region_map", height = "420px"),
               div(
                 class = "viz-panel-controls",
@@ -411,6 +491,8 @@ ui <- tagList(
     # ---------------------------------------------------------
     tabPanel(
       "Weekly summary table",
+      div(
+        style = "padding-top: 22px;",
       sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -424,8 +506,9 @@ ui <- tagList(
           tags$hr(),
           tags$p(
             style = "font-size: 12px; color: #555;",
-            "Cell shading reflects the percentage change in a week's cases relative to the average of the ",
-            "previous three weeks. Darker red indicates a larger increase; darker green indicates a larger decrease."
+            "Cell shading reflects how many standard deviations a week's cases are above or below its expected ",
+            "baseline (CUSUM/C2 method: rolling 9-week window, most recent 2 weeks dropped, mean/SD of the prior ",
+            "7 weeks). Darker red indicates more SD above baseline; darker green indicates more SD below."
           )
         ),
         mainPanel(
@@ -437,6 +520,7 @@ ui <- tagList(
           ),
           DTOutput("weekly_table")
         )
+      )
       )
     ),
 
@@ -481,6 +565,12 @@ server <- function(input, output, session) {
     get_trend_data(input$disease, input$location)
   })
 
+  output$trend_subtitle <- renderUI({
+    req(input$disease, input$location)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease, ", Location: ", input$location))
+  })
+
   output$year_selector <- renderUI({
     d <- trend_data_all()
     yrs <- sort(unique(d$Year), decreasing = TRUE)
@@ -499,6 +589,20 @@ server <- function(input, output, session) {
 
     case_type <- input$case_type %||% "reported"
 
+    # Year-to-date cumulative totals, computed per calendar year so the
+    # hover box can show "how many cases so far this year" alongside the
+    # single week's count. NA weeks are treated as 0 for the running total
+    # (a missing report isn't the same as a known zero, but for a *running
+    # total* silently skipping it is the least misleading option).
+    d <- d %>%
+      arrange(Year, Week) %>%
+      group_by(Year) %>%
+      mutate(
+        Reported_YTD  = cumsum(ifelse(is.na(Reported), 0, Reported)),
+        Projected_YTD = cumsum(ifelse(is.na(Projected), 0, Projected))
+      ) %>%
+      ungroup()
+
     # Build a long-format frame: one row per (Year, Week, Series) where
     # Series is Reported (solid) and/or Projected (dashed)
     long_list <- list()
@@ -507,6 +611,7 @@ server <- function(input, output, session) {
         transmute(Year, Week, Series = "Reported", Cases = Reported, Compliance,
                   tooltip = paste0("Year: ", Year, "<br>Week: ", Week,
                                     "<br>Reported cases: ", comma(Reported),
+                                    " (YTD: ", comma(Reported_YTD), ")",
                                     ifelse(is.na(Compliance), "",
                                            paste0("<br>Reporting compliance: ", Compliance, "%"))))
     }
@@ -515,6 +620,7 @@ server <- function(input, output, session) {
         transmute(Year, Week, Series = "Projected", Cases = Projected, Compliance,
                   tooltip = paste0("Year: ", Year, "<br>Week: ", Week,
                                     "<br>Projected total cases: ", comma(Projected),
+                                    " (YTD: ", comma(round(Projected_YTD)), ")",
                                     ifelse(is.na(Compliance), "",
                                            paste0("<br>Reporting compliance: ", Compliance, "%"))))
     }
@@ -526,24 +632,26 @@ server <- function(input, output, session) {
       group_id = paste(Year, Series)
     )
 
+    # Ticks for every week, but only every 5th week gets a text label
+    # (keeps the axis readable across a full 52-week year).
+    week_breaks <- seq(floor(min(dl$Week, na.rm = TRUE)), ceiling(max(dl$Week, na.rm = TRUE)), by = 1)
+    week_labels <- ifelse(week_breaks %% 5 == 0, as.character(week_breaks), "")
+
     p <- ggplot(dl, aes(x = Week, y = Cases, group = group_id, color = Year_f,
                         linetype = Series, text = tooltip)) +
       geom_line(linewidth = 1) +
       geom_point(size = 1.4) +
       scale_color_manual(values = cols, name = "Year") +
       scale_linetype_manual(values = c(Reported = "solid", Projected = "dashed"), name = "Series") +
-      scale_x_continuous(breaks = pretty_breaks(n = 12)) +
+      scale_x_continuous(breaks = week_breaks, labels = week_labels) +
       scale_y_continuous(labels = comma) +
-      labs(
-        title = paste0(input$disease, " \u2014 ", input$location),
-        x = "Week", y = "Number of cases"
-      ) +
+      labs(x = "Week", y = "Number of cases") +
       theme_minimal(base_size = 14) +
       theme(
         text = element_text(family = "sans"),
-        plot.title = element_text(color = who_navy, face = "plain", size = 18),
         panel.grid.minor = element_blank(),
-        panel.grid.major = element_line(color = "#E6E7E8")
+        panel.grid.major = element_line(color = "#E6E7E8"),
+        axis.text.x = element_text(size = 9)
       )
 
     gg <- ggplotly(p, tooltip = "text") %>%
@@ -575,13 +683,19 @@ server <- function(input, output, session) {
 
     region_list <- lapply(locs, function(loc) {
       s <- get_trend_data(input$disease, loc)
-      if (nrow(s) == 0) return(data.frame(region = loc, pct = NA_real_))
+      if (nrow(s) == 0) return(data.frame(region = loc, z = NA_real_))
       yr <- max(s$Year, na.rm = TRUE)
       wk <- max(s$Week[s$Year == yr], na.rm = TRUE)
-      pct <- pct_change_vs_prev3(s, yr, wk, value_col = metric)
-      data.frame(region = loc, pct = pct, year = yr, week = wk)
+      z <- cusum_z_at(s, yr, wk, value_col = metric)
+      data.frame(region = loc, z = z, year = yr, week = wk)
     })
     bind_rows(region_list)
+  })
+
+  output$map_subtitle <- renderUI({
+    req(input$disease, input$location)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease, ", Location: ", input$location))
   })
 
   output$region_map <- renderPlot({
@@ -596,7 +710,7 @@ server <- function(input, output, session) {
 
     rc <- region_change_data()
     sf_map <- pak_regions_sf %>% left_join(rc, by = c("province" = "region"))
-    sf_map$pct_capped <- pmin(pmax(sf_map$pct, -50), 50)
+    sf_map$z_capped <- pmin(pmax(sf_map$z, -4), 4)
 
     # Label points guaranteed to sit inside each polygon (unlike a plain
     # centroid, which can fall outside oddly-shaped or multi-part regions)
@@ -604,15 +718,15 @@ server <- function(input, output, session) {
     coords <- sf::st_coordinates(label_pts)
     label_df <- data.frame(
       x = coords[, 1], y = coords[, 2],
-      label = ifelse(is.na(sf_map$pct), sf_map$province, paste0(sf_map$province, "\n", round(sf_map$pct, 1), "%"))
+      label = ifelse(is.na(sf_map$z), sf_map$province, paste0(sf_map$province, "\n", round(sf_map$z, 1), " SD"))
     )
 
     p <- ggplot(sf_map) +
-      geom_sf(aes(fill = pct_capped), color = "#8A8F94", linewidth = 0.3) +
+      geom_sf(aes(fill = z_capped), color = "#8A8F94", linewidth = 0.3) +
       scale_fill_gradient2(
         low = "#1A9850", mid = "#FFFFFF", high = who_red_dark, midpoint = 0,
-        limits = c(-50, 50), na.value = "#E6E7E8", name = "% change",
-        labels = function(x) paste0(x, "%")
+        limits = c(-4, 4), na.value = "#E6E7E8", name = "SD from\nbaseline",
+        labels = function(x) paste0(x, " SD")
       ) +
       ggrepel::geom_text_repel(
         data = label_df, aes(x = x, y = y, label = label),
@@ -620,11 +734,9 @@ server <- function(input, output, session) {
         segment.color = who_navy, segment.size = 0.3,
         max.overlaps = Inf, box.padding = 0.4, seed = 42
       ) +
-      labs(title = input$disease) +
       theme_void(base_size = 13) +
       theme(
-        legend.position = "right",
-        plot.title = element_text(color = who_navy, face = "plain", size = 18)
+        legend.position = "right"
       )
 
     # Highlight whichever region matches the Location dropdown with a thin
@@ -664,18 +776,18 @@ server <- function(input, output, session) {
     values_wide_wide <- values_wide %>% pivot_wider(names_from = Week_lab, values_from = Value)
     values_wide_wide <- values_wide_wide[, c("Disease", week_cols)]
 
-    pct_matrix <- sapply(weeks_to_show, function(w) {
+    sd_matrix <- sapply(weeks_to_show, function(w) {
       sapply(diseases_here, function(dis) {
         s <- series %>% filter(Disease == dis)
-        pct_change_vs_prev3(s, yr, w, value_col = value_col)
+        cusum_z_at(s, yr, w, value_col = value_col)
       })
     })
-    pct_wide <- as.data.frame(pct_matrix)
-    colnames(pct_wide) <- paste0(week_cols, "_pct")
+    sd_wide <- as.data.frame(sd_matrix)
+    colnames(sd_wide) <- paste0(week_cols, "_sd")
 
     list(
       display_values = values_wide_wide,
-      pct = pct_wide,
+      sd = sd_wide,
       week_cols = week_cols,
       year = yr, n_wk = n_wk, diseases = diseases_here, weeks = weeks_to_show,
       value_col = value_col
@@ -685,9 +797,9 @@ server <- function(input, output, session) {
   output$weekly_table <- renderDT({
     tbl <- weekly_table_reactive()
 
-    display_df <- cbind(tbl$display_values, tbl$pct)
-    pct_col_names <- paste0(tbl$week_cols, "_pct")
-    pct_col_index <- which(names(display_df) %in% pct_col_names) - 1
+    display_df <- cbind(tbl$display_values, tbl$sd)
+    sd_col_names <- paste0(tbl$week_cols, "_sd")
+    sd_col_index <- which(names(display_df) %in% sd_col_names) - 1
 
     label <- if (tbl$value_col == "Projected") "projected total" else "reported"
 
@@ -696,7 +808,7 @@ server <- function(input, output, session) {
       rownames = FALSE,
       options = list(
         pageLength = 25,
-        columnDefs = list(list(visible = FALSE, targets = pct_col_index))
+        columnDefs = list(list(visible = FALSE, targets = sd_col_index))
       ),
       caption = paste0(
         "Weekly ", label, " cases by disease, ", input$location_tbl,
@@ -708,9 +820,9 @@ server <- function(input, output, session) {
     dt <- formatStyle(
       dt,
       columns = tbl$week_cols,
-      valueColumns = pct_col_names,
-      backgroundColor = styleInterval(PCT_BREAKS, PCT_BG_PAL),
-      color = styleInterval(PCT_BREAKS, PCT_FONT_PAL)
+      valueColumns = sd_col_names,
+      backgroundColor = styleInterval(SD_BREAKS, SD_BG_PAL),
+      color = styleInterval(SD_BREAKS, SD_FONT_PAL)
     )
     dt
   })
@@ -718,7 +830,7 @@ server <- function(input, output, session) {
   # ---------------- Alerts tab (text lines, grouped by disease) ----------
   alerts_reactive <- reactive({
     value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
-    compute_alerts_long(value_col = value_col, threshold = THRESHOLD_PCT)
+    compute_alerts_long(value_col = value_col)
   })
 
   output$alerts_output <- renderUI({
@@ -727,30 +839,33 @@ server <- function(input, output, session) {
 
     note <- p(
       style = "font-size: 12.5px; color:#555;",
-      "Increase percentages are calculated versus each location's own previous 3-week average, using ",
-      strong(label), " cases."
+      "Alerts use a CUSUM/C2-style aberration detection method (rolling 9-week baseline, most recent ",
+      "2 weeks dropped as a guard band) applied to each location's own ", strong(label), " cases."
     )
 
     if (nrow(alerts) == 0) {
       return(tagList(
         note,
         div(class = "qv-none",
-            paste0("No disease currently has any location \u2265", THRESHOLD_PCT,
-                   "% above its trailing 3-week average."))
+            "No disease currently has any location more than 2 standard deviations above its expected baseline.")
       ))
     }
 
-    # One entry per disease, ordered by its most severe (largest %) location
+    # One entry per disease, ordered by its most severe (highest SD level, then z-score) location
     disease_order <- alerts %>%
       group_by(Disease) %>%
-      summarise(max_pct = max(PctChange, na.rm = TRUE), .groups = "drop") %>%
-      arrange(desc(max_pct)) %>%
+      summarise(max_level = max(Level), .groups = "drop") %>%
+      arrange(desc(max_level), Disease) %>%
       pull(Disease)
 
+    level_class <- c(`1` = "qv-box-l1", `2` = "qv-box-l2", `3` = "qv-box-l3")
+
     lines <- lapply(disease_order, function(dis) {
-      d <- alerts %>% filter(Disease == dis)
-      loc_text <- paste0(as.character(d$Location), " (", round(d$PctChange, 1), "% increase)")
-      div(class = "qv-box", strong(dis), ": ", paste(loc_text, collapse = ", "))
+      d <- alerts %>% filter(Disease == dis) %>% arrange(desc(Level), desc(Z))
+      max_lvl <- max(d$Level)
+      loc_text <- paste0(as.character(d$Location), " (", round(d$Z, 1), "SD)")
+      div(class = paste("qv-box", level_class[as.character(max_lvl)]),
+          strong(dis), ": ", paste(loc_text, collapse = ", "))
     })
 
     tagList(note, lines)
