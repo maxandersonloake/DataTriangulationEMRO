@@ -94,7 +94,7 @@ a:hover { color: var(--who-navy); }
 .qv-box strong { color: var(--who-navy); }
 
 /* CUSUM alert severity levels: pale / medium / dark red */
-.qv-box-l1 { border-left-color: #F4A9AD; background-color: #FDF1F1; }
+.qv-box-l1 { border-left-color: var(--who-yellow); background-color: #FFF6DF; }
 .qv-box-l2 { border-left-color: var(--who-red); background-color: #FDE3E4; }
 .qv-box-l3 { border-left-color: var(--who-red-dark); background-color: #F9D0D2; }
 .qv-box-l3 strong { color: var(--who-red-dark); }

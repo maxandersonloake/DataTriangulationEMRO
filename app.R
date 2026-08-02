@@ -56,7 +56,7 @@ COMPLIANCE_PATH <- "Data/PAK_IDSR_Compliance.csv"
 # contaminated by cases that may belong to the same emerging cluster as
 # the current week. The mean (mu) and standard deviation (sigma) of the
 # remaining 7 baseline weeks define escalating alert thresholds:
-#   T1 = mu + 2*sigma  (pale red)    T2 = mu + 3*sigma (medium red)
+#   T1 = mu + 2*sigma  (yellow)      T2 = mu + 3*sigma (medium red)
 #   T3 = mu + 4*sigma  (dark red)
 # At least 10 total weeks of history (9 lookback weeks + the current week)
 # are required before a location/disease series is evaluated.
@@ -256,10 +256,11 @@ compute_alerts_long <- function(value_col = "Reported") {
 # Same CUSUM/C2 method as the Alerts tab (rolling 9-week window, 2-week
 # guard band, 7-week baseline). Deliberately wide neutral band: a week
 # within +-2 SD of its expected baseline stays plain white. Colour escalates
-# through the same pale/medium/dark tiers used on the Alerts tab, mirrored
+# through the same yellow/medium-red/dark-red tiers used on the Alerts tab,
+# mirrored
 # for below-baseline weeks in green.
 SD_BREAKS   <- c(-4, -3, -2, 2, 3, 4)
-SD_BG_PAL   <- c("#1B7837", "#5AAE61", "#C7E9C0", "#FFFFFF", "#F8C9CB", who_red, who_red_dark)
+SD_BG_PAL   <- c("#1B7837", "#5AAE61", "#C7E9C0", "#FFFFFF", "#FCE9B0", who_red, who_red_dark)
 SD_FONT_PAL <- c("#FFFFFF", "#111111", "#111111", "#111111", "#111111", "#FFFFFF", "#FFFFFF")
 
 # ---- Fixed year -> colour map ----------------------------------------------
@@ -379,12 +380,35 @@ ui <- tagList(
           h4("How to use this dashboard"),
           tags$ol(
             tags$li("Alerts: a scan across every region and disease for any combination whose most recent week ",
-                    "is more than 2 standard deviations above its expected baseline, using a CUSUM-style ",
-                    "aberration detection method."),
+                    "triggers the CUSUM/C2 aberration detection method described below, split into national and ",
+                    "regional (district-level) alerts."),
             tags$li("Data visualisation: choose a disease and region, toggle between reported / projected / both ",
                     "case counts, and show or hide individual years. The map highlights whichever region is selected."),
             tags$li("Weekly summary table: review the full week-by-week table with conditional shading for a chosen ",
                     "location.")
+          )
+        ),
+        div(
+          class = "info-card",
+          h4("Alert detection method: CUSUM/C2"),
+          p("Alerts and the SD-based shading on the map and weekly table are generated with a modified CDC ",
+            "EARS-style CUSUM/C2 aberration detection method:"),
+          tags$ol(
+            tags$li("For a given disease/location, take the 9 weeks immediately before the week being evaluated."),
+            tags$li("Drop the 2 most recent of those 9 weeks (a \u201cguard band\u201d), so an emerging cluster in the ",
+                    "days just before the current week can't inflate its own baseline."),
+            tags$li("Calculate the mean (\u03bc) and standard deviation (\u03c3) of the remaining 7 baseline weeks."),
+            tags$li("Compare the current week's count against three escalating thresholds: T1 = \u03bc + 2\u03c3 ",
+                    "(yellow), T2 = \u03bc + 3\u03c3 (medium red), and T3 = \u03bc + 4\u03c3 (dark red).")
+          ),
+          p("At least 10 weeks of history (9 baseline weeks plus the current week) are required before a ",
+            "disease/location combination is evaluated; where a run of consecutive weeks of history isn't yet ",
+            "available (for example, very early in the dataset), no alert or shading is shown for that cell."),
+          p(
+            "Method: ", tags$a(
+              href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
+              "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data"
+            )
           )
         )
       )
@@ -406,18 +430,10 @@ ui <- tagList(
             tags$hr(),
             tags$p(
               style = "font-size: 12px; color: #555;",
-              "Lists every disease with at least one location (National or a district) whose most recent ",
-              "reporting week is ", strong("more than 2 standard deviations"), " above its expected baseline, ",
-              "using a CUSUM/C2-style aberration detection method: a rolling 9-week lookback window, with the ",
-              "2 weeks immediately preceding the current week dropped, and the mean/SD of the remaining 7 ",
-              "weeks used as the baseline. At least 10 weeks of history are required."
-            ),
-            tags$p(
-              style = "font-size: 12px; color: #555;",
-              "Method: ", tags$a(
-                href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
-                "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data"
-              )
+              "Lists every disease with at least one location (National or a district) that triggers a ",
+              strong("CUSUM-style aberration detection method"), " (rolling 9-week baseline, most recent 2 weeks ",
+              "dropped as a guard band). See the ", strong("Home"), " tab for a full explanation of how it's ",
+              "calculated and a link to the methodology reference."
             )
           ),
           mainPanel(
@@ -508,7 +524,8 @@ ui <- tagList(
             style = "font-size: 12px; color: #555;",
             "Cell shading reflects how many standard deviations a week's cases are above or below its expected ",
             "baseline (CUSUM/C2 method: rolling 9-week window, most recent 2 weeks dropped, mean/SD of the prior ",
-            "7 weeks). Darker red indicates more SD above baseline; darker green indicates more SD below."
+            "7 weeks). 2 SD above shows yellow, 3 SD medium red, 4+ SD dark red; the same tiers below baseline ",
+            "show as green shades."
           )
         ),
         mainPanel(
@@ -535,6 +552,15 @@ ui <- tagList(
           p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
           tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
                  "https://www.nih.org.pk/phb/weekly-bulletin")
+        ),
+        div(
+          class = "info-card",
+          h4("Alert detection methodology"),
+          p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
+            "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
+            "See the ", strong("Home"), " tab for a full explanation of how it's calculated."),
+          tags$a(href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
+                 "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data")
         ),
         div(
           class = "info-card",
@@ -650,15 +676,26 @@ server <- function(input, output, session) {
       theme(
         text = element_text(family = "sans"),
         panel.grid.minor = element_blank(),
-        panel.grid.major = element_line(color = "#E6E7E8"),
-        axis.text.x = element_text(size = 9)
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color = "#E6E7E8"),
+        axis.text.x = element_text(size = 9),
+        axis.ticks.x = element_line(color = "#8A8F94"),
+        axis.ticks.length.x = unit(4, "pt")
       )
 
     gg <- ggplotly(p, tooltip = "text") %>%
       layout(
         legend = list(orientation = "h", y = -0.35, title = list(text = "")),
         margin = list(b = 90),
-        hoverlabel = list(bgcolor = "#FFFFFF", font = list(color = who_navy, family = "Source Sans Pro"))
+        hoverlabel = list(bgcolor = "#FFFFFF", font = list(color = who_navy, family = "Source Sans Pro")),
+        # Small tick mark at every week, but no full-height vertical
+        # gridline for every week -- only every 5th week gets a text label
+        # (set via week_labels above).
+        xaxis = list(
+          tickmode = "array", tickvals = week_breaks, ticktext = week_labels,
+          ticks = "outside", ticklen = 4, tickwidth = 1, tickcolor = "#8A8F94",
+          showgrid = FALSE
+        )
       ) %>%
       config(displaylogo = FALSE)
 
@@ -843,32 +880,61 @@ server <- function(input, output, session) {
       "2 weeks dropped as a guard band) applied to each location's own ", strong(label), " cases."
     )
 
-    if (nrow(alerts) == 0) {
-      return(tagList(
-        note,
-        div(class = "qv-none",
-            "No disease currently has any location more than 2 standard deviations above its expected baseline.")
-      ))
-    }
-
-    # One entry per disease, ordered by its most severe (highest SD level, then z-score) location
-    disease_order <- alerts %>%
-      group_by(Disease) %>%
-      summarise(max_level = max(Level), .groups = "drop") %>%
-      arrange(desc(max_level), Disease) %>%
-      pull(Disease)
-
     level_class <- c(`1` = "qv-box-l1", `2` = "qv-box-l2", `3` = "qv-box-l3")
 
-    lines <- lapply(disease_order, function(dis) {
-      d <- alerts %>% filter(Disease == dis) %>% arrange(desc(Level), desc(Z))
-      max_lvl <- max(d$Level)
-      loc_text <- paste0(as.character(d$Location), " (", round(d$Z, 1), "SD)")
-      div(class = paste("qv-box", level_class[as.character(max_lvl)]),
-          strong(dis), ": ", paste(loc_text, collapse = ", "))
-    })
+    # Builds one qv-box per disease. `show_location` controls whether each
+    # location is spelled out inline (needed for the Regional column, which
+    # can have several districts per disease) or omitted (the National
+    # column only ever has one possible "location", so it'd be redundant).
+    render_alert_boxes <- function(sub, show_location) {
+      if (nrow(sub) == 0) return(NULL)
+      disease_order <- sub %>%
+        group_by(Disease) %>%
+        summarise(max_level = max(Level), .groups = "drop") %>%
+        arrange(desc(max_level), Disease) %>%
+        pull(Disease)
 
-    tagList(note, lines)
+      lapply(disease_order, function(dis) {
+        d <- sub %>% filter(Disease == dis) %>% arrange(desc(Level), desc(Z))
+        max_lvl <- max(d$Level)
+        entry_text <- if (show_location) {
+          paste(paste0(as.character(d$Location), " (", round(d$Z, 1), "SD)"), collapse = ", ")
+        } else {
+          paste0(round(d$Z, 1), "SD")
+        }
+        div(class = paste("qv-box", level_class[as.character(max_lvl)]),
+            strong(dis), ": ", entry_text)
+      })
+    }
+
+    national_alerts <- alerts %>% filter(Location == "National")
+    regional_alerts <- alerts %>% filter(Location != "National")
+    national_boxes  <- render_alert_boxes(national_alerts, show_location = FALSE)
+    regional_boxes  <- render_alert_boxes(regional_alerts, show_location = TRUE)
+
+    tagList(
+      note,
+      fluidRow(
+        column(
+          width = 6,
+          h4("National alerts", style = "font-size:15px; color:#00205C; margin-top:0;"),
+          if (is.null(national_boxes)) {
+            div(class = "qv-none", "No national-level alerts.")
+          } else {
+            tagList(national_boxes)
+          }
+        ),
+        column(
+          width = 6,
+          h4("Regional alerts", style = "font-size:15px; color:#00205C; margin-top:0;"),
+          if (is.null(regional_boxes)) {
+            div(class = "qv-none", "No regional (district-level) alerts.")
+          } else {
+            tagList(regional_boxes)
+          }
+        )
+      )
+    )
   })
 }
 
