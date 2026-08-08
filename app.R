@@ -586,7 +586,7 @@ ui <- tagList(
       div(
         class = "page-tint-bg",
         div(
-          style = "max-width: 980px; margin: 0 auto;",
+          style = "max-width: 980px; margin: 0;",
           h4("About this dashboard"),
           p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern Medierranean (EMRO)
             in monitoring disease case reporting from Pakistan, provided by the 
@@ -832,7 +832,7 @@ ui <- tagList(
       div(
         class = "page-tint-bg",
         div(
-          style = "max-width: 900px; margin: 0 auto;",
+          style = "max-width: 900px; margin: 0;",
           h4("Primary data source"),
           p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
           tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
