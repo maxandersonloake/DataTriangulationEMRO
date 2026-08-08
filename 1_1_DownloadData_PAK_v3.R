@@ -1414,6 +1414,8 @@ extract_PAK_data_main <- function(extract_all = FALSE,
     new_rows <- link_metadata |>
       anti_join(existing, by = c("year" = "Year", "week" = "Week"))
     
+    new_rows <- new_rows %>% filter(year >= 2026) # ignore those that are before 2026 and have changed
+    
     # ---- Changed weeks: present, but the bulletin's link has changed -----
     changed_rows <- detect_changed_links(link_metadata, cases_file)
   }
