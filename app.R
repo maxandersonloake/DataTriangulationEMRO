@@ -597,7 +597,7 @@ ui <- tagList(
             "by national authorities, or formal WHO information products. The dashboard should not be shared ",
             "externally or used for operational or public communication without appropriate technical review and ",
             "authorization.")
-        ),
+        )),
       div(
         class = "info-card",
         h4("About this dashboard"),
