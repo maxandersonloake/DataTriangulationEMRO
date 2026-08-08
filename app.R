@@ -607,9 +607,8 @@ ui <- tagList(
                     "Punjab, Sindh, and Azad Jammu & Kashmir (AJK)."),
             tags$li(strong("Missing data: "), "Some regions don't report for a given week -- these are marked NR ",
                     "(Not Reported) in the bulletin. Some diseases are also missing from the table entirely for a ",
-                    "given week, most likely because there were no cases to report. In this case, we also treat the value ",
-                    "as missing rather than assuming it's zero. Missing weeks appear as grey flags on the map and ",
-                    "in the Alerts tab.")
+                    "given week, most likely because there were no cases to report. In this case, we also treat the values ",
+                    "as missing rather than assuming they are zero.")
           ),
           h4("Methodology", style = "margin-top: 20px;"),
           h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
@@ -1079,7 +1078,7 @@ server <- function(input, output, session) {
       ggrepel::geom_text_repel(
         data = label_df, aes(x = x, y = y, label = label),
         size = 3.3, color = who_navy, fontface = "bold", 
-        segment.color = who_navy, segment.size = 0.3,
+        segment.color = who_navy, segment.size = 0.3, min.segment.length=0.05,force_pull=10, force=0.01,
         max.overlaps = Inf, box.padding = 0.4, seed = 42
       ) +
       theme_void(base_size = 13) +
