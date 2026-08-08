@@ -457,6 +457,20 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week) {
   if (is.null(missing) || nrow(missing) == 0) {
     missing <- data.frame(Location = character(), Disease = character(), Status = character(), stringsAsFactors = FALSE)
   } else {
+    # If a disease has insufficient baseline data at the National level,
+    # it almost always does at the regional level too (the same sparse
+    # reporting history), so listing it separately for every region adds
+    # noise without adding information. Drop those regional duplicates,
+    # keeping only the National line -- an explicit NR for that disease at
+    # a specific region is a distinct, region-specific signal and is
+    # always kept regardless.
+    insuff_national <- missing$Disease[missing$Location == "National" &
+                                          missing$Status %in% c("insufficient_history", "insufficient_baseline")]
+    drop <- missing$Location != "National" &
+      missing$Disease %in% insuff_national &
+      missing$Status %in% c("insufficient_history", "insufficient_baseline")
+    missing <- missing[!drop, ]
+
     missing$Location <- factor(missing$Location, levels = location_choices)
     missing <- missing %>% arrange(Location, Disease)
   }
@@ -530,7 +544,7 @@ pak_regions_sf <- load_pak_regions()
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=9"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=10"),
     tags$title("WHO EMRO | Pakistan IDSR Dashboard")
   ),
 
@@ -541,7 +555,7 @@ ui <- tagList(
   # correctly because these rules don't depend on the external file at all.
   div(
     class = "who-header",
-    style = "display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; padding:18px 28px; background-color:#FFFFFF; border-bottom:3px solid #00205C;",
+    style = "display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; padding:14px 24px; background-color:#FFFFFF; border-bottom:3px solid #00205C;",
     if (!is.null(logo_uri)) {
       tags$img(src = logo_uri, alt = "World Health Organization",
                style = "height:92px; border:none; outline:none; box-shadow:none;")
@@ -570,7 +584,7 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
-        style = "max-width: 980px; margin: 24px 0; padding: 0 28px;",
+        style = "max-width: 1180px; margin: 16px 0; padding: 0 24px;",
         div(
           class = "info-card",
           style = "border-left: 6px solid #B0121A; background-color: #FDF2F2;",
@@ -592,12 +606,10 @@ ui <- tagList(
             Integrated Disease Surveillance and Response (IDSR) bulletins."),
           p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
             "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, and ",
-            strong("Weekly summary table"), " for the full week-by-week breakdown.")
-        ),
-        div(
-          class = "info-card",
-          h4("How to use this dashboard"),
+            strong("Weekly summary table"), " for the full week-by-week breakdown."),
+          h5("How to use this dashboard", style = "margin-top: 14px; margin-bottom: 6px; color: var(--who-navy); font-size: 14px;"),
           tags$ol(
+            style = "margin-bottom: 0;",
             tags$li("Alerts: a scan across every region and disease for combinations that trigger the CUSUM/C2 ",
                     "aberration detection method (see below), listed by disease with National shown first. ",
                     "Locations with no report or insufficient baseline data for the selected week are listed ",
@@ -609,64 +621,78 @@ ui <- tagList(
                     "location.")
           )
         ),
-        div(
-          class = "info-card",
-          h4("Data sources and limitations"),
-          tags$ul(
-            tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are predominantly ",
-                    "suspected cases rather than laboratory-confirmed, and should be ",
-                    "interpreted as an early-warning signal rather than a confirmed burden estimate."),
-            tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every week. ",
-                    "The \u201cCompliance %\u201d reflects the share of expected reports actually received for a region ",
-                    "in a given week. Weeks or regions with low compliance will under-represent true case counts."),
-            tags$li(strong("Projected total cases: "), "To account for incomplete reporting, this dashboard offers a ",
-                    "simple projection: reported cases \u00f7 (compliance % / 100). Where compliance data is missing or ",
-                    "unusable for a given week/region (for example, no expected-report figure is available), no ",
-                    "projection is shown for that week rather than assuming full compliance. This projection also ",
-                    "assumes non-reporting sites have a similar case rate to reporting sites, which may not hold, ",
-                    "particularly during active outbreaks or access constraints \u2014 treat projected figures as a rough ",
-                    "estimate, not a precise figure."),
-            tags$li(strong("Geographic coverage: "), "Regions reflect those published in the NIH IDSR bulletins ",
-                    "(Balochistan, Gilgit-Baltistan, Islamabad Capital Territory, Khyber Pakhtunkhwa, Sindh, and Azad ",
-                    "Jammu & Kashmir). Where a region has no data for a given week this is shown as a gap rather than ",
-                    "assumed to be zero -- on the trend chart this means the line breaks rather than connecting ",
-                    "straight across the missing week(s). A genuinely reported zero is treated differently: it's ",
-                    "kept as real data, not a gap, and used normally in the CUSUM calculation below, including as a ",
-                    "baseline value."),
-            tags$li(strong("Missing data: "), "A disease marked NR (Not Reported) was listed in that week's ",
-                    "bulletin, but the region reported nothing against it -- a genuine data gap, shown as a grey ",
-                    "flag on the map and in the Alerts tab. A disease that wasn't listed in that week's bulletin at ",
-                    "all is treated as not applicable for that week and excluded rather than flagged. Where a ",
-                    "region is NR across every disease it normally reports, the Alerts tab shows a single summary ",
-                    "line rather than listing every disease (e.g. \u201cAJK: No reporting (all diseases)\u201d).")
+        fluidRow(
+          column(
+            width = 6,
+            div(
+              class = "info-card",
+              style = "height: 100%;",
+              h4("Data sources and limitations"),
+              tags$ul(
+                tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are ",
+                        "predominantly suspected cases rather than laboratory-confirmed, and should be interpreted ",
+                        "as an early-warning signal rather than a confirmed burden estimate."),
+                tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every ",
+                        "week. The \u201cCompliance %\u201d reflects the share of expected reports actually received ",
+                        "for a region in a given week. Weeks or regions with low compliance will under-represent ",
+                        "true case counts."),
+                tags$li(strong("Geographic coverage: "), "Regions reflect those published in the NIH IDSR ",
+                        "bulletins (Balochistan, Gilgit-Baltistan, Islamabad Capital Territory, Khyber Pakhtunkhwa, ",
+                        "Sindh, and Azad Jammu & Kashmir). Where a region has no data for a given week this is ",
+                        "shown as a gap rather than assumed to be zero -- on the trend chart the line breaks ",
+                        "rather than connecting straight across the missing week(s). A genuinely reported zero is ",
+                        "treated differently: it's kept as real data, not a gap, and used normally in the CUSUM ",
+                        "calculation (see Methodology), including as a baseline value."),
+                tags$li(strong("Missing data: "), "A disease marked NR (Not Reported) was listed in that week's ",
+                        "bulletin, but the region reported nothing against it -- a genuine data gap, shown as a ",
+                        "grey flag on the map and in the Alerts tab. A disease that wasn't listed in that week's ",
+                        "bulletin at all is treated as not applicable for that week and excluded rather than ",
+                        "flagged. Where a region is NR across every disease it normally reports, the Alerts tab ",
+                        "shows a single summary line rather than listing every disease (e.g. \u201cAJK: No reporting ",
+                        "(all diseases)\u201d). Where a disease has insufficient baseline data at the National level, ",
+                        "it's shown only once rather than repeated for every region.")
+              )
+            )
+          ),
+          column(
+            width = 6,
+            div(
+              class = "info-card",
+              style = "height: 100%;",
+              h4("Methodology"),
+              h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
+              p("To account for incomplete reporting, this dashboard offers a simple projection: reported cases ",
+                "\u00f7 (compliance % / 100). Where compliance data is missing or unusable for a given week/region ",
+                "(for example, no expected-report figure is available), no projection is shown for that week ",
+                "rather than assuming full compliance. This projection also assumes non-reporting sites have a ",
+                "similar case rate to reporting sites, which may not hold, particularly during active outbreaks or ",
+                "access constraints \u2014 treat projected figures as a rough estimate, not a precise figure."),
+              h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("Alerts, the map, and the weekly summary table are generated with a CUSUM/C2 aberration detection ",
+                "method. For a given disease and location, the 9 calendar weeks immediately before the week being ",
+                "evaluated form a lookback window. The 2 most recent of those weeks are dropped as a guard band, ",
+                "so an emerging cluster can't inflate its own baseline. The mean (\u03bc) and standard deviation ",
+                "(\u03c3) of the remaining 7 baseline weeks set three escalating thresholds: T1 = \u03bc + 2\u03c3 ",
+                "(yellow), T2 = \u03bc + 3\u03c3 (medium red), and T3 = \u03bc + 4\u03c3 (dark red)."),
+              h5("Handling missing weeks in the baseline",
+                 style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("If one or more of the 7 baseline weeks is marked NR, or wasn't in that week's bulletin at all, the ",
+                "mean and standard deviation are calculated from the remaining baseline weeks, as long as at least ",
+                "3 have a report. Below that, the method isn't applied and the week is flagged as having ",
+                strong("insufficient baseline data"), ". A week marked NR is flagged as having ", strong("no reports"),
+                " rather than treated as zero cases; a week the disease wasn't in the bulletin for is excluded ",
+                "from evaluation entirely. Both cases appear in grey on the map and are listed separately, in ",
+                "grey, at the bottom of the Alerts tab."),
+              h5("Flat (all-zero) baselines",
+                 style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("A rare or sporadic disease can have a baseline where all 7 weeks report the same value, often ",
+                "zero, giving a standard deviation of exactly 0. Rather than flag these as insufficient -- which ",
+                "would suppress alerts for exactly the regions where a single new case matters most -- a minimum ",
+                "standard deviation of 1 is applied, following standard practice in the aberration-detection ",
+                "literature for the same method (see the ", strong("References"), " tab). For an otherwise-flat ",
+                "baseline, this simply sets the thresholds at 2, 3, and 4 cases above the usual count.")
+            )
           )
-        ),
-        div(
-          class = "info-card",
-          h4("CUSUM alert detection method"),
-          p("Alerts, the map, and the weekly summary table are generated with a CUSUM/C2 aberration detection ",
-            "method. For a given disease and location, the 9 calendar weeks immediately before the week being ",
-            "evaluated form a lookback window. The 2 most recent of those weeks are dropped as a guard band, so an ",
-            "emerging cluster can't inflate its own baseline. The mean (\u03bc) and standard deviation (\u03c3) of ",
-            "the remaining 7 baseline weeks set three escalating thresholds: T1 = \u03bc + 2\u03c3 (yellow), ",
-            "T2 = \u03bc + 3\u03c3 (medium red), and T3 = \u03bc + 4\u03c3 (dark red)."),
-          h5("Handling missing weeks in the baseline",
-             style = "margin-bottom: 4px; margin-top: 16px; color: var(--who-navy); font-size: 14px;"),
-          p("If one or more of the 7 baseline weeks is marked NR, or wasn't in that week's bulletin at all, the ",
-            "mean and standard deviation are calculated from the remaining baseline weeks, as long as at least 3 ",
-            "have a report. Below that, the method isn't applied and the week is flagged as having ",
-            strong("insufficient baseline data"), ". A week marked NR is flagged as having ", strong("no reports"),
-            " rather than treated as zero cases; a week the disease wasn't in the bulletin for is excluded from ",
-            "evaluation entirely. Both cases appear in grey on the map and are listed separately, in grey, at the ",
-            "bottom of the Alerts tab."),
-          h5("Flat (all-zero) baselines",
-             style = "margin-bottom: 4px; margin-top: 16px; color: var(--who-navy); font-size: 14px;"),
-          p("A rare or sporadic disease can have a baseline where all 7 weeks report the same value, often zero, ",
-            "giving a standard deviation of exactly 0. Rather than flag these as insufficient -- which would ",
-            "suppress alerts for exactly the regions where a single new case matters most -- a minimum standard ",
-            "deviation of 1 is applied, following standard practice in the aberration-detection literature for the ",
-            "same method (see the ", strong("References"), " tab). For an otherwise-flat baseline, this simply ",
-            "sets the thresholds at 2, 3, and 4 cases above the usual count.")
         )
       )
     ),
@@ -675,7 +701,7 @@ ui <- tagList(
     tabPanel(
       "Alerts",
       div(
-        style = "padding-top: 22px; padding-bottom: 40px;",
+        style = "padding-top: 16px; padding-bottom: 28px;",
         sidebarLayout(
           sidebarPanel(
             width = 3,
@@ -709,18 +735,18 @@ ui <- tagList(
     tabPanel(
       "Data visualisation",
       div(
-        style = "padding: 18px 28px;",
+        style = "padding: 14px 24px;",
         div(
-          style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:10px 22px; margin-bottom:12px; display:flex; gap:24px; align-items:flex-end;",
+          style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
           div(style = "flex: 1 1 0;", selectInput("disease", "Disease", choices = disease_choices, selected = disease_choices[1], width = "100%")),
           div(style = "flex: 1 1 0;", selectInput("location", "Location", choices = location_choices, selected = "National", width = "100%")),
           div(style = "flex: 1 1 0;", selectInput("asof_week_viz", "As of week", choices = WEEK_CHOICES, selected = LATEST_WEEK_CHOICE, width = "100%"))
         ),
-        tags$details(
+        div(
           class = "info-disclosure",
-          tags$summary("How are Projected cases and SD calculated?"),
+          div(class = "info-disclosure-title", "\u2139 How Projected cases and SD are calculated"),
           div(
-            style = "padding: 10px 4px 2px 4px; font-size: 12.5px; color: #555;",
+            style = "font-size: 12.5px; color: #555;",
             p(style = "margin-bottom: 6px;",
               strong("Projected total cases"), " = reported cases \u00f7 (compliance % / 100), shown blank where ",
               "compliance data is missing."),
@@ -735,13 +761,13 @@ ui <- tagList(
             width = 6,
             div(
               class = "viz-panel",
-              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:20px 22px 16px 22px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
               h4("Weekly case trend", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
               uiOutput("trend_subtitle"),
               plotlyOutput("trend_plot", height = "420px"),
               div(
                 class = "viz-panel-controls",
-                style = "margin-top:12px; padding-top:12px; border-top:1px solid #EEF1F4; min-height:150px;",
+                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
                 uiOutput("year_selector"),
                 radioButtons(
                   "case_type", "Case counts to show",
@@ -763,13 +789,13 @@ ui <- tagList(
             width = 6,
             div(
               class = "viz-panel",
-              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:20px 22px 16px 22px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
               h4("Deviation from expected baseline (SD), by region", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
               uiOutput("map_subtitle"),
               plotOutput("region_map", height = "420px"),
               div(
                 class = "viz-panel-controls",
-                style = "margin-top:12px; padding-top:12px; border-top:1px solid #EEF1F4; min-height:150px;",
+                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
                 radioButtons(
                   "case_type_map", "Case counts to colour the map by",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
@@ -784,13 +810,13 @@ ui <- tagList(
             width = 12,
             div(
               class = "viz-panel",
-              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:20px 22px 16px 22px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:20px;",
+              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
               h4("Regional contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
               uiOutput("stack_subtitle"),
               plotlyOutput("region_stack_plot", height = "380px"),
               div(
                 class = "viz-panel-controls",
-                style = "margin-top:12px; padding-top:12px; border-top:1px solid #EEF1F4;",
+                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
                 radioButtons(
                   "case_type_stack", "Case counts to show",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
@@ -807,7 +833,7 @@ ui <- tagList(
     tabPanel(
       "Weekly summary table",
       div(
-        style = "padding-top: 22px;",
+        style = "padding-top: 16px;",
       sidebarLayout(
         sidebarPanel(
           width = 3,
@@ -824,7 +850,7 @@ ui <- tagList(
             "Cell shading"
           ),
           div(
-            lapply(seq_along(SD_BG_PAL), function(i) {
+            lapply(rev(seq_along(SD_BG_PAL)), function(i) {
               div(class = "sd-legend-row",
                   span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
                   SD_LEGEND_LABELS[i])
@@ -852,7 +878,7 @@ ui <- tagList(
     tabPanel(
       "References",
       div(
-        style = "max-width: 900px; margin: 24px 0; padding: 0 28px;",
+        style = "max-width: 900px; margin: 16px 0; padding: 0 24px;",
         div(
           class = "info-card",
           h4("Primary data source"),

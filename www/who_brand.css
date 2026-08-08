@@ -32,7 +32,7 @@ body { background-color: #FFFFFF; color: #222222; }
   align-items: center;
   justify-content: space-between;
   flex-direction: row-reverse;
-  padding: 18px 28px;
+  padding: 14px 24px;
   background-color: #FFFFFF;
   border-bottom: 3px solid var(--who-navy);
 }
@@ -116,7 +116,7 @@ a:hover { color: var(--who-navy); }
 
 /* ---- Footer ---- */
 .who-footer {
-  padding: 16px 28px;
+  padding: 12px 24px;
   font-size: 12px;
   color: #555555;
   background-color: var(--who-blue-10);
@@ -131,8 +131,8 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   background-color: var(--who-blue-10);
   border: 1px solid var(--who-blue-25);
   border-radius: 6px;
-  padding: 18px 22px;
-  margin-bottom: 16px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
 }
 .info-card h4 { margin-top: 0; }
 
@@ -143,7 +143,7 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   background-color: #FFFFFF;
   border: 1px solid #E0E4E8;
   border-radius: 8px;
-  padding: 20px 22px 16px 22px;
+  padding: 16px 18px 12px 18px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   height: 100%;
   display: flex;
@@ -160,22 +160,19 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   margin-bottom: 12px;
 }
 
-/* Collapsible "info tab" disclosure on the Data visualisation page */
+/* Always-visible "info tab" on the Data visualisation page */
 .info-disclosure {
   background-color: #F4F5F6;
   border: 1px solid #DDE1E4;
   border-radius: 6px;
-  padding: 8px 16px;
-  margin-bottom: 20px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
 }
-.info-disclosure summary {
-  cursor: pointer;
+.info-disclosure-title {
   color: var(--who-navy);
   font-weight: 600;
   font-size: 13.5px;
-}
-.info-disclosure summary::before {
-  content: "\24D8  ";
+  margin-bottom: 8px;
 }
 
 /* SD colour legend on the Weekly summary table tab */
@@ -202,8 +199,8 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   padding-top: 4px;
 }
 .viz-panel-controls {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid #EEF1F4;
   min-height: 150px;
 }
