@@ -673,7 +673,7 @@ ui <- tagList(
               style = "font-size: 12px; color: #555;",
               strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
               "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
-              "a total projected case estimate of 40. See the ", strong("Home"), " tab for a full explanation."
+              "a projected total case estimate of 40. See the ", strong("Home"), " tab for full details."
             )
           ),
           mainPanel(
@@ -697,7 +697,7 @@ ui <- tagList(
         ),
         div(
           class = "info-disclosure",
-          div(class = "info-disclosure-title", "\u2139    How Projected cases and SD are calculated"),
+          div(class = "info-disclosure-title", "\u2139"),
           div(
             style = "font-size: 12.5px; color: #555;",
             p(style = "margin-bottom: 6px;",
@@ -705,9 +705,10 @@ ui <- tagList(
               "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
               "a projected total case estimate of 40."),
             
-            p(style = "margin-bottom: 0;",
+            p(style = "margin-bottom: 6px;",
               strong("SD"), " shows how many standard deviations a week's case count is from its expected baseline, ",
-              "using the CUSUM/C2 method."),
+              "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped)."),
+            
             p(style = "margin-bottom: 0;",
               "See the ", strong("Home"), " tab for full details.")
           )
@@ -808,7 +809,7 @@ ui <- tagList(
           ),
           tags$p(
             style = "font-size: 12px; color: #555; margin-top: 8px;",
-            "Standard deviations are based on the CUSUM/C2 method (see the ", strong("Home"), " tab for details)."
+            "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details)."
           )
         ),
         mainPanel(
