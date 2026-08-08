@@ -584,6 +584,21 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
+        style = "max-width: 980px; margin: 16px 0; padding: 0 24px;",
+        div(
+          class = "info-card",
+          style = "border-left: 6px solid #B0121A; background-color: #FDF2F2;",
+          h4("Disclaimer", style = "color:#B0121A;"),
+          p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support the ",
+            "exploratory review and interpretation of publicly available surveillance data. Its outputs, including ",
+            "statistical signals and projected estimates, are preliminary and require validation. They do not ",
+            "constitute official WHO epidemiological assessments, alerts, or recommendations and do not replace ",
+            "established Public Health Intelligence (PHI) processes, expert epidemiological review, verification ",
+            "by national authorities, or formal WHO information products. The dashboard should not be shared ",
+            "externally or used for operational or public communication without appropriate technical review and ",
+            "authorization.")
+        ),
+      div(
         class = "info-card",
         h4("About this dashboard"),
         p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern Medierranean (EMRO)
