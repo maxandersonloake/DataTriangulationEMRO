@@ -1,219 +1,219 @@
-[2026-07-26 10:33:24] Week 22, 2023 — https://www.nih.org.pk/wp-content/uploads/2023/08/Weekly_Report_22_2023.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:47:51] Week 22, 2023 — https://www.nih.org.pk/wp-content/uploads/2023/08/Weekly_Report_22_2023.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:27] Week 16, 2023 — https://www.nih.org.pk/wp-content/uploads/2023/04/Weekly Report-16-2023.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:47:53] Week 16, 2023 — https://www.nih.org.pk/wp-content/uploads/2023/04/Weekly Report-16-2023.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:30] Week 16, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/05/IDSR-Weekly-Report-16-2022.pdf: Cannot extract disease table rows: Unmatched column header(s):  Cases of VPDs reported from all
-[2026-07-26 10:33:30] Week 16, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/05/IDSR-Weekly-Report-16-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:47:56] Week 16, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/05/IDSR-Weekly-Report-16-2022.pdf: Cannot extract disease table rows: Unmatched column header(s):  Cases of VPDs reported from all
+[2026-08-08 10:47:56] Week 16, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/05/IDSR-Weekly-Report-16-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:34] Week 15, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-15-2022.pdf: Cannot convert disease table: 17 disease name(s) unmatched, kept as-is:  Cases of VPDs reported from all over Pakistan, therefore, an AD (Non-Cholera); ILI immediate attention in terms; of strengthening of SARI; immunization activities is ALRI < 5 years; required. B. Diarrhea; Typhoid  There is persistent; reporting of AWD (S. Cholera); AD (Non-Cholera) and AWD (S. Rabies/ Dog bite; Cholera) cases which need AVH (A & E); immediate verification to rule VH (B, C & D); out presence of confirmed Chickenpox/ Varicella; Cholera cases. Afterwards Measles; public health measures need to CL; be implemented accordingly. Gonorrhea;  Cases of Rabies/Dog bite, Pertussis; Dengue and Leishmaniasis are Meningitis; reported continuously. A Syphilis
-[2026-07-26 10:33:34] Week 15, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-15-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:47:59] Week 15, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-15-2022.pdf: Cannot convert disease table: 17 disease name(s) unmatched, kept as-is:  Cases of VPDs reported from all over Pakistan, therefore, an AD (Non-Cholera); ILI immediate attention in terms; of strengthening of SARI; immunization activities is ALRI < 5 years; required. B. Diarrhea; Typhoid  There is persistent; reporting of AWD (S. Cholera); AD (Non-Cholera) and AWD (S. Rabies/ Dog bite; Cholera) cases which need AVH (A & E); immediate verification to rule VH (B, C & D); out presence of confirmed Chickenpox/ Varicella; Cholera cases. Afterwards Measles; public health measures need to CL; be implemented accordingly. Gonorrhea;  Cases of Rabies/Dog bite, Pertussis; Dengue and Leishmaniasis are Meningitis; reported continuously. A Syphilis
+[2026-08-08 10:47:59] Week 15, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-15-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:37] Week 14, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-14-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): Districts
-[2026-07-26 10:33:37] Week 14, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-14-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:02] Week 14, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-14-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): Districts
+[2026-08-08 10:48:02] Week 14, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-14-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:40] Week 13, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-13-2022-1.pdf: Cannot extract disease table rows: Unmatched column header(s): Therefore, an immediate, Districts
-[2026-07-26 10:33:40] Week 13, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-13-2022-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:04] Week 13, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-13-2022-1.pdf: Cannot extract disease table rows: Unmatched column header(s): Therefore, an immediate, Districts
+[2026-08-08 10:48:04] Week 13, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-13-2022-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:44] Week 11, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-11-2022.pdf: Cannot extract disease table rows: Unmatched column header(s):  Cases of VPDs reported from all
-[2026-07-26 10:33:44] Week 11, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-11-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:07] Week 11, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-11-2022.pdf: Cannot extract disease table rows: Unmatched column header(s):  Cases of VPDs reported from all
+[2026-08-08 10:48:07] Week 11, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/04/IDSR-Weekly-Report-11-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:48] Week 9, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-9-2022.pdf: Cannot convert disease table: 14 disease name(s) unmatched, kept as-is:  Cases of VPDs reported from all over the Pakistan, and need ILI; immediate attention of AD (Non-Cholera); Immunization program to SARI; strengthen immunization Malaria; activities for its control. B. Diarrhea;  Cases of Rabies/Dog bite are Typhoid; regularly reported. Therefore, Rabies / Dog bite; public health measures need to AWD (S. Cholera); be implemented on priority Measles; basis by adopting a multi- Mumps; sectoral One-Health. CL;  There is persistent reporting of Pertussis; Bloody diarrhea, AWD (S. AVH (A & E); Cholera) and Typhoid cases from Gonorrhea
-[2026-07-26 10:33:48] Week 9, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-9-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:11] Week 9, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-9-2022.pdf: Cannot convert disease table: 14 disease name(s) unmatched, kept as-is:  Cases of VPDs reported from all over the Pakistan, and need ILI; immediate attention of AD (Non-Cholera); Immunization program to SARI; strengthen immunization Malaria; activities for its control. B. Diarrhea;  Cases of Rabies/Dog bite are Typhoid; regularly reported. Therefore, Rabies / Dog bite; public health measures need to AWD (S. Cholera); be implemented on priority Measles; basis by adopting a multi- Mumps; sectoral One-Health. CL;  There is persistent reporting of Pertussis; Bloody diarrhea, AWD (S. AVH (A & E); Cholera) and Typhoid cases from Gonorrhea
+[2026-08-08 10:48:11] Week 9, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-9-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:52] Week 7, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-7-1.pdf: Cannot extract disease table rows: Unmatched column header(s): (Non Cholera) & VH (B, C & D)
-[2026-07-26 10:33:52] Week 7, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-7-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:14] Week 7, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-7-1.pdf: Cannot extract disease table rows: Unmatched column header(s): (Non Cholera) & VH (B, C & D)
+[2026-08-08 10:48:14] Week 7, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/03/IDSR-Weekly-Report-7-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:55] Week 4, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-4-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): • Cases of VPDs reported from KP,
-[2026-07-26 10:33:55] Week 4, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-4-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:16] Week 4, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-4-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): • Cases of VPDs reported from KP,
+[2026-08-08 10:48:16] Week 4, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-4-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:33:58] Week 2, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-2-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): Meningitis, Chickenpox &
-[2026-07-26 10:33:59] Week 2, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-2-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:19] Week 2, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-2-2022.pdf: Cannot extract disease table rows: Unmatched column header(s): Meningitis, Chickenpox &
+[2026-08-08 10:48:19] Week 2, 2022 — https://www.nih.org.pk/wp-content/uploads/2022/02/IDSR-Weekly-Report-2-2022.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:02] Week 52, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-52-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Measles, Chickenpox & Mumps)
-[2026-07-26 10:34:02] Week 52, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-52-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:22] Week 52, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-52-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Measles, Chickenpox & Mumps)
+[2026-08-08 10:48:22] Week 52, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-52-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:04] Week 50, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-50.pdf: Cannot extract disease table rows: Unmatched column header(s): • Persistent reporting of cases of
-[2026-07-26 10:34:04] Week 50, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-50.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:24] Week 50, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-50.pdf: Cannot extract disease table rows: Unmatched column header(s): • Persistent reporting of cases of
+[2026-08-08 10:48:24] Week 50, 2021 — https://www.nih.org.pk/wp-content/uploads/2022/01/IDSR-Weekly-Report-50.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:07] Week 48, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-48-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): and public health response.
-[2026-07-26 10:34:08] Week 48, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-48-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:26] Week 48, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-48-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): and public health response.
+[2026-08-08 10:48:27] Week 48, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-48-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:11] Week 46, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-46-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): ● Persistent reporting of Malaria
-[2026-07-26 10:34:11] Week 46, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-46-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:29] Week 46, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-46-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): ● Persistent reporting of Malaria
+[2026-08-08 10:48:29] Week 46, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-46-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:14] Week 44, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-44-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Sindh & KP which demand
-[2026-07-26 10:34:14] Week 44, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-44-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:32] Week 44, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-44-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Sindh & KP which demand
+[2026-08-08 10:48:32] Week 44, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-44-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:17] Week 42, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-42-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Malaria cases increasingly
-[2026-07-26 10:34:17] Week 42, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-42-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:34] Week 42, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-42-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Malaria cases increasingly
+[2026-08-08 10:48:34] Week 42, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-42-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:20] Week 40, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-40-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): similar trend respectively.
-[2026-07-26 10:34:20] Week 40, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-40-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:37] Week 40, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-40-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): similar trend respectively.
+[2026-08-08 10:48:37] Week 40, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-40-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:23] Week 38, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-38-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): , Dengue cases are on rise in
-[2026-07-26 10:34:23] Week 38, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-38-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:39] Week 38, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-38-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): , Dengue cases are on rise in
+[2026-08-08 10:48:39] Week 38, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-38-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:27] Week 36, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-36-2021.pdf: Cannot convert disease table: 11 disease name(s) unmatched, kept as-is: attention in terms of epidemiological investigations and ILI; response measures. AD (Non-Cholera);  Cases of Measles, Chickenpox and ALRI < 5 years; Mumps cases were reported from Balochistan, Sindh & KP, therefore Typhoid; routine immunization needs to be SARI strengthened in order to decrease; the disease burden of VPDs. S. Cholera;  Food and water borne disease Rabies / Dog bite; have been reported. Therefore, VH (B, C & D); water & sanitation departments, Measles and food authorities; may be taken on board for implementation of Chickenpox; response measure, and prevention Mumps
-[2026-07-26 10:34:27] Week 36, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-36-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:42] Week 36, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-36-2021.pdf: Cannot convert disease table: 11 disease name(s) unmatched, kept as-is: attention in terms of epidemiological investigations and ILI; response measures. AD (Non-Cholera);  Cases of Measles, Chickenpox and ALRI < 5 years; Mumps cases were reported from Balochistan, Sindh & KP, therefore Typhoid; routine immunization needs to be SARI strengthened in order to decrease; the disease burden of VPDs. S. Cholera;  Food and water borne disease Rabies / Dog bite; have been reported. Therefore, VH (B, C & D); water & sanitation departments, Measles and food authorities; may be taken on board for implementation of Chickenpox; response measure, and prevention Mumps
+[2026-08-08 10:48:42] Week 36, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-36-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:30] Week 34, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-34-2021-1.pdf: Cannot extract disease table rows: Unmatched column header(s): consistently from Sindh, KP, and
-[2026-07-26 10:34:30] Week 34, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-34-2021-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:45] Week 34, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-34-2021-1.pdf: Cannot extract disease table rows: Unmatched column header(s): consistently from Sindh, KP, and
+[2026-08-08 10:48:45] Week 34, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-34-2021-1.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:33] Week 32, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-32-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): vector surveillance and control.
-[2026-07-26 10:34:33] Week 32, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-32-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:48] Week 32, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-32-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): vector surveillance and control.
+[2026-08-08 10:48:48] Week 32, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-32-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:36] Week 30, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-30-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): were reported from Sindh and KP
-[2026-07-26 10:34:36] Week 30, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-30-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:51] Week 30, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-30-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): were reported from Sindh and KP
+[2026-08-08 10:48:51] Week 30, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-30-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:39] Week 29, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-29-2021-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): , Cases of dog bite are being reported
-[2026-07-26 10:34:39] Week 29, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-29-2021-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:53] Week 29, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-29-2021-Final.pdf: Cannot extract disease table rows: Unmatched column header(s): , Cases of dog bite are being reported
+[2026-08-08 10:48:53] Week 29, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-29-2021-Final.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:42] Week 27, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-27-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): and
-[2026-07-26 10:34:42] Week 27, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-27-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:56] Week 27, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-27-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): and
+[2026-08-08 10:48:56] Week 27, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/12/IDSR-Weekly-Report-27-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:45] Week 25, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-25-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): reported from KP (n=42), Balochistan, and, Pakhtun
-[2026-07-26 10:34:45] Week 25, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-25-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:48:58] Week 25, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-25-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): reported from KP (n=42), Balochistan, and, Pakhtun
+[2026-08-08 10:48:59] Week 25, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-25-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:48] Week 23, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-23_3.pdf: Cannot extract disease table rows: Unmatched column header(s): (n=61) and Sindh (n=10)., Baloch.
-[2026-07-26 10:34:48] Week 23, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-23_3.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:49:01] Week 23, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-23_3.pdf: Cannot extract disease table rows: Unmatched column header(s): (n=61) and Sindh (n=10)., Baloch.
+[2026-08-08 10:49:01] Week 23, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-23_3.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
-[2026-07-26 10:34:52] Week 21, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-21-June-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Baloch.
-[2026-07-26 10:34:52] Week 21, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-21-June-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
+[2026-08-08 10:49:04] Week 21, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-21-June-2021.pdf: Cannot extract disease table rows: Unmatched column header(s): Baloch.
+[2026-08-08 10:49:04] Week 21, 2021 — https://www.nih.org.pk/wp-content/uploads/2021/07/IDSR-Weekly-Report-21-June-2021.pdf: Cannot extract compliance table: No compliance table found in the first 5 page(s) of this bulletin — expected a table with Region/Expected/Received/Compliance columns ending in a National row.
 Diagnostics:
   - page 1: no Region/Expected/Received/Compliance keywords found
   - page 2: no Region/Expected/Received/Compliance keywords found

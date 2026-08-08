@@ -15,6 +15,29 @@
 #    - 30% increase colouring?
 
 
+# TO DO:
+#Meeting 8/4/2026 - Dashboard Review:
+
+# Where to use % vs CUSUM method
+# Map with neighbouring countries as well?
+# Include greens in weekly summary
+# - Alerts national and regional split?
+#   - How to handle missing data punjab
+# - Other next steps
+# 
+# - Add other countries neighbouring in map
+# - Need 3+ weeks with available data to calculate mean and sd, otherwise flag
+# - If missing data in line plot, remove line between and swap to scatter plot
+# - Make it clear which week the data is showing (most recent week)
+# - Add description about compliance calculation on visualisation page
+# - Differentiate between late data and NR
+# - Week in alert tab
+# - Functionality to change map and alerts pages to previous week or other week
+# - Stacked bar for how the number of cases in each district is contributing to total
+# - Disclaimer: Not replacing PHI. Watermark. 
+# - Alerted last 3 weeks, or X times this year
+
+
 library(xml2)
 library(rvest)
 library(stringr)
@@ -828,10 +851,20 @@ convert_cases_table <- function(extracted){
     select(-Disease_raw) |>
     pivot_longer(-Disease, names_to = "Province", values_to = "Cases") |>
     mutate(
+      # Keep an explicit "NR" cell as its own row (Cases = NA, Status =
+      # "NR") rather than dropping it outright. This preserves the
+      # distinction, downstream, between "this disease WAS in the table
+      # this week, but this region reported nothing" (a real row, flagged
+      # NR) and "this disease wasn't a row in this week's table at all"
+      # (which never reaches this point in the first place -- there's no
+      # PDF row to pivot from, so it's simply absent from the output,
+      # exactly as before). Any other non-numeric, non-"NR" cell is
+      # dropped as before -- only a clean, explicit "NR" gets kept.
+      Status = ifelse(Cases == "NR", "NR", "reported"),
       Cases  = na_if(Cases, "NR"),
       Cases  = as.numeric(Cases)
     ) |>
-    filter(!is.na(Cases))
+    filter(!is.na(Cases) | Status == "NR")
   
   return(cases_table)
 }

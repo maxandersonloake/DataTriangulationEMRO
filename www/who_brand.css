@@ -98,6 +98,8 @@ a:hover { color: var(--who-navy); }
 .qv-box-l2 { border-left-color: var(--who-red); background-color: #FDE3E4; }
 .qv-box-l3 { border-left-color: var(--who-red-dark); background-color: #F9D0D2; }
 .qv-box-l3 strong { color: var(--who-red-dark); }
+.qv-box-grey { border-left-color: #8A8F94; background-color: #F1F2F3; }
+.qv-box-grey strong { color: #555555; }
 .qv-none {
   border-left: 6px solid var(--who-green);
   background-color: #F1F8E4;
@@ -156,6 +158,43 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   font-size: 13px;
   color: #555555;
   margin-bottom: 12px;
+}
+
+/* Collapsible "info tab" disclosure on the Data visualisation page */
+.info-disclosure {
+  background-color: #F4F5F6;
+  border: 1px solid #DDE1E4;
+  border-radius: 6px;
+  padding: 8px 16px;
+  margin-bottom: 20px;
+}
+.info-disclosure summary {
+  cursor: pointer;
+  color: var(--who-navy);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.info-disclosure summary::before {
+  content: "\24D8  ";
+}
+
+/* SD colour legend on the Weekly summary table tab */
+.sd-legend-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #C9CDD1;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.sd-legend-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: #333333;
 }
 
 /* Small buffer so tab content never sits flush against the navbar */
