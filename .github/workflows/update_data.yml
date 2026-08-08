@@ -2,9 +2,9 @@ name: Update PAK IDSR Data
 
 on:
   schedule:
-    # Cron is always UTC regardless of local timezone.
-    # 05:00 UTC every day = 08:00 Cairo
-    - cron: "0 5 * * *"
+    # 06:00 UTC every day -- adjust to whenever the bulletin usually
+    # publishes. Cron is always UTC regardless of your local timezone.
+    - cron: "0 6 * * *"
   workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
 
 permissions:
@@ -67,16 +67,22 @@ jobs:
 
       - name: Email run summary
         if: steps.should_email.outputs.send == 'true'
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port: ${{ secrets.MAIL_PORT }}
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "PAK IDSR data pipeline update — ${{ github.run_id }}"
-          to: ${{ secrets.MAIL_TO }}
-          from: PAK IDSR Pipeline
-          body: file://Data/run_log.txt
+        env:
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          # Mailgun accounts are region-locked at signup: US accounts use
+          # api.mailgun.net, EU accounts use api.eu.mailgun.net. Change
+          # this if your Sinch Mailgun domain was created under EU.
+          MAILGUN_API_BASE: https://api.mailgun.net
+        run: |
+          curl --fail-with-body -sS \
+            --user "api:${MAILGUN_API_KEY}" \
+            "${MAILGUN_API_BASE}/v3/${MAILGUN_DOMAIN}/messages" \
+            -F from="PAK IDSR Pipeline <pipeline@${MAILGUN_DOMAIN}>" \
+            -F to="${MAIL_TO}" \
+            -F subject="PAK IDSR data pipeline update — ${{ github.run_id }}" \
+            -F text=@Data/run_log.txt
 
       - name: Email failure alert
         # Fires only if an earlier step in this job failed outright (e.g.
@@ -84,16 +90,21 @@ jobs:
         # enough to break scraping entirely) -- distinct from the normal
         # summary email above, which only runs on a successful step chain.
         if: failure()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.MAIL_SERVER }}
-          server_port: ${{ secrets.MAIL_PORT }}
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "PAK IDSR data pipeline FAILED — ${{ github.run_id }}"
-          to: ${{ secrets.MAIL_TO }}
-          from: PAK IDSR Pipeline
-          body: |
-            The scheduled data pipeline run did not complete successfully.
+        env:
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAILGUN_API_BASE: https://api.mailgun.net
+        run: |
+          printf '%s\n\n%s\n' \
+            "The scheduled data pipeline run did not complete successfully." \
+            "Full log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            > /tmp/failure_body.txt
+          curl --fail-with-body -sS \
+            --user "api:${MAILGUN_API_KEY}" \
+            "${MAILGUN_API_BASE}/v3/${MAILGUN_DOMAIN}/messages" \
+            -F from="PAK IDSR Pipeline <pipeline@${MAILGUN_DOMAIN}>" \
+            -F to="${MAIL_TO}" \
+            -F subject="PAK IDSR data pipeline FAILED — ${{ github.run_id }}" \
+            -F text=@/tmp/failure_body.txt
 
-            Full log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
