@@ -698,9 +698,10 @@ ui <- tagList(
         ),
         div(
           class = "info-disclosure",
-          div(class = "info-disclosure-title", "\u2139"),
           div(
             style = "font-size: 12.5px; color: #555;",
+            p(style = "margin-bottom: 6px;",
+              strong("Calculations:")),
             p(style = "margin-bottom: 6px;",
               strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
               "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
