@@ -544,7 +544,7 @@ pak_regions_sf <- load_pak_regions()
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=10"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=11"),
     tags$title("WHO EMRO | Pakistan IDSR Dashboard")
   ),
 
@@ -584,69 +584,70 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
-        style = "margin: 16px 0; padding: 0 24px;",
+        class = "page-tint-bg",
         div(
-          class = "info-card",
-          style = "border-left: 6px solid #B0121A; background-color: #FDF2F2;",
-          h4("Disclaimer", style = "color:#B0121A;"),
-          p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support the ",
-            "exploratory review and interpretation of publicly available surveillance data. Its outputs, including ",
-            "statistical signals and projected estimates, are preliminary and require validation. They do not ",
-            "constitute official WHO epidemiological assessments, alerts, or recommendations and do not replace ",
-            "established Public Health Intelligence (PHI) processes, expert epidemiological review, verification ",
-            "by national authorities, or formal WHO information products. The dashboard should not be shared ",
-            "externally or used for operational or public communication without appropriate technical review and ",
-            "authorization.")
-        )),
-      div(
-        class = "info-card",
-        h4("About this dashboard"),
-        p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern Medierranean (EMRO)
+          style = "max-width: 980px; margin: 0 auto;",
+          h4("About this dashboard"),
+          p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern Medierranean (EMRO)
             in monitoring disease case reporting from Pakistan, provided by the 
             Integrated Disease Surveillance and Response (IDSR) bulletins."),
-        p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
-          "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, and ",
-          strong("Weekly summary table"), " for the full week-by-week breakdown."),
-        h4("Data sources and limitations", style = "margin-top: 16px;"),
-        tags$ul(
-          tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are mostly ",
-                  "suspected cases, not laboratory-confirmed diagnoses. Treat them as an early-warning signal, ",
-                  "not a confirmed count of cases."),
-          tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every week. ",
-                  "\u201cCompliance %\u201d is the share of expected reports a region actually received for a given ",
-                  "week -- weeks or regions with low compliance will under-represent the true number of cases."),
-          tags$li(strong("Geographic coverage: "), "Regions match those published in the NIH IDSR bulletins: ",
-                  "Balochistan, Gilgit-Baltistan, Islamabad Capital Territory (ICT), Khyber Pakhtunkhwa (KP), ",
-                  "Punjab, Sindh, and Azad Jammu & Kashmir (AJK)."),
-          tags$li(strong("Missing data: "), "Some regions don't report for a given week -- these are marked NR ",
-                  "(Not Reported) in the bulletin. Some diseases are also missing from the table entirely for a ",
-                  "given week, most likely because there were no cases to report. In this case, we also treat the value ",
-                  "as missing rather than assuming it's zero. Missing weeks appear as grey flags on the map and ",
-                  "in the Alerts tab.")
-        ),
-        h4("Methodology", style = "margin-top: 16px;"),
-        h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
-        p("Using the number of reported cases and the compliance percentage, we can estimate the true number of ",
-          "cases for a given week and region. We use a simple projection: reported cases \u00f7 (compliance % / ",
-          "100). For example, 20 reported cases with 50% compliance gives a projected total of ",
-          "20 \u00f7 0.5 = 40 cases. This assumes non-reporting sites have a similar case rate to reporting ",
-          "sites, which may not hold -- particularly during active outbreaks or access constraints -- so treat ",
-          "projected figures as a rough estimate, not a precise count."),
-        h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
-        p("Alerts are generated using a CUSUM/C2 aberration detection method. For a given disease and location, ",
-          "we look at the 9 weeks immediately before the week being evaluated. We drop the 2 most recent of ",
-          "those weeks (a \u201cguard band\u201d), so an emerging outbreak can't inflate its own baseline. The ",
-          "mean (\u03bc) and standard deviation (\u03c3) of the remaining 7 baseline weeks set three thresholds: ",
-          "T1 = \u03bc + 2\u03c3 (yellow), T2 = \u03bc + 3\u03c3 (medium red), and T3 = \u03bc + 4\u03c3 (dark red)."),
-        tags$ul(
-          tags$li(strong("Handling missing weeks in the baseline: "), "If one or more of the 7 baseline weeks is ",
-                  "marked NR, or missing from the bulletin entirely, we calculate the mean and standard ",
-                  "deviation from the remaining weeks -- as long as at least 3 have a report. Below that, we ",
-                  "don't apply the method, and the week is flagged as having ", strong("insufficient baseline data")),
-          tags$li(strong("Flat baselines: "), "A rare or sporadic disease can have a baseline where all 7 weeks ",
-                  "report the same value, often zero -- giving a standard deviation of exactly 0. In this case, ",
-                  "we apply a minimum standard deviation of 1, following standard practice in the ",
-                  "aberration-detection literature for this method (see the ", strong("References"), " tab).")
+          p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
+            "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, and ",
+            strong("Weekly summary table"), " for the full week-by-week breakdown."),
+          h4("Data sources and limitations", style = "margin-top: 20px;"),
+          tags$ul(
+            tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are mostly ",
+                    "suspected cases, not laboratory-confirmed diagnoses. Treat them as an early-warning signal, ",
+                    "not a confirmed count of cases."),
+            tags$li(strong("Reporting compliance: "), "Not every expected reporting site submits data every week. ",
+                    "\u201cCompliance %\u201d is the share of expected reports a region actually received for a given ",
+                    "week -- weeks or regions with low compliance will under-represent the true number of cases."),
+            tags$li(strong("Geographic coverage: "), "Regions match those published in the NIH IDSR bulletins: ",
+                    "Balochistan, Gilgit-Baltistan, Islamabad Capital Territory (ICT), Khyber Pakhtunkhwa (KP), ",
+                    "Punjab, Sindh, and Azad Jammu & Kashmir (AJK)."),
+            tags$li(strong("Missing data: "), "Some regions don't report for a given week -- these are marked NR ",
+                    "(Not Reported) in the bulletin. Some diseases are also missing from the table entirely for a ",
+                    "given week, most likely because there were no cases to report. In this case, we also treat the value ",
+                    "as missing rather than assuming it's zero. Missing weeks appear as grey flags on the map and ",
+                    "in the Alerts tab.")
+          ),
+          h4("Methodology", style = "margin-top: 20px;"),
+          h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
+          p("Using the number of reported cases and the compliance percentage, we can estimate the true number of ",
+            "cases for a given week and region. We use a simple projection: reported cases \u00f7 (compliance % / ",
+            "100). For example, 20 reported cases with 50% compliance gives a projected total of ",
+            "20 \u00f7 0.5 = 40 cases. This assumes non-reporting sites have a similar case rate to reporting ",
+            "sites, which may not hold -- particularly during active outbreaks or access constraints -- so treat ",
+            "projected figures as a rough estimate, not a precise count."),
+          h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+          p("Alerts are generated using a CUSUM/C2 aberration detection method. For a given disease and location, ",
+            "we look at the 9 weeks immediately before the week being evaluated. We drop the 2 most recent of ",
+            "those weeks (a \u201cguard band\u201d), so an emerging outbreak can't inflate its own baseline. The ",
+            "mean (\u03bc) and standard deviation (\u03c3) of the remaining 7 baseline weeks set three thresholds: ",
+            "T1 = \u03bc + 2\u03c3 (yellow), T2 = \u03bc + 3\u03c3 (medium red), and T3 = \u03bc + 4\u03c3 (dark red)."),
+          tags$ul(
+            tags$li(strong("Handling missing weeks in the baseline: "), "If one or more of the 7 baseline weeks is ",
+                    "marked NR, or missing from the bulletin entirely, we calculate the mean and standard ",
+                    "deviation from the remaining weeks -- as long as at least 3 have a report. Below that, we ",
+                    "don't apply the method, and the week is flagged as having ", strong("insufficient baseline data")),
+            tags$li(strong("Flat baselines: "), "A rare or sporadic disease can have a baseline where all 7 weeks ",
+                    "report the same value, often zero -- giving a standard deviation of exactly 0. In this case, ",
+                    "we apply a minimum standard deviation of 1, following standard practice in the ",
+                    "aberration-detection literature for this method (see the ", strong("References"), " tab).")
+          ),
+          div(
+            class = "info-card",
+            style = "border-left: 6px solid #B0121A; background-color: #FDF2F2; margin-top: 24px;",
+            h4("Disclaimer", style = "color:#B0121A;"),
+            p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support the ",
+              "exploratory review and interpretation of publicly available surveillance data. Its outputs, including ",
+              "statistical signals and projected estimates, are preliminary and require validation. They do not ",
+              "constitute official WHO epidemiological assessments, alerts, or recommendations and do not replace ",
+              "established Public Health Intelligence (PHI) processes, expert epidemiological review, verification ",
+              "by national authorities, or formal WHO information products. The dashboard should not be shared ",
+              "externally or used for operational or public communication without appropriate technical review and ",
+              "authorization.")
+          )
         )
       )
     ),
@@ -809,7 +810,7 @@ ui <- tagList(
           ),
           tags$p(
             style = "font-size: 12px; color: #555; margin-top: 8px;",
-            "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details)."
+            "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
           )
         ),
         mainPanel(
@@ -829,17 +830,14 @@ ui <- tagList(
     tabPanel(
       "References",
       div(
-        style = "max-width: 900px; margin: 16px 0; padding: 0 24px;",
+        class = "page-tint-bg",
         div(
-          class = "info-card",
+          style = "max-width: 900px; margin: 0 auto;",
           h4("Primary data source"),
           p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
           tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
-                 "https://www.nih.org.pk/phb/weekly-bulletin")
-        ),
-        div(
-          class = "info-card",
-          h4("Alert detection methodology"),
+                 "https://www.nih.org.pk/phb/weekly-bulletin"),
+          h4("Alert detection methodology", style = "margin-top: 20px;"),
           p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
             "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
             "See the ", strong("Home"), " tab for a full explanation of how it's calculated."),
@@ -849,11 +847,8 @@ ui <- tagList(
             "For rare/sporadic diseases with an all-zero (or otherwise flat) baseline, a minimum standard ",
             "deviation of 1 is applied rather than treating the week as unusable -- see:"),
           tags$a(href = "https://wwwnc.cdc.gov/eid/article/15/4/08-0616_article", target = "_blank",
-                 "Hutwagner et al., Enhancing Time-Series Detection Algorithms for Automated Biosurveillance, Emerg Infect Dis, 2009")
-        ),
-        div(
-          class = "info-card",
-          h4("Contact"),
+                 "Hutwagner et al., Enhancing Time-Series Detection Algorithms for Automated Biosurveillance, Emerg Infect Dis, 2009"),
+          h4("Contact", style = "margin-top: 20px;"),
           p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
         )
       )
@@ -862,7 +857,7 @@ ui <- tagList(
 
   div(
     class = "who-footer",
-    style = "padding:16px 28px; font-size:12px; color:#555555; background-color:#E6EFF9; border-top:1px solid #C9DEF3;",
+    style = "padding:16px 28px; font-size:12px; color:#555555; background-color:#FFFFFF; border-top:1px solid #C9DEF3;",
     "Data source: National Institute of Health (NIH) Pakistan, IDSR weekly bulletins."
   )
 )
@@ -1318,7 +1313,7 @@ server <- function(input, output, session) {
       missing_section <- tagList(
         h4("Data gaps", style = "font-size:15px; color:#555; margin-top:24px;"),
         p(style = "font-size: 12.5px; color:#555;",
-          "List of locations and diseases where either there is no reporting (NR) for the current week, or because there is ",
+          "List of locations and diseases where there is no reporting (NR) for the current week or there is ",
           "insufficient data from previous weeks to form a baseline. Diseases not in this week's bulletin are not shown."),
         missing_boxes
       )

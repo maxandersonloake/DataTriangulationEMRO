@@ -115,11 +115,15 @@ a:hover { color: var(--who-navy); }
 }
 
 /* ---- Footer ---- */
+/* White rather than the pale blue used for the Home/References page
+   background (see .page-tint-bg below) -- otherwise, now that those pages
+   are pale blue edge-to-edge, the footer would blend straight into them
+   with no visible boundary. */
 .who-footer {
   padding: 12px 24px;
   font-size: 12px;
   color: #555555;
-  background-color: var(--who-blue-10);
+  background-color: #FFFFFF;
   border-top: 1px solid var(--who-blue-25);
 }
 
@@ -135,6 +139,17 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   margin-bottom: 12px;
 }
 .info-card h4 { margin-top: 0; }
+
+/* Full-bleed pale-blue background for the Home and References tabs --
+   content sits directly on this background rather than in individual
+   boxed cards. The negative margin cancels Shiny's default container
+   gutter so the tint reaches the edges of the visible content area. */
+.page-tint-bg {
+  background-color: var(--who-blue-10);
+  margin: 0 -15px;
+  padding: 20px 15px 36px 15px;
+  min-height: calc(100vh - 300px);
+}
 
 /* Data visualisation panels: chart + its controls, styled as a clean card
    with a fixed-height footer area so the plot and map panels line up at
