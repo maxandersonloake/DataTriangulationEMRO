@@ -1,0 +1,1454 @@
+# Perform NIH Pakistan Weekly Bulletin extraction
+#   To Do:
+#    - better identification of table of interest (rather than relying on it being labelled table 1)
+#    - email mandersonloake@gmail.com with any unexpected outputs (or if output is good)
+#    - fix up dates matching each week (currently assumes week 1 = 01-01 to 01-07)
+#    - add data validation step
+
+# Questions:
+#    - Rubella same as rubella (crs)?
+#    - Diphtheria (probable) same as diphtheria?
+#    - Punjab delayed reporting
+#    - Week on x axis or date?
+#    - Compliance table ideas
+#    - Interpretation of none reported (leave off plot? - currently have as 0s on table)
+#    - 30% increase colouring?
+
+
+# TO DO:
+#Meeting 8/4/2026 - Dashboard Review:
+
+# Where to use % vs CUSUM method
+# Map with neighbouring countries as well?
+# Include greens in weekly summary
+# - Alerts national and regional split?
+#   - How to handle missing data punjab
+# - Other next steps
+# 
+# - Add other countries neighbouring in map
+# - Need 3+ weeks with available data to calculate mean and sd, otherwise flag
+# - If missing data in line plot, remove line between and swap to scatter plot
+# - Make it clear which week the data is showing (most recent week)
+# - Add description about compliance calculation on visualisation page
+# - Differentiate between late data and NR
+# - Week in alert tab
+# - Functionality to change map and alerts pages to previous week or other week
+# - Stacked bar for how the number of cases in each district is contributing to total
+# - Disclaimer: Not replacing PHI. Watermark. 
+# - Alerted last 3 weeks, or X times this year
+
+
+library(xml2)
+library(rvest)
+library(stringr)
+library(dplyr)
+library(purrr)
+library(pdftools)
+library(stringdist)
+library(tidyr)
+library(readr)
+library(fs)
+
+# ---- Lookups ----------------------------------------------------------
+
+# Some PDF fonts drop the "ti" ligature glyph entirely during text
+# extraction (a poppler/pdftools quirk with certain embedded font subsets),
+# either removing it outright or leaving a single space in its place --
+# e.g. "National" extracts as "Na onal", "Baltistan" as "Bal stan". Which
+# words are affected seems to depend on which font subset that block of
+# text happens to use, so rather than loosening fuzzy-match distance
+# tolerances everywhere (risking confusion between genuinely different
+# short terms elsewhere), any lookup term containing "ti" gets defensive
+# extra variants added so a broken extraction still resolves via an
+# exact/near-exact match.
+add_ligature_variants <- function(lookup){
+  lapply(lookup, function(variants){
+    extra <- unlist(lapply(variants, function(v){
+      if(!grepl("ti", v, fixed = TRUE)) return(character(0))
+      c(
+        str_squish(gsub("ti", " ", v, fixed = TRUE)),  # ligature dropped, space left behind
+        gsub("ti", "", v, fixed = TRUE)                # ligature dropped entirely
+      )
+    }))
+    unique(c(variants, extra))
+  })
+}
+
+# Flexible lookup in case column names change
+# (Capitalisation does not matter)
+column_lookup <- list(
+  Disease      = c("disease", "diseases"),
+  AJK          = c("ajk", "azad jammu kashmir", "azad jammu & kashmir"),
+  Balochistan  = c("balochistan"),
+  GB           = c("gb", "gilgit baltistan", "gilgit-baltistan"),
+  ICT          = c("ict", "islamabad", "islamabad capital territory"),
+  KP           = c("kp", "kpk", "khyber pakhtunkhwa"),
+  Punjab       = c("punjab"),
+  Sindh        = c("sindh"),
+  Total        = c("total", "totals", "grand total")
+)
+column_lookup <- column_lookup |> lapply(tolower) |> add_ligature_variants()
+
+# Flexible lookup in case disease names change spelling/punctuatuion
+disease_lookup <- list(
+  "AD (Non-Cholera)"        = c("ad (non-cholera)", "ad non cholera", "acute diarrhea (non-cholera)",
+                                "acute diarrhoea (non-cholera)", "ad non-cholera"),
+  "Malaria"                 = c("malaria"),
+  "ILI"                     = c("ili", "influenza like illness", "influenza-like illness"),
+  "TB"                      = c("tb", "tuberculosis"),
+  "ALRI < 5 years"          = c("alri < 5 years", "alri under 5", "alri<5",
+                                "acute lower respiratory infection < 5 years", "alri (<5 years)"),
+  "Animal / Dog Bite"       = c("animal / dog bite", "animal/dog bite", "animal bite", "dog bite", "animal & dog bite"),
+  "B. Diarrhea"             = c("b. diarrhea", "b diarrhea", "bloody diarrhea", "bloody diarrhoea", "b. diarrhoea"),
+  "VH (B, C & D)"           = c("vh (b, c & d)", "vh b c d", "viral hepatitis (b, c & d)", "vh (b,c&d)"),
+  "VH (B & C)"             = c("vh (b & c)", "vh (b&c)", "vh b&c", "vh b c", "viral hepatitis (b & c)", "viral hepatitis (b&c)"),
+  "Typhoid"                 = c("typhoid", "typhoid fever"),
+  "SARI"                    = c("sari", "severe acute respiratory infection", "severe acute respiratory illness"),
+  "CL"                      = c("cl", "cutaneous leishmaniasis"),
+  "AVH (A & E)"             = c("avh (a & e)", "avh a e", "acute viral hepatitis (a & e)", "avh (a&e)"),
+  "Measles"                 = c("measles"),
+  "Mumps"                   = c("mumps"),
+  "Chickenpox/ Varicella"   = c("chickenpox/ varicella", "chickenpox / varicella", "chicken pox / varicella",
+                                "chickenpox varicella", "varicella"),
+  "AWD (S. Cholera)"        = c("awd (s. cholera)", "awd s cholera", "acute watery diarrhea (suspected cholera)",
+                                "awd (suspected cholera)"),
+  "Dengue"                  = c("dengue", "dengue fever"),
+  "Meningitis"              = c("meningitis"),
+  "AFP"                     = c("afp", "acute flaccid paralysis"),
+  "Pertussis"               = c("pertussis", "whooping cough"),
+  "HIV/AIDS"                = c("hiv/aids", "hiv / aids", "hiv aids", "hiv"),
+  "Gonorrhea"               = c("gonorrhea"),
+  "Syphilis"                = c("syphilis"),
+  "VL"                      = c("vl", "visceral leishmaniasis", "kala azar", "kala-azar"),
+  "Leprosy"                 = c("leprosy"),
+  "NT"                      = c("nt", "neonatal tetanus"),
+  "Brucellosis"             = c("brucellosis"),
+  "Diphtheria (Probable)"   = c("diphtheria (probable)", "diphtheria probable", "diphtheria"),
+  "CCHF"                    = c("cchf", "crimean congo hemorrhagic fever", "crimean-congo haemorrhagic fever"),
+  "Rubella (CRS)"           = c("rubella (crs)", "rubella crs", "congenital rubella syndrome", "rubella"),
+  "Rabies"                  = c("rabies"),
+  "COVID-19"                = c("covid-19", "covid 19", "covid19", "sars-cov-2"),
+  "Mpox"                    = c("mpox", "monkeypox"),
+  "Anthrax"                 = c("anthrax"),
+  "Chikungunya"             = c("chikungunya")
+)
+disease_lookup <- disease_lookup |> lapply(tolower) |> add_ligature_variants()
+
+# Flexible lookup for the region names used in the compliance table.
+# NOTE: the compliance table never appears to include Punjab (see the
+# "Punjab delayed reporting" question above) but Punjab is included here
+# anyway in case a future bulletin does report it.
+region_lookup <- list(
+  AJK          = c("ajk", "azad jammu kashmir", "azad jammu & kashmir", "azad jammu and kashmir"),
+  Balochistan  = c("balochistan"),
+  GB           = c("gb", "gilgit baltistan", "gilgit-baltistan"),
+  ICT          = c("ict", "islamabad", "islamabad capital territory"),
+  KP           = c("kp", "kpk", "khyber pakhtunkhwa"),
+  Punjab       = c("punjab"),
+  Sindh        = c("sindh"),
+  National     = c("national", "pakistan", "overall")
+)
+region_lookup <- region_lookup |> lapply(tolower) |> add_ligature_variants()
+
+get_bulletin_links <- function(url) {
+  # Retrieve bulletin PDF links and their displayed titles from the
+  # NIH Pakistan weekly bulletin webpage.
+  # Args:
+  #   url: URL of the weekly bulletin webpage.
+  # Returns:
+  #   A data frame containing:
+  #      - title: the anchor text (e.g. 'IDSRS Week 26 Bulletin (2026)')
+  #      - link: the link to the bulletin PDF
+  
+  page <- read_html(url)
+  
+  nodes <- page |>
+    html_elements(".list-pdf a")
+  
+  tibble(
+    title = nodes |> html_text2(),
+    link = nodes |> html_attr("href")
+  ) |>
+    mutate(
+      link = str_trim(link),
+      link = str_replace(link, "\\?.*$", ""),
+      # The site's markup occasionally has stray characters trailing the
+      # real href (e.g. literal "\r\n" sequences turning up as extra path
+      # segments after the file extension). Since every genuine link here
+      # is a PDF, the robust fix is to truncate right after ".pdf" rather
+      # than trying to strip out each possible flavour of trailing junk.
+      link = if_else(
+        str_detect(link, regex("\\.pdf", ignore_case = TRUE)),
+        str_extract(link, regex("^.*\\.pdf", ignore_case = TRUE)),
+        link
+      ),
+      link = if_else(
+        str_detect(link, "^http"),
+        link,
+        paste0("https://www.nih.org.pk", link)
+      )
+    )
+}
+
+extract_report_date <- function(link_df) {
+  # ------------------------------------------------------------------------------
+  # Extract the reporting year and week from bulletin titles.
+  #
+  # Bulletin titles are expected to follow the format:
+  #   "IDSRS Week WW Bulletin (YYYY)"
+  # for example:
+  #   "IDSRS Week 26 Bulletin (2026)"
+  #
+  # Assumptions:
+  #   - The week number immediately follows the word "Week".
+  #   - The reporting year is the four-digit number enclosed in parentheses at
+  #     the end of the title.
+  #
+  # Args:
+  #   link_df: Data frame returned by get_bulletin_links() containing columns
+  #            'title' and 'link'.
+  #
+  # Returns:
+  #   The input data frame with additional columns:
+  #     - year: Reporting year.
+  #     - week: Week number.
+  # ------------------------------------------------------------------------------
+  
+  link_df |>
+    mutate(
+      week = as.numeric(
+        str_extract(title, "(?<=Week\\s)\\d+")
+      ),
+      year = as.numeric(
+        str_extract(title, "(?<=\\()\\d{4}(?=\\)$)")
+      )
+    )
+}
+
+download_pdf <- function(url) {
+  # Download a PDF and extract both its text and its word-level layout data.
+  # Args:
+  #   url: URL of the PDF.
+  # Returns:
+  #   A list with:
+  #     - text: character vector, the text of each page (as from
+  #       pdftools::pdf_text()) -- used for the disease-counts table, which
+  #       has a variable row count and is well suited to line-based parsing.
+  #     - data: a list of data frames, one per page, each with one row per
+  #       word and its x/y bounding-box position (as from
+  #       pdftools::pdf_data()) -- used for the compliance table, which has
+  #       a fixed, known row set but whose columns can drift onto separate
+  #       text lines in ways that defeat line-based heuristics (see
+  #       extract_compliance_rows()).
+  #   Returns NULL if the download or extraction fails.
+  
+  # Get url into correct format for reading, e.g., replaces spaces with %20
+  url <- utils::URLencode(url)
+  
+  # Temporary file for the downloaded PDF
+  tmp <- tempfile(fileext = ".pdf")
+  
+  tryCatch({
+    
+    download.file(
+      url = url,
+      destfile = tmp,
+      mode = "wb",
+      quiet = TRUE
+    )
+    
+    list(
+      text = pdftools::pdf_text(tmp),
+      data = pdftools::pdf_data(tmp)
+    )
+    
+  }, error = function(e) {
+    
+    warning("Failed to process PDF: ", url)
+    
+    NULL
+    
+  }, finally = {
+    
+    if (file.exists(tmp)) {
+      unlink(tmp)
+    }
+    
+  })
+}
+
+# ---- Generic fuzzy matcher builder -------------------------------------
+
+build_matcher <- function(lookup){
+  variant_to_canonical <- unlist(
+    lapply(names(lookup), function(nm) {
+      setNames(rep(nm, length(lookup[[nm]])), lookup[[nm]])
+    })
+  )
+  variant_to_canonical
+}
+
+column_variant_map   <- build_matcher(column_lookup)
+disease_variant_map  <- build_matcher(disease_lookup)
+region_variant_map   <- build_matcher(region_lookup)
+
+fuzzy_match <- function(raw, variant_map, max_dist = 2){
+  # Match disease/column/region names to the standard values
+  # Permits:
+  #   1. Exact matches, or matches provided in the previous lookups
+  #   2. Prefixes, where the prefix is at least 4 characters and is the exact start of value in lookup
+  #               e.g. Baloch. or baloch matches to balochistan
+  #   3. Fuzzy matching: <= 4 chars : must match exactly, 5-7 chars : 1 difference in string allowed,  8+ chars : 2 errors allowed
+  
+  clean <- tolower(trimws(raw))
+  
+  # ---- 1. Exact match (silent) --------------------------------------------
+  if(clean %in% names(variant_map)){
+    return(unname(variant_map[clean]))
+  }
+  
+  # ---- 2. Prefix match (flagged) ------------------------------------------
+  if(nchar(clean) >= 4){
+    
+    prefix_hits <- which(startsWith(names(variant_map), clean))
+    
+    if(length(prefix_hits) > 0){
+      
+      canonicals <- unique(unname(variant_map[prefix_hits]))
+      
+      if(length(canonicals) == 1){
+        
+        message(sprintf('Prefix matched "%s" -> "%s" (canonical: "%s")',
+                        raw, names(variant_map)[prefix_hits[1]], canonicals))
+        
+        return(canonicals)
+      }
+      
+      if(length(canonicals) > 1){
+        stop(sprintf('Ambiguous prefix match for "%s": matches multiple different values (%s)',
+                     raw, paste(canonicals, collapse = ", ")))
+      }
+    }
+  }
+  
+  # ---- 3. Distance-based fuzzy match (flagged) ----------------------------
+  n <- nchar(clean)
+  tol <- dplyr::case_when(
+    n <= 4 ~ 0,
+    n <= 7 ~ 1,
+    TRUE   ~ 2
+  )
+  tol <- min(tol, max_dist)
+  
+  dists <- stringdist(clean, names(variant_map), method = "osa")
+  best_dist <- min(dists)
+  
+  if(best_dist <= tol){
+    
+    best_idx   <- which(dists == best_dist)
+    canonicals <- unique(unname(variant_map[best_idx]))
+    
+    if(length(canonicals) > 1){
+      stop(sprintf('Ambiguous fuzzy match for "%s": matches multiple different values (%s) at distance %d',
+                   raw, paste(canonicals, collapse = ", "), best_dist))
+    }
+    
+    message(sprintf('Fuzzy matched "%s" -> "%s" (canonical: "%s", distance: %d)',
+                    raw, names(variant_map)[best_idx[1]], canonicals, best_dist))
+    
+    return(canonicals)
+  }
+  
+  NA_character_
+}
+
+match_column_name  <- function(x) fuzzy_match(x, column_variant_map,  max_dist = 2)
+match_disease_name <- function(x) fuzzy_match(x, disease_variant_map, max_dist = 2)
+match_region_name  <- function(x) fuzzy_match(x, region_variant_map,  max_dist = 2)
+
+is_exact_disease_match <- function(raw, variant_map = disease_variant_map){
+  tolower(trimws(raw)) %in% names(variant_map)
+}
+
+merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map){
+  
+  # Names sometimes wrap across two (or three) lines in the source PDF.
+  # Pure-text (non-data) lines are tokenized at the WORD level (not just on
+  # double-spaces), since footnote/disclaimer text is often single-spaced and
+  # glued to a genuine name continuation on the same line (e.g.
+  # "(Probable) Punjab Data delayed due to non-reporting by HF" needs to
+  # split into "(Probable)" + separate footnote words to be handled correctly).
+  #
+  # In addition, the last data column (e.g. Total, or Compliance %) is
+  # frequently NOT baseline-aligned with the rest of its row -- it looks
+  # like it's vertically centered against the full (possibly multi-line)
+  # row height, so it can print on its own line, landing before, between,
+  # or after the row's other lines in the extracted text stream. These
+  # "stray value" lines have exactly one numeric token and no name text.
+  #
+  # This function is shared between the main disease-counts table (where
+  # variant_map = disease_variant_map) and the compliance table (where
+  # variant_map = region_variant_map) -- the wrapping/stray-value problems
+  # are identical, only the set of "valid names" to match against differs.
+  #
+  # Approach:
+  #   Pass 1: data lines anchor rows as before. A data line with n_cols-1
+  #           tokens is a complete row. A data line with n_cols-2 tokens is
+  #           treated as a row that's missing its last value (placeholder NA).
+  #           A line with a single bare numeric token and no name text is
+  #           queued as a stray value rather than forced into a row.
+  #           Non-data lines contribute word-level tokens to a "floater run"
+  #           between two rows (name-wrap handling, unchanged).
+  #   Pass 2: for a run between two rows, find the single split point
+  #           minimising combined match score of both sides (as before).
+  #           For a TRAILING run (nothing after it), search for the
+  #           shortest prefix that best improves the previous row's match
+  #           score; anything beyond that point is discarded as noise.
+  #   Pass 3: resolve stray values -- each is assigned to whichever
+  #           value-missing row is nearest to it (by row index / "look
+  #           above or below"), preferring the row immediately preceding it.
+  
+  get_tokens_coarse <- function(x){
+    t <- str_split(str_trim(x), "\\s{2,}")[[1]]
+    t[nzchar(t)]
+  }
+  get_tokens_fine <- function(x){
+    t <- str_split(str_trim(x), "\\s+")[[1]]
+    t[nzchar(t)]
+  }
+  is_numeric_tok <- function(tok) grepl("^(NR|[0-9,]+)$", tok)
+  bracket_open   <- function(text) str_count(text, "\\(") > str_count(text, "\\)")
+  
+  score_name <- function(name, vmap = variant_map){
+    clean <- tolower(trimws(name))
+    if(nchar(clean) == 0) return(Inf)
+    if(clean %in% names(vmap)) return(0)
+    dists <- stringdist(clean, names(vmap), method = "osa")
+    min(dists)
+  }
+  
+  # ---- Pass 1: data-anchored rows + name-only floater runs -----------------
+  rows <- list()
+  runs <- list()
+  stray_values <- list()
+  
+  current_run <- character(0)
+  
+  flush_run <- function(){
+    if(length(current_run) > 0){
+      runs[[length(runs) + 1]] <<- list(after_row = length(rows), tokens = current_run)
+      current_run <<- character(0)
+    }
+  }
+  
+  row_missing_last <- function(r){
+    n <- length(r$data_tokens)
+    n > 0 && is.na(r$data_tokens[n])
+  }
+  
+  for(ln in lines){
+    
+    coarse_tokens <- get_tokens_coarse(ln)
+    if(length(coarse_tokens) == 0) next
+    
+    is_num <- is_numeric_tok(coarse_tokens)
+    
+    if(any(is_num)){
+      leading_name <- coarse_tokens[!is_num]
+      data_tokens  <- coarse_tokens[is_num]
+      
+      if(length(leading_name) == 0 && length(data_tokens) == 1){
+        # A lone numeric token with no name text -- almost certainly a
+        # value that has drifted onto its own line. Queue it; it gets
+        # attached to a row in the resolution pass below rather than
+        # being forced in here (we don't yet reliably know which row it
+        # belongs to).
+        stray_values[[length(stray_values) + 1]] <- list(
+          after_row = length(rows),
+          value     = data_tokens
+        )
+        next
+      }
+      
+      flush_run()
+      
+      if(length(data_tokens) == n_cols - 1){
+        
+        rows[[length(rows) + 1]] <- list(name_parts = leading_name, data_tokens = data_tokens)
+        
+      } else if(length(data_tokens) == n_cols - 2){
+        
+        # Missing exactly one value -- almost always the last column, which
+        # (per the note above) often prints on a separate line. Create the
+        # row now with a placeholder NA; it gets filled in by the
+        # stray-value resolution pass.
+        rows[[length(rows) + 1]] <- list(
+          name_parts  = leading_name,
+          data_tokens = c(data_tokens, NA_character_)
+        )
+        
+      } else {
+        stop("Data line has ", length(data_tokens), " value(s), expected ",
+             n_cols - 1, " (or ", n_cols - 2, " with the last value on its own line): ",
+             paste(coarse_tokens, collapse = " "))
+      }
+      
+    } else {
+      # Pure-text line -- use WORD-level tokens so any footnote text glued
+      # to a genuine name fragment can be separated later.
+      current_run <- c(current_run, get_tokens_fine(ln))
+    }
+  }
+  flush_run()
+  
+  # ---- Pass 2: resolve each name-wrap run --------------------------------
+  for(run in runs){
+    
+    left_idx  <- run$after_row
+    right_idx <- run$after_row + 1
+    tok       <- run$tokens
+    m         <- length(tok)
+    
+    has_left  <- left_idx  >= 1 && left_idx  <= length(rows)
+    has_right <- right_idx >= 1 && right_idx <= length(rows)
+    
+    left_base  <- if(has_left)  paste(rows[[left_idx]]$name_parts,  collapse = " ") else ""
+    right_base <- if(has_right) paste(rows[[right_idx]]$name_parts, collapse = " ") else ""
+    
+    if(!has_left && !has_right){
+      next  # nothing to attach to either side -- drop (shouldn't normally happen)
+    }
+    
+    if(!has_left){
+      # Nothing before the first row -- attach everything to the right.
+      rows[[right_idx]]$name_parts <- c(tok, rows[[right_idx]]$name_parts)
+      next
+    }
+    
+    if(!has_right){
+      
+      # TRAILING run: search every possible prefix length. If ANY prefix
+      # produces an exact match against the lookup, take the shortest such
+      # prefix immediately (an exact match is always preferable to a merely
+      # "improved" fuzzy score). Otherwise fall back to whichever prefix
+      # gives the best (lowest) fuzzy score. Anything beyond the chosen
+      # split point is discarded as noise (footnote/disclaimer text).
+      
+      best_s     <- 0
+      best_score <- score_name(left_base)
+      exact_found <- (best_score == 0)
+      
+      if(nchar(trimws(left_base)) == 0){
+        # This row has no name at all yet (a "numbers first, name second"
+        # row -- see the both-sides branch below for how that arises).
+        # Any text is strictly better than an empty name, so claim the
+        # entire trailing run rather than searching for a fuzzy match.
+        best_s <- m
+      } else {
+        
+        for(s in seq_len(m)){
+          
+          candidate <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
+          sc <- score_name(candidate)
+          
+          if(sc == 0){
+            best_s      <- s
+            best_score  <- 0
+            exact_found <- TRUE
+            break
+          }
+          
+          if(!exact_found && sc < best_score){
+            best_score <- sc
+            best_s     <- s
+          }
+        }
+      }
+      
+      if(best_s > 0){
+        rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
+      }
+      if(best_s < m){
+        warning("Discarding trailing text as noise: ", paste(tok[(best_s + 1):m], collapse = " "))
+      }
+      next
+    }
+    
+    # ---- Both sides present ------------------------------------------------
+    # First, check whether attaching the ENTIRE run to one side gives an
+    # exact match. This matters because summing score_name(left) +
+    # score_name(right) breaks down when one side is still completely
+    # nameless (e.g. a "numbers first, name second" table layout, where a
+    # run sits between two number-only rows that haven't received their own
+    # dedicated name run yet): an empty side scores Inf, and a mediocre
+    # finite fuzzy split across both sides can numerically beat a perfect
+    # exact match on just one side purely because Inf so heavily dominates
+    # the sum. An outright exact match on one full side is always the right
+    # call regardless of what state the other side is in, so it's checked
+    # first and short-circuits the additive search entirely.
+    full_run         <- paste(tok, collapse = " ")
+    left_full_score  <- score_name(paste(c(left_base, full_run), collapse = " "))
+    right_full_score <- score_name(paste(c(full_run, right_base), collapse = " "))
+    
+    if(left_full_score == 0){
+      
+      # Prefer completing the left (preceding) row whenever that's an
+      # exact match -- including when the right side would ALSO score an
+      # exact match (which happens when both adjacent rows are still
+      # completely nameless, e.g. right_base == "" too: appending the run
+      # to either trivially "matches" itself). A name run belongs to the
+      # row whose numbers already appeared, not the row still to come.
+      best_s <- m
+      
+    } else if(right_full_score == 0){
+      
+      best_s <- 0
+      
+    } else {
+      
+      # No unambiguous whole-run exact match -- fall back to the
+      # fine-grained split search (genuine cross-row name wraps, e.g.
+      # "Islamabad Capital" + "Territory" spanning two lines of the SAME
+      # row's name).
+      min_split    <- 0
+      running_left <- left_base
+      while(min_split < m && bracket_open(running_left)){
+        min_split    <- min_split + 1
+        running_left <- paste(running_left, tok[min_split])
+      }
+      
+      best_s     <- min_split
+      best_score <- Inf
+      
+      for(s in min_split:m){
+        left_name  <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
+        right_name <- if(s < m) paste(c(tok[(s + 1):m], right_base), collapse = " ") else right_base
+        
+        score <- score_name(left_name) + score_name(right_name)
+        
+        if(score < best_score){
+          best_score <- score
+          best_s     <- s
+        }
+      }
+    }
+    
+    if(best_s > 0){
+      rows[[left_idx]]$name_parts <- c(rows[[left_idx]]$name_parts, tok[seq_len(best_s)])
+    }
+    if(best_s < m){
+      rows[[right_idx]]$name_parts <- c(tok[(best_s + 1):m], rows[[right_idx]]$name_parts)
+    }
+  }
+  
+  # ---- Pass 3: resolve stray last-column values (values on their own line) ----
+  if(length(stray_values) > 0){
+    
+    pending <- which(vapply(rows, row_missing_last, logical(1)))
+    
+    for(st in stray_values){
+      
+      if(length(pending) == 0){
+        warning("Found a stray value with no row left to attach it to: ", st$value)
+        next
+      }
+      
+      # "Look above or below": attach to whichever pending row is nearest
+      # (by row index) to the point in the source where this value was
+      # encountered. Ties favor the row above (lower index), since values
+      # more often print just after their row than just before the next.
+      dist    <- abs(pending - st$after_row)
+      nearest <- pending[which.min(dist)]
+      
+      rows[[nearest]]$data_tokens[length(rows[[nearest]]$data_tokens)] <- st$value
+      pending <- pending[pending != nearest]
+    }
+  }
+  
+  still_missing <- which(vapply(rows, row_missing_last, logical(1)))
+  if(length(still_missing) > 0){
+    warning("Row(s) still missing their last value after stray-value resolution: ",
+            paste(vapply(rows[still_missing], function(r) paste(r$name_parts, collapse = " "), character(1)),
+                  collapse = "; "))
+  }
+  
+  # ---- Reassemble into the original flat-string row format ------------------
+  vapply(rows, function(r){
+    full_name <- paste(r$name_parts, collapse = " ")
+    paste(c(full_name, r$data_tokens), collapse = "   ")
+  }, character(1))
+}
+
+
+split_glued_token <- function(token, lookup = column_lookup){
+  
+  clean <- tolower(token)
+  
+  # Try every pair of (start_variant, end_variant) to see if the token is
+  # exactly two known column names concatenated with no space between them.
+  all_variants <- unlist(lookup, use.names = FALSE)
+  all_variants <- all_variants[order(-nchar(all_variants))]  # longest first, avoids partial matches
+  
+  for(v1 in all_variants){
+    if(startsWith(clean, v1)){
+      
+      remainder <- substring(clean, nchar(v1) + 1)
+      remainder <- trimws(remainder)
+      
+      if(nchar(remainder) == 0) next  # token WAS just v1 alone, nothing to split
+      
+      for(v2 in all_variants){
+        if(remainder == v2){
+          return(c(v1, v2))
+        }
+      }
+    }
+  }
+  
+  NULL  # could not decompose into two known tokens
+}
+
+# ---- Generic helper: locate a table's header line by keyword hits ------
+
+find_header_line <- function(lines, header_keywords, min_matches){
+  # Returns the index (within `lines`) of the first line that mentions at
+  # least `min_matches` of `header_keywords`, or NA if none do.
+  keyword_counts <- vapply(lines, function(ln){
+    sum(sapply(header_keywords, function(k) grepl(k, ln, ignore.case = TRUE)))
+  }, integer(1))
+  
+  hits <- which(keyword_counts >= min_matches)
+  if(length(hits) == 0) return(NA_integer_)
+  hits[1]
+}
+
+# ---- Main disease-counts table ------------------------------------------
+
+extract_table_rows <- function(pdf_text){
+  
+  page <- pdf_text[grepl("Table\\s*1\\b", pdf_text, ignore.case = TRUE)]
+  if(length(page) == 0) return(NULL)
+  
+  lines <- str_split(page, "\\n")[[1]]
+  lines <- lines[nzchar(trimws(lines))]
+  
+  header_keywords <- c("Disease", "AJK", "Balochistan", "GB", "ICT", "KP", "Punjab", "Sindh", "Total")
+  
+  start <- find_header_line(lines, header_keywords, min_matches = 4)
+  if(is.na(start)) return(NULL)
+  
+  header_line   <- lines[start]
+  header_tokens <- str_split(str_trim(header_line), "\\s{2,}")[[1]]
+  matched_cols  <- vapply(header_tokens, match_column_name, character(1))
+  
+  if(!("Disease" %in% matched_cols)){
+    header_tokens <- c("Disease", header_tokens)
+    matched_cols  <- c("Disease", matched_cols)
+  }
+  
+  if(any(is.na(matched_cols))){
+    
+    new_tokens  <- list()
+    new_matches <- list()
+    
+    for(idx in seq_along(header_tokens)){
+      
+      if(!is.na(matched_cols[idx])){
+        new_tokens[[idx]]  <- header_tokens[idx]
+        new_matches[[idx]] <- matched_cols[idx]
+        next
+      }
+      
+      split_attempt <- split_glued_token(header_tokens[idx])
+      
+      if(!is.null(split_attempt)){
+        resolved <- vapply(split_attempt, match_column_name, character(1))
+        if(!any(is.na(resolved))){
+          message(sprintf('Split glued header token "%s" -> %s',
+                          header_tokens[idx], paste(split_attempt, collapse = " + ")))
+          new_tokens[[idx]]  <- split_attempt
+          new_matches[[idx]] <- resolved
+          next
+        }
+      }
+      
+      new_tokens[[idx]]  <- header_tokens[idx]
+      new_matches[[idx]] <- NA_character_
+    }
+    
+    header_tokens <- unlist(new_tokens)
+    matched_cols  <- unlist(new_matches)
+    
+    if(any(is.na(matched_cols))){
+      stop("Unmatched column header(s): ",
+           paste(header_tokens[is.na(matched_cols)], collapse = ", "))
+    }
+  }
+  
+  rows <- lines[(start + 1):length(lines)]
+  figure_idx <- which(grepl("^\\s*Figure", rows, ignore.case = TRUE))
+  if(length(figure_idx) > 0){
+    rows <- rows[seq_len(min(figure_idx) - 1)]
+  }
+  rows <- rows[!grepl("Page\\s*\\|", rows, ignore.case = TRUE)]   # <-- drop footer lines
+  rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols), variant_map = disease_variant_map)
+  
+  list(
+    rows    = rows,
+    columns = matched_cols
+  )
+}
+
+convert_cases_table <- function(extracted){
+  
+  rows         <- extracted$rows
+  matched_cols <- extracted$columns
+  
+  if(is.null(matched_cols) || length(matched_cols) == 0){
+    stop("`extracted` has no columns — check header parsing for this page.")
+  }
+  
+  if(is.null(rows) || length(rows) == 0){
+    stop("`extracted` has no rows — check row extraction/merging for this page.")
+  }
+  
+  split_lengths <- rows |>
+    str_replace_all("(?<=\\d),(?=\\d)", "") |>
+    str_split("\\s{2,}") |>
+    map_int(length)
+  
+  good_rows <- rows[split_lengths == length(matched_cols)]
+  
+  if(any(split_lengths != length(matched_cols))){
+    warning(sum(split_lengths != length(matched_cols)),
+            " row(s) dropped due to unexpected column count: ",
+            paste(rows[split_lengths != length(matched_cols)], collapse = " | "))
+  }
+  
+  data <- good_rows |>
+    str_replace_all("(?<=\\d),(?=\\d)", "") |>
+    str_split_fixed("\\s{2,}", n = length(matched_cols)) |>
+    as_tibble(.name_repair = ~ matched_cols)
+  
+  colnames(data) <- matched_cols
+  
+  data <- data |>
+    mutate(
+      Disease_raw = Disease,
+      Disease = vapply(Disease, match_disease_name, character(1)),
+      Disease = coalesce(Disease, Disease_raw)   # keep unmatched names visible, not NA
+    )
+  
+  unresolved <- data |> filter(Disease == Disease_raw & !(Disease %in% names(disease_lookup)))
+  if(nrow(unresolved) > 0){
+    stop(sprintf(
+      "%d disease name(s) unmatched, kept as-is: %s",
+      nrow(unresolved), paste(unique(unresolved$Disease_raw), collapse = "; ")
+    ))
+  }
+  
+  cases_table = data |>
+    select(-Disease_raw) |>
+    pivot_longer(-Disease, names_to = "Province", values_to = "Cases") |>
+    mutate(
+      # Keep an explicit "NR" cell as its own row (Cases = NA, Status =
+      # "NR") rather than dropping it outright. This preserves the
+      # distinction, downstream, between "this disease WAS in the table
+      # this week, but this region reported nothing" (a real row, flagged
+      # NR) and "this disease wasn't a row in this week's table at all"
+      # (which never reaches this point in the first place -- there's no
+      # PDF row to pivot from, so it's simply absent from the output,
+      # exactly as before). Any other non-numeric, non-"NR" cell is
+      # dropped as before -- only a clean, explicit "NR" gets kept.
+      Status = ifelse(Cases == "NR", "NR", "reported"),
+      Cases  = na_if(Cases, "NR"),
+      Cases  = as.numeric(Cases)
+    ) |>
+    filter(!is.na(Cases) | Status == "NR")
+  
+  return(cases_table)
+}
+
+write_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/PAK_IDSR_Data.csv'){
+  
+  # ---- Compute the date corresponding to the last day of the epi week ----
+  # Assumes week 1 = days 1-7 of the year, week 2 = days 8-14, etc.
+  # i.e. "last date in week" = Jan 1 + (week * 7) - 1 days.
+  # Adjust this formula if your source defines epi weeks differently
+  # (e.g. ISO 8601 weeks, which start on Mondays and follow different rules).
+  
+  week_end_date <- as.Date(paste0(metadata$year, "-01-01")) + (metadata$week * 7) - 1
+  
+  # ---- Combine cases_table with metadata columns --------------------------
+  
+  out <- cases_table |>
+    mutate(
+      Week           = metadata$week,
+      Year           = metadata$year,
+      `Source link`  = metadata$link,
+      `Source title` = metadata$title,
+      date           = week_end_date,
+      datetime_loaded = Sys.time()
+    )
+  
+  # ---- Create directory if it doesn't exist --------------------------------
+  
+  dir_create(path_dir(file_loc))
+  
+  # ---- Write: create with header if new, append without header if exists --
+  
+  file_exists <- file.exists(file_loc)
+  
+  write_csv(
+    out,
+    file      = file_loc,
+    append    = file_exists,
+    col_names = !file_exists
+  )
+  
+  invisible(out)
+}
+
+# ---- Compliance table -----------------------------------------------------
+#
+# The compliance table has no consistent label ("Table 1" etc.), is preceded
+# by a variable amount of title/bullet text, and -- unlike the disease-counts
+# table -- its exact column layout can be unreliable in the underlying PDF:
+# individual cells (in observed real bulletins, sometimes a row's Expected/
+# Received values, sometimes its Total-equivalent) can render on a
+# completely separate text line from the rest of their own row, in ways
+# that don't follow one single consistent pattern. Trying to keep chasing
+# each new drift pattern with text-line heuristics doesn't scale, so this
+# uses word-level (x, y) coordinates from pdftools::pdf_data() instead:
+# each word is bucketed into a column purely by its x-position (relative to
+# the header labels' x-positions), then within each column the words are
+# read top-to-bottom by y. Because each of the 4 columns is processed
+# independently, it doesn't matter which physical text line a value prints
+# on, or whether a cell's text itself is split into multiple word-tokens
+# (e.g. a dropped "ti" ligature turning "National" into two word-tokens,
+# "Na" and "onal", both still land in the Region column and still end up
+# concatenated back together within that row's y-cluster).
+#
+# What IS consistent across all seen examples:
+#   - It appears somewhere in the first few pages of the bulletin.
+#   - Its header row mentions "Region", "Expected", "Received" and
+#     "Compliance", left-to-right in that order.
+#   - Its last row is always the "National" total.
+
+extract_compliance_rows <- function(pdf_data, max_pages = 5){
+  
+  header_labels  <- c("Region", "Expected", "Received", "Compliance")
+  n_search_pages <- min(max_pages, length(pdf_data))
+  diagnostics    <- character(0)
+  
+  for(p in seq_len(n_search_pages)){
+    
+    words <- pdf_data[[p]]
+    if(is.null(words) || nrow(words) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: empty page", p))
+      next
+    }
+    
+    # ---- Locate the header row -------------------------------------------
+    kw_hit <- vapply(words$text, function(t){
+      any(vapply(header_labels, function(k) grepl(k, t, ignore.case = TRUE), logical(1)))
+    }, logical(1))
+    header_words <- words[kw_hit, ]
+    if(nrow(header_words) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: no Region/Expected/Received/Compliance keywords found", p))
+      next
+    }
+    
+    # Bullet-point prose before the table often repeats a header word (e.g.
+    # "compliance" appearing several times in "The national compliance
+    # rate..." etc.), so the y band with the most raw keyword hits is often
+    # NOT the header. Instead, cluster keyword hits by y-proximity and take
+    # whichever cluster contains the most DISTINCT header labels together
+    # -- that's what actually identifies a genuine header row.
+    header_words <- header_words[order(header_words$y), ]
+    row_break <- c(TRUE, diff(header_words$y) > 8)
+    header_words$cluster <- cumsum(row_break)
+    
+    label_of <- function(txt){
+      hits <- header_labels[vapply(header_labels, function(k) grepl(k, txt, ignore.case = TRUE), logical(1))]
+      if(length(hits) == 0) NA_character_ else hits[1]
+    }
+    header_words$label <- vapply(header_words$text, label_of, character(1))
+    
+    cluster_scores <- tapply(header_words$label, header_words$cluster, function(l) length(unique(l)))
+    if(max(cluster_scores) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: header keywords found but never clustered together (max %d distinct labels at one y)", p, max(cluster_scores)))
+      next
+    }
+    best_cluster <- names(cluster_scores)[which.max(cluster_scores)]
+    
+    header_words <- header_words[header_words$cluster == best_cluster, ]
+    header_y     <- mean(header_words$y)
+    if(nrow(header_words) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: header cluster had fewer than 3 labels after filtering", p))
+      next
+    }
+    
+    col_x <- setNames(rep(NA_real_, length(header_labels)), header_labels)
+    for(lbl in header_labels){
+      hit <- header_words[grepl(lbl, header_words$text, ignore.case = TRUE), ]
+      if(nrow(hit) > 0) col_x[lbl] <- min(hit$x)
+    }
+    # Columns should read left-to-right in exactly this order; if any
+    # header label is missing, or they aren't in increasing x order, this
+    # isn't (or isn't reliably) the table we're looking for.
+    if(any(is.na(col_x))){
+      diagnostics <- c(diagnostics, sprintf("page %d: header found but missing one of Region/Expected/Received/Compliance", p))
+      next
+    }
+    if(is.unsorted(col_x)){
+      diagnostics <- c(diagnostics, sprintf("page %d: header labels found but not in left-to-right Region/Expected/Received/Compliance order", p))
+      next
+    }
+    
+    # ---- Bucket everything below the header row -----------------------
+    # The table can run across a page break (e.g. the first 5 regions on
+    # one page, "Sindh" and "National" continuing at the top of the next
+    # page with NO header repeated there). So rather than restrict body to
+    # just this page, pull in up to 2 subsequent pages' content too, each
+    # shifted by a large y-offset so it sorts strictly after this page's
+    # remaining content -- the region/numeric logic below doesn't care
+    # which page a word came from, only its relative order.
+    y_offset_unit <- 100000
+    body_parts <- list(words[words$y > header_y + 8, ])
+    n_continuation_pages <- min(2, length(pdf_data) - p)
+    if(n_continuation_pages > 0){
+      for(k in seq_len(n_continuation_pages)){
+        next_page <- pdf_data[[p + k]]
+        if(!is.null(next_page) && nrow(next_page) > 0){
+          next_page$y <- next_page$y + k * y_offset_unit
+          body_parts[[length(body_parts) + 1]] <- next_page
+        }
+      }
+    }
+    body <- bind_rows(body_parts)
+    if(nrow(body) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: nothing found below the header row", p))
+      next
+    }
+    
+    is_num <- grepl("^[0-9,]+$", body$text)
+    
+    # ---- Region column: non-numeric tokens -----------------------------
+    # This step doesn't depend on x-boundaries at all (every non-numeric
+    # token is unconditionally Region), so it's used to establish the real
+    # table's row count and y-range FIRST, before tackling the 3 numeric
+    # columns below.
+    region_words <- body[!is_num, ]
+    region_words <- region_words[order(region_words$y), ]
+    if(nrow(region_words) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: no region-name text found below the header", p))
+      next
+    }
+    
+    # First, group into tight physical-line clusters (words on the exact
+    # same line, e.g. "Khyber" + "Pakhtunkhwa").
+    row_break <- c(TRUE, diff(region_words$y) > 8)
+    region_words$row_id <- cumsum(row_break)
+    
+    line_tbl <- region_words |>
+      group_by(row_id) |>
+      summarise(name = paste(text, collapse = " "), y = min(y), .groups = "drop") |>
+      arrange(y)
+    
+    # Drop obvious footer/page-marker fragments (e.g. a page number like
+    # "Page | 3" has its digit filtered out as numeric, leaving a stray
+    # "Page |" line here) before the greedy region matching below. Left
+    # in, such a line can accumulate together with subsequent genuinely
+    # good lines (e.g. "Sindh", "National") before the noise-reset
+    # threshold is reached, discarding all of them together as one bad
+    # buffer instead of just the footer itself. Its y is also recorded so
+    # any numeric token at that same y (e.g. the page-number digit itself,
+    # which survives the is_num filter) can later be excluded from the
+    # numeric x-clustering below -- otherwise it becomes a contaminating
+    # outlier that skews where the column boundaries are drawn.
+    footer_mask <- grepl("^\\s*Page\\b", line_tbl$name, ignore.case = TRUE) | line_tbl$name == "|"
+    footer_ys   <- line_tbl$y[footer_mask]
+    line_tbl    <- line_tbl[!footer_mask, ]
+    if(nrow(line_tbl) == 0){
+      diagnostics <- c(diagnostics, sprintf("page %d: region text found but produced no line groups", p))
+      next
+    }
+    
+    # A region name can wrap across two (or more) physical lines (e.g.
+    # "Islamabad Capital" / "Territory", with its Expected/Received/
+    # Compliance values sitting at a y roughly BETWEEN the two name lines
+    # -- vertically centered against the two-line-tall cell). The gap
+    # between those two name lines is often indistinguishable from the gap
+    # between two genuinely different rows, since both are just "the next
+    # line down" at the same fixed line height. So rather than trust that
+    # gap, physical lines are greedily accumulated in y-order and tested
+    # against the known region vocabulary: once the accumulated text
+    # resolves to a valid region, that closes the row. If 3 lines
+    # accumulate without a match, it's almost certainly noise (stray
+    # footer/prose text caught in this y-range), so the buffer is dropped
+    # and accumulation restarts from the next line.
+    rows_acc <- list()
+    buf      <- character(0)
+    buf_y    <- NA_real_
+    is_exact_region_match <- function(x) tolower(trimws(x)) %in% names(region_variant_map)
+    for(i in seq_len(nrow(line_tbl))){
+      if(length(buf) == 0) buf_y <- line_tbl$y[i]
+      buf <- c(buf, line_tbl$name[i])
+      candidate <- paste(buf, collapse = " ")
+      
+      # An EXACT match is required to close a row here, not the lenient
+      # prefix/fuzzy matching match_region_name() normally allows -- e.g.
+      # "Islamabad Capital" alone already prefix-matches the full
+      # "islamabad capital territory" lookup entry, which would wrongly
+      # close the row before "Territory" (the actual next physical line)
+      # is ever consumed. Only once 3 lines have accumulated without an
+      # exact hit does the lenient matcher get a last try, in case a
+      # genuinely fuzzy/abbreviated multi-line name needs it.
+      if(is_exact_region_match(candidate)){
+        rows_acc[[length(rows_acc) + 1]] <- list(name = candidate, y = buf_y, region = match_region_name(candidate))
+        buf <- character(0)
+        if(rows_acc[[length(rows_acc)]]$region == "National") break
+      } else if(length(buf) >= 3){
+        resolved <- tryCatch(match_region_name(candidate), error = function(e) NA_character_)
+        if(!is.na(resolved)){
+          rows_acc[[length(rows_acc) + 1]] <- list(name = candidate, y = buf_y, region = resolved)
+          if(resolved == "National") break
+        }
+        buf <- character(0)
+      }
+    }
+    
+    if(length(rows_acc) == 0 || rows_acc[[length(rows_acc)]]$region != "National"){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: matched %d region row(s) (%s) but never reached National",
+        p, length(rows_acc),
+        if(length(rows_acc) > 0) paste(vapply(rows_acc, function(r) r$region, character(1)), collapse = ", ") else "none"
+      ))
+      next
+    }
+    
+    region_tbl <- tibble(
+      name = vapply(rows_acc, function(r) r$name, character(1)),
+      y    = vapply(rows_acc, function(r) r$y,    numeric(1))
+    )
+    n_rows <- nrow(region_tbl)
+    
+    # ---- Numeric columns: cluster by x within the real table's y-range ----
+    # Numeric columns are commonly right-aligned, so a short value (e.g. a
+    # 2-digit "23") can sit noticeably further right within its column than
+    # a long one (e.g. a 4-digit "2315") in the same column -- sometimes
+    # far enough right to cross a boundary based on the HEADER label's x
+    # position, which is typically left-aligned. So rather than trust
+    # header-derived boundaries, the actual numeric x-positions are
+    # clustered directly: restricting to y <= the National row's y (which
+    # excludes footer/page-number junk below the table) and splitting on
+    # the two largest gaps in x should cleanly separate Expected/Received/
+    # Compliance regardless of alignment or digit-count quirks.
+    y_cutoff <- region_tbl$y[n_rows] + 15
+    numeric_words <- body[is_num & body$y <= y_cutoff, ]
+    if(length(footer_ys) > 0){
+      near_footer <- vapply(numeric_words$y, function(yy) any(abs(yy - footer_ys) <= 8), logical(1))
+      numeric_words <- numeric_words[!near_footer, ]
+    }
+    if(nrow(numeric_words) < n_rows * 3){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: found all %d region rows (through National) but only %d numeric value(s) above it -- expected at least %d",
+        p, n_rows, nrow(numeric_words), n_rows * 3
+      ))
+      next
+    }
+    
+    ux <- sort(unique(numeric_words$x))
+    if(length(ux) < 3){
+      diagnostics <- c(diagnostics, sprintf("page %d: numeric values found but only %d distinct x-position(s) among them", p, length(ux)))
+      next
+    }
+    gaps <- diff(ux)
+    top_gap_idx <- order(gaps, decreasing = TRUE)[seq_len(min(2, length(gaps)))]
+    x_breaks <- sort(ux[top_gap_idx] + gaps[top_gap_idx] / 2)
+    if(length(x_breaks) < 2){
+      diagnostics <- c(diagnostics, sprintf("page %d: couldn't split numeric values into 3 distinct x-clusters", p))
+      next
+    }
+    
+    numeric_words$column <- c("Expected", "Received", "Compliance")[
+      findInterval(numeric_words$x, x_breaks) + 1
+    ]
+    
+    get_column_values <- function(col_name){
+      cw <- numeric_words[numeric_words$column == col_name, ]
+      cw <- cw[order(cw$y), ]
+      cw$text
+    }
+    expected_vals   <- get_column_values("Expected")
+    received_vals   <- get_column_values("Received")
+    compliance_vals <- get_column_values("Compliance")
+    
+    if(length(expected_vals) < n_rows || length(received_vals) < n_rows ||
+       length(compliance_vals) < n_rows){
+      diagnostics <- c(diagnostics, sprintf(
+        "page %d: after x-clustering, columns had %d/%d/%d values (Expected/Received/Compliance) but needed %d each",
+        p, length(expected_vals), length(received_vals), length(compliance_vals), n_rows
+      ))
+      next
+    }
+    
+    rows_out <- paste(
+      region_tbl$name,
+      expected_vals[seq_len(n_rows)],
+      received_vals[seq_len(n_rows)],
+      compliance_vals[seq_len(n_rows)],
+      sep = "   "
+    )
+    
+    return(list(rows = rows_out, columns = header_labels))
+  }
+  
+  stop("No compliance table found in the first ", n_search_pages,
+       " page(s) of this bulletin — expected a table with Region/Expected/",
+       "Received/Compliance columns ending in a National row.",
+       if(length(diagnostics) > 0) paste0("\nDiagnostics:\n  - ", paste(diagnostics, collapse = "\n  - ")) else "")
+}
+
+convert_compliance_table <- function(extracted){
+  
+  rows <- extracted$rows
+  cols <- extracted$columns
+  
+  if(is.null(rows) || length(rows) == 0){
+    stop("`extracted` has no compliance rows — check header parsing for this page.")
+  }
+  
+  split_lengths <- rows |>
+    str_split("\\s{2,}") |>
+    map_int(length)
+  
+  good_rows <- rows[split_lengths == length(cols)]
+  
+  if(any(split_lengths != length(cols))){
+    stop(sum(split_lengths != length(cols)),
+         " compliance row(s) had an unexpected column count: ",
+         paste(rows[split_lengths != length(cols)], collapse = " | "))
+  }
+  
+  data <- good_rows |>
+    str_split_fixed("\\s{2,}", n = length(cols)) |>
+    as_tibble(.name_repair = ~ cols)
+  
+  data <- data |>
+    mutate(
+      Region_raw = Region,
+      Region     = vapply(Region, match_region_name, character(1)),
+      Region     = coalesce(Region, Region_raw)
+    )
+  
+  unresolved <- data |> filter(Region == Region_raw & !(Region %in% names(region_lookup)))
+  if(nrow(unresolved) > 0){
+    stop(sprintf(
+      "%d region name(s) unmatched, kept as-is: %s",
+      nrow(unresolved), paste(unique(unresolved$Region_raw), collapse = "; ")
+    ))
+  }
+  
+  data |>
+    select(-Region_raw) |>
+    rename(
+      `Expected Reports` = Expected,
+      `Received Reports` = Received,
+      `Compliance (%)`   = Compliance
+    ) |>
+    mutate(across(
+      c(`Expected Reports`, `Received Reports`, `Compliance (%)`),
+      ~ as.numeric(str_replace_all(.x, ",", ""))
+    ))
+}
+
+write_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data/PAK_IDSR_Compliance.csv'){
+  
+  out <- compliance_table |>
+    mutate(
+      Week           = metadata$week,
+      Year           = metadata$year,
+      `Source link`  = metadata$link,
+      `Source title` = metadata$title,
+      datetime_loaded = Sys.time()
+    )
+  
+  dir_create(path_dir(file_loc))
+  
+  file_exists <- file.exists(file_loc)
+  
+  write_csv(
+    out,
+    file      = file_loc,
+    append    = file_exists,
+    col_names = !file_exists
+  )
+  
+  invisible(out)
+}
+
+# ---- Per-bulletin processing (shared by both extraction modes) ---------
+
+process_one_bulletin <- function(week, year, link, title,
+                                 cases_file      = 'Data/PAK_IDSR_Data.csv',
+                                 compliance_file = 'Data/PAK_IDSR_Compliance.csv',
+                                 failed_log      = 'Data/failed_reports.txt'){
+  
+  log_failure <- function(reason){
+    dir_create(path_dir(failed_log))
+    write(sprintf("[%s] Week %s, %s — %s: %s",
+                  format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+                  week, year, link, reason),
+          file = failed_log, append = file.exists(failed_log))
+  }
+  
+  metadata <- tibble(week = week, year = year, link = link, title = title)
+  
+  print(paste0('Loading report: Week ', week, ' ', year))
+  
+  pdf <- download_pdf(link)
+  if(is.null(pdf)){
+    log_failure('Cannot load link')
+    return(invisible(NULL))
+  }
+  
+  # ---- Disease-counts table ----
+  extracted <- tryCatch(extract_table_rows(pdf$text), error = function(e) e)
+  if(inherits(extracted, "error") || is.null(extracted)){
+    log_failure(paste('Cannot extract disease table rows:',
+                      if(inherits(extracted, "error")) conditionMessage(extracted) else "not found"))
+  } else {
+    cases_table <- tryCatch(convert_cases_table(extracted), error = function(e) e)
+    if(inherits(cases_table, "error")){
+      log_failure(paste('Cannot convert disease table:', conditionMessage(cases_table)))
+    } else {
+      write_cases_to_csv(cases_table, metadata, file_loc = cases_file)
+    }
+  }
+  
+  # ---- Compliance table ----
+  compliance_extracted <- tryCatch(extract_compliance_rows(pdf$data), error = function(e) e)
+  if(inherits(compliance_extracted, "error")){
+    log_failure(paste('Cannot extract compliance table:', conditionMessage(compliance_extracted)))
+  } else {
+    compliance_table <- tryCatch(convert_compliance_table(compliance_extracted), error = function(e) e)
+    if(inherits(compliance_table, "error")){
+      log_failure(paste('Cannot convert compliance table:', conditionMessage(compliance_table)))
+    } else {
+      write_compliance_to_csv(compliance_table, metadata, file_loc = compliance_file)
+    }
+  }
+  
+  invisible(NULL)
+}
+
+# ---- Change detection: has an already-processed week's link changed? -----
+#
+# Every row written by write_cases_to_csv()/write_compliance_to_csv() carries
+# the `Source link` it was extracted from. Comparing that stored link against
+# the link currently shown on the bulletin page for the same (Year, Week) is
+# how a corrected/replaced bulletin gets detected -- the week itself isn't
+# new, but its content might now differ from what's on file.
+detect_changed_links <- function(link_metadata, cases_file){
+  if(!file.exists(cases_file)){
+    return(link_metadata[0, ])
+  }
+
+  existing_links <- read_csv(cases_file, show_col_types = FALSE) |>
+    distinct(Year, Week, `Source link`) |>
+    rename(year = Year, week = Week, existing_link = `Source link`)
+
+  link_metadata |>
+    inner_join(existing_links, by = c("year", "week")) |>
+    filter(link != existing_link) |>
+    select(title, link, week, year)
+}
+
+# ---- Remove all rows for one (Year, Week) from a CSV ----------------------
+# Used before re-processing a changed week, so the refreshed bulletin's data
+# REPLACES what's on file rather than duplicating alongside it.
+remove_existing_week <- function(file_loc, year, week){
+  if(!file.exists(file_loc)) return(invisible(NULL))
+
+  df <- read_csv(file_loc, show_col_types = FALSE) |>
+    filter(!(Year == year & Week == week))
+
+  write_csv(df, file_loc)
+  invisible(NULL)
+}
+
+# ---- Main entry point ----------------------------------------------------
+# Always returns (invisibly) a list(new = <n>, changed = <n>) summarising
+# what it did, even when there's nothing to do -- this is what the CI driver
+# script (run_pipeline.R) uses to build its run summary.
+extract_PAK_data_main <- function(extract_all = FALSE,
+                                  cases_file      = 'Data/PAK_IDSR_Data.csv',
+                                  compliance_file = 'Data/PAK_IDSR_Compliance.csv'){
+  
+  bulletin_url <-
+    "https://www.nih.org.pk/phb/weekly-bulletin"
+  
+  links <- get_bulletin_links(
+    bulletin_url
+  )
+  
+  link_metadata <- extract_report_date(links)
+  
+  if(file.exists(cases_file)){
+    existing <- read_csv(cases_file, show_col_types = FALSE) |>
+      distinct(Year, Week)
+  } else {
+    existing <- tibble(Year = numeric(0), Week = numeric(0))
+  }
+  
+  if(extract_all){
+    
+    new_rows     <- link_metadata
+    changed_rows <- link_metadata[0, ]
+    
+  } else {
+    
+    # ---- New weeks: not already present in the cases CSV at all ----------
+    new_rows <- link_metadata |>
+      anti_join(existing, by = c("year" = "Year", "week" = "Week"))
+    
+    # ---- Changed weeks: present, but the bulletin's link has changed -----
+    changed_rows <- detect_changed_links(link_metadata, cases_file)
+  }
+  
+  rows_to_run <- bind_rows(new_rows, changed_rows) |>
+    distinct(year, week, .keep_all = TRUE)
+  
+  if(nrow(rows_to_run) == 0){
+    message("No new or changed bulletins — dataset is already up to date.")
+    return(invisible(list(new = 0L, changed = 0L)))
+  }
+  
+  message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
+  
+  # Clear out the old data for any changed week BEFORE reprocessing it.
+  if(nrow(changed_rows) > 0){
+    for(i in seq_len(nrow(changed_rows))){
+      message("Link changed for Week ", changed_rows$week[i], ", ", changed_rows$year[i],
+             " — replacing existing data for that week.")
+      remove_existing_week(cases_file, changed_rows$year[i], changed_rows$week[i])
+      remove_existing_week(compliance_file, changed_rows$year[i], changed_rows$week[i])
+    }
+  }
+  
+  for(i_row in seq_len(nrow(rows_to_run))){
+    
+    process_one_bulletin(
+      week            = rows_to_run$week[i_row],
+      year            = rows_to_run$year[i_row],
+      link            = rows_to_run$link[i_row],
+      title           = rows_to_run$title[i_row],
+      cases_file      = cases_file,
+      compliance_file = compliance_file
+    )
+  }
+  
+  invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
+}

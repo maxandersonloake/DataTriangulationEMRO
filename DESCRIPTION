@@ -1,0 +1,22 @@
+Package: pakidsrpipeline
+Title: PAK IDSR Bulletin Extraction Pipeline
+Version: 1.0.0
+Description: Downloads and parses Pakistan NIH IDSR weekly bulletin PDFs
+    into the disease-counts and compliance CSVs used by the surveillance
+    dashboard. Not an installable package in its own right -- this
+    DESCRIPTION file exists purely so GitHub Actions' r-lib/actions/setup-r-dependencies
+    step can resolve both the R packages and the underlying system
+    libraries (e.g. libgdal, libgeos, poppler-utils) that sf and pdftools
+    need to install cleanly on a bare runner.
+Imports:
+    xml2,
+    rvest,
+    stringr,
+    dplyr,
+    purrr,
+    pdftools,
+    stringdist,
+    tidyr,
+    readr,
+    fs
+Encoding: UTF-8
