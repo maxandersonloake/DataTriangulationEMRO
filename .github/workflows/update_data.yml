@@ -1,0 +1,99 @@
+name: Update PAK IDSR Data
+
+on:
+  schedule:
+    # Cron is always UTC regardless of local timezone.
+    # 05:00 UTC every day = 08:00 Cairo
+    - cron: "0 5 * * *"
+  workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
+
+permissions:
+  contents: write   # needed to commit the updated CSVs back to the repo
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.4"
+          use-public-rspm: true
+
+      - name: Install R and system dependencies
+        uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Reads Imports: from DESCRIPTION and installs both the R
+          # packages AND the underlying system libraries sf/pdftools need
+          # (libgdal, libgeos, libproj, poppler-utils, etc.) -- this is
+          # the part plain install.packages() can't do for you.
+          needs: check
+
+      - name: Run data pipeline
+        run: Rscript run_pipeline.R
+
+      - name: Check whether any data changed
+        id: git_status
+        run: |
+          if [ -n "$(git status --porcelain Data/)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push updated data
+        if: steps.git_status.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Data/
+          git commit -m "Automated IDSR data update: $(date -u +'%Y-%m-%d')"
+          git push
+
+      - name: Decide whether to send an email
+        id: should_email
+        run: |
+          # Send if there's anything worth reading: new/changed data, or
+          # any ERROR/WARNING section in today's run log. Stays silent on
+          # an ordinary day where the bulletin page simply has nothing new.
+          if grep -qE "^=== (ERROR|WARNING)" Data/run_log.txt || [ "${{ steps.git_status.outputs.changed }}" = "true" ]; then
+            echo "send=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "send=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Email run summary
+        if: steps.should_email.outputs.send == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "PAK IDSR data pipeline update — ${{ github.run_id }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: PAK IDSR Pipeline
+          body: file://Data/run_log.txt
+
+      - name: Email failure alert
+        # Fires only if an earlier step in this job failed outright (e.g.
+        # the R script crashed, or the bulletin page's structure changed
+        # enough to break scraping entirely) -- distinct from the normal
+        # summary email above, which only runs on a successful step chain.
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.MAIL_SERVER }}
+          server_port: ${{ secrets.MAIL_PORT }}
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "PAK IDSR data pipeline FAILED — ${{ github.run_id }}"
+          to: ${{ secrets.MAIL_TO }}
+          from: PAK IDSR Pipeline
+          body: |
+            The scheduled data pipeline run did not complete successfully.
+
+            Full log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
