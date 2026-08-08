@@ -2,9 +2,9 @@ name: Update PAK IDSR Data
 
 on:
   schedule:
-    # 06:00 UTC every day -- adjust to whenever the bulletin usually
-    # publishes. Cron is always UTC regardless of your local timezone.
-    - cron: "0 6 * * *"
+    # 05:00 UTC every day -- 08:00 Cairo
+    # Cron is always UTC regardless of local timezone.
+    - cron: "0 5 * * *"
   workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
 
 permissions:
@@ -107,4 +107,5 @@ jobs:
             -F to="${MAIL_TO}" \
             -F subject="PAK IDSR data pipeline FAILED — ${{ github.run_id }}" \
             -F text=@/tmp/failure_body.txt
+
 
