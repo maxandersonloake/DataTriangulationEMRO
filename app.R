@@ -584,7 +584,7 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
-        style = "max-width: 1180px; margin: 16px 0; padding: 0 24px;",
+        style = "margin: 16px 0; padding: 0 24px;",
         div(
           class = "info-card",
           style = "border-left: 6px solid #B0121A; background-color: #FDF2F2;",
