@@ -584,7 +584,7 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
-        style = "max-width: 980px; margin: 16px 0; padding: 0 24px;",
+        style = "margin: 16px 0; padding: 0 24px;",
         div(
           class = "info-card",
           style = "border-left: 6px solid #B0121A; background-color: #FDF2F2;",
@@ -671,10 +671,9 @@ ui <- tagList(
             tags$hr(),
             tags$p(
               style = "font-size: 12px; color: #555;",
-              "Lists every disease that triggers a ",
-              strong("CUSUM-style aberration detection method"), " (rolling 9-week baseline, most recent 2 weeks ",
-              "dropped). See the ", strong("Home"), " tab for a full explanation of how it's ",
-              "calculated and a link to the methodology reference."
+              strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
+              "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
+              "a total projected case estimate of 40. See the ", strong("Home"), " tab for a full explanation."
             )
           ),
           mainPanel(
@@ -698,16 +697,19 @@ ui <- tagList(
         ),
         div(
           class = "info-disclosure",
-          div(class = "info-disclosure-title", "\u2139   How Projected cases and SD are calculated"),
+          div(class = "info-disclosure-title", "\u2139    How Projected cases and SD are calculated"),
           div(
             style = "font-size: 12.5px; color: #555;",
             p(style = "margin-bottom: 6px;",
-              strong("Projected total cases"), " = reported cases \u00f7 (compliance % / 100), shown blank where ",
-              "compliance data is missing."),
+              strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
+              "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
+              "a projected total case estimate of 40."),
+            
             p(style = "margin-bottom: 0;",
-              strong("SD"), " shows how far a week's case count is from its expected baseline, using the CUSUM/C2 ",
-              "method (see the ", strong("Home"), " tab for the full explanation). Grey means the region/week is ",
-              "marked NR, wasn't in that week's bulletin, or doesn't have enough history to form a baseline.")
+              strong("SD"), " shows how many standard deviations a week's case count is from its expected baseline, ",
+              "using the CUSUM/C2 method."),
+            p(style = "margin-bottom: 0;",
+              "See the ", strong("Home"), " tab for full details.")
           )
         ),
         fluidRow(
@@ -729,12 +731,6 @@ ui <- tagList(
                               "Projected total cases" = "projected",
                               "Both" = "both"),
                   selected = "reported", inline = TRUE
-                ),
-                tags$p(
-                  style = "font-size: 12px; color: #555; margin-bottom: 0;",
-                  "Hover over any point to see its year, week, case count, and reporting compliance %. A gap in ",
-                  "the line means no report was submitted that week (not zero cases) -- points either side of a ",
-                  "gap are not connected."
                 )
               )
             )
@@ -812,7 +808,7 @@ ui <- tagList(
           ),
           tags$p(
             style = "font-size: 12px; color: #555; margin-top: 8px;",
-            "Based on the CUSUM/C2 method (see the ", strong("Home"), " tab for details)."
+            "Standard deviations are based on the CUSUM/C2 method (see the ", strong("Home"), " tab for details)."
           )
         ),
         mainPanel(
@@ -1321,9 +1317,8 @@ server <- function(input, output, session) {
       missing_section <- tagList(
         h4("Data gaps", style = "font-size:15px; color:#555; margin-top:24px;"),
         p(style = "font-size: 12.5px; color:#555;",
-          "Locations and diseases not shown above because they couldn't be evaluated this week: marked NR (Not ",
-          "Reported) for a disease normally tracked here, or without enough baseline history to judge whether the ",
-          "count is unusual. Diseases not in this week's bulletin at all are not shown."),
+          "List of locations and diseases where either there is no reporting (NR) for the current week, or because there is ",
+          "insufficient data from previous weeks to form a baseline. Diseases not in this week's bulletin are not shown."),
         missing_boxes
       )
     }
