@@ -12,7 +12,7 @@
 # the project root next to the Data/ and www/ folders):
 #   app.R
 #   www/who_brand.css
-#   www/logo.png            <- WHO logo, add this yourself (not shipped here)
+#   www/logo.png          
 #   Data/PAK_IDSR_Data.csv
 #   Data/PAK_IDSR_Compliance.csv
 #   Data/pakistan_admin1.geojson  <- bundled province boundaries for the map
@@ -833,23 +833,60 @@ ui <- tagList(
         class = "page-tint-bg",
         div(
           style = "max-width: 1000px; margin: 0; padding-left: 24px;",
-          h4("Primary data source"),
-          p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
-          tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
-                 "https://www.nih.org.pk/phb/weekly-bulletin"),
-          h4("Alert detection methodology", style = "margin-top: 20px;"),
-          p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
-            "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
-            "See the ", strong("Home"), " tab for a full explanation of how it's calculated."),
-          tags$a(href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
-                 "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data"),
-          p(style = "margin-top: 10px;",
-            "For rare/sporadic diseases with an all-zero (or otherwise flat) baseline, a minimum standard ",
-            "deviation of 1 is applied rather than treating the week as unusable -- see:"),
-          tags$a(href = "https://wwwnc.cdc.gov/eid/article/15/4/08-0616_article", target = "_blank",
-                 "Hutwagner et al., Enhancing Time-Series Detection Algorithms for Automated Biosurveillance, Emerg Infect Dis, 2009"),
-          h4("Contact", style = "margin-top: 20px;"),
-          p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
+          tabsetPanel(
+            id = "references_tabs",
+            type = "tabs",
+
+            tabPanel(
+              "Sources & methodology",
+              div(
+                style = "padding-top: 18px;",
+                h4("Primary data source"),
+                p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
+                tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
+                       "https://www.nih.org.pk/phb/weekly-bulletin"),
+                h4("Alert detection methodology", style = "margin-top: 20px;"),
+                p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
+                  "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
+                  "See the ", strong("Home"), " tab for a full explanation of how it's calculated."),
+                tags$a(href = "https://pmc.ncbi.nlm.nih.gov/articles/PMC3320440/", target = "_blank",
+                       "Hutwagner et al., Comparing Aberration Detection Methods with Simulated Data"),
+                p(style = "margin-top: 10px;",
+                  "For rare/sporadic diseases with an all-zero (or otherwise flat) baseline, a minimum standard ",
+                  "deviation of 1 is applied rather than treating the week as unusable -- see:"),
+                tags$a(href = "https://wwwnc.cdc.gov/eid/article/15/4/08-0616_article", target = "_blank",
+                       "Hutwagner et al., Enhancing Time-Series Detection Algorithms for Automated Biosurveillance, Emerg Infect Dis, 2009"),
+                h4("Contact", style = "margin-top: 20px;"),
+                p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
+              )
+            ),
+
+            tabPanel(
+              "Download data",
+              div(
+                style = "padding-top: 18px; max-width: 640px;",
+                h4("Download the underlying data"),
+                p(style = "color:#555; font-size: 13.5px;",
+                  "These are the raw CSV files this dashboard is built from, exactly as loaded at app start-up."),
+
+                div(
+                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; margin-bottom:14px; background-color:#FFFFFF;",
+                  h5("IDSR case data", style = "margin-top:0; color:var(--who-navy);"),
+                  p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
+                    "Weekly reported/projected case counts by disease, province, and reporting status (Data/PAK_IDSR_Data.csv)."),
+                  downloadButton("download_idsr_data", "Download PAK_IDSR_Data.csv", class = "btn-who-download")
+                ),
+
+                div(
+                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; background-color:#FFFFFF;",
+                  h5("Reporting compliance data", style = "margin-top:0; color:var(--who-navy);"),
+                  p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
+                    "Weekly reporting compliance (%) by region (Data/PAK_IDSR_Compliance.csv)."),
+                  downloadButton("download_idsr_compliance", "Download PAK_IDSR_Compliance.csv", class = "btn-who-download")
+                )
+              )
+            )
+          )
         )
       )
     )
@@ -1321,6 +1358,20 @@ server <- function(input, output, session) {
 
     tagList(note, alert_section, missing_section)
   })
+
+  # ---------------- References tab: raw data downloads --------------------
+  # Serve the original CSV files as-is (not the filtered/cleaned in-memory
+  # versions), so what's downloaded matches exactly what ships in Data/.
+
+  output$download_idsr_data <- downloadHandler(
+    filename = function() basename(DATA_PATH),
+    content = function(file) file.copy(DATA_PATH, file)
+  )
+
+  output$download_idsr_compliance <- downloadHandler(
+    filename = function() basename(COMPLIANCE_PATH),
+    content = function(file) file.copy(COMPLIANCE_PATH, file)
+  )
 }
 
 shinyApp(ui, server)
