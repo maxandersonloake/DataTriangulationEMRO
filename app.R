@@ -873,7 +873,7 @@ ui <- tagList(
                   style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; margin-bottom:14px; background-color:#FFFFFF;",
                   h5("IDSR case data", style = "margin-top:0; color:var(--who-navy);"),
                   p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
-                    "Weekly reported/projected case counts by disease, province, and reporting status (Data/PAK_IDSR_Data.csv)."),
+                    "Weekly reported case counts by disease, province, and reporting status."),
                   downloadButton("download_idsr_data", "Download PAK_IDSR_Data.csv", class = "btn-who-download")
                 ),
 
@@ -881,7 +881,7 @@ ui <- tagList(
                   style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; background-color:#FFFFFF;",
                   h5("Reporting compliance data", style = "margin-top:0; color:var(--who-navy);"),
                   p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
-                    "Weekly reporting compliance (%) by region (Data/PAK_IDSR_Compliance.csv)."),
+                    "Weekly reporting compliance (%) by region."),
                   downloadButton("download_idsr_compliance", "Download PAK_IDSR_Compliance.csv", class = "btn-who-download")
                 )
               )
