@@ -1,4 +1,4 @@
-PAK IDSR data pipeline run -- 2026-08-09 05:51:13 UTC
+PAK IDSR data pipeline run -- 2026-08-10 06:15:28 UTC
 
 New weeks processed: 0
 Changed weeks reprocessed: 0
