@@ -1,10 +1,10 @@
-PAK IDSR data pipeline run -- 2026-08-11 05:57:35 UTC
+PAK IDSR data pipeline run -- 2026-08-12 06:19:40 UTC
 
-New weeks processed: 1
+New weeks processed: 0
 Changed weeks reprocessed: 0
 
 === WARNINGS (1) -- review recommended ===
 (fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
 
-[MESSAGE] 1 new week(s) and 0 changed week(s) to (re-)extract.
+[MESSAGE] No new or changed bulletins — dataset is already up to date.
 
