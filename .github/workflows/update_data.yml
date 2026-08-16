@@ -5,7 +5,16 @@ on:
     # 05:00 UTC every day -- 08:00 Cairo
     # Cron is always UTC regardless of local timezone.
     - cron: "0 5 * * *"
-  workflow_dispatch: {}   # adds a manual "Run workflow" button in the Actions tab
+  workflow_dispatch:   # adds a manual "Run workflow" button in the Actions tab
+    inputs:
+      include_district:
+        description: "Also extract district-level tables (not just province-level)?"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: write   # needed to commit the updated CSVs back to the repo
@@ -33,6 +42,13 @@ jobs:
           needs: check
 
       - name: Run data pipeline
+        env:
+          # On a manual "Run workflow" trigger this takes whatever was chosen
+          # in the dropdown above. On the daily schedule (or any trigger with
+          # no inputs) github.event.inputs.include_district is empty, so the
+          # `|| 'true'` fallback kicks in -- district-level extraction stays
+          # on by default for the automated runs.
+          INCLUDE_DISTRICT: ${{ github.event.inputs.include_district || 'true' }}
         run: Rscript run_pipeline.R
 
       - name: Check whether any data changed
@@ -97,5 +113,3 @@ jobs:
             The scheduled data pipeline run did not complete successfully.
 
             Full log: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-
