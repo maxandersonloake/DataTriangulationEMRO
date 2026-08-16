@@ -312,11 +312,22 @@ get_all_disease_series <- function(location) {
   d %>%
     group_by(Disease, Year, Week) %>%
     # See get_trend_data() above for why this isn't a plain sum(na.rm=TRUE).
-    summarise(Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE), .groups = "drop") %>%
+    summarise(
+      Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
+      # A blank case count is only ever shown to the user as "NR" when it's a
+      # genuine, explicit Not-Reported submission -- i.e. every row
+      # contributing to this Disease/Year/Week is itself marked NR (and so
+      # has no case count at all). This is deliberately Status-based rather
+      # than just "Cases is NA", since Cases can also be NA for OTHER
+      # reasons (e.g. Projected being unavailable because compliance data is
+      # missing) that aren't a reporting gap and shouldn't be labelled NR.
+      IsNR = is.na(Cases) && all(Status == "NR"),
+      .groups = "drop"
+    ) %>%
     mutate(join_key = if (location == "National") "National" else location) %>%
     left_join(compliance_data, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
     mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
-    select(Disease, Year, Week, Reported = Cases, Projected, Compliance)
+    select(Disease, Year, Week, Reported = Cases, Projected, Compliance, IsNR)
 }
 
 # ---- Helper: district-level weekly series for a single disease, across ----
@@ -328,10 +339,18 @@ get_district_disease_series <- function(disease) {
     filter(Disease == disease) %>%
     group_by(Province, District, Year, Week) %>%
     # See get_trend_data() above for why this isn't a plain sum(na.rm=TRUE).
-    summarise(Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE), .groups = "drop") %>%
+    summarise(
+      Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
+      # Only a genuine, explicit "NR" is ever shown as "NR" -- NOT the
+      # district pipeline's separate "Missing" status (see raw_district_data's
+      # loading comment above), which stays blank like any other gap. See
+      # get_all_disease_series() above for why this checks Cases as well.
+      IsNR = is.na(Cases) && all(Status == "NR"),
+      .groups = "drop"
+    ) %>%
     left_join(district_compliance_data, by = c("Province", "District", "Week", "Year")) %>%
     mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
-    select(Province, District, Year, Week, Reported = Cases, Projected, Compliance)
+    select(Province, District, Year, Week, Reported = Cases, Projected, Compliance, IsNR)
 }
 
 # ---- Helper: province-level totals derived by summing a district series --
@@ -340,13 +359,18 @@ get_district_disease_series <- function(disease) {
 # EVERY one of its districts is NA that week (no usable report anywhere in
 # the province); otherwise missing districts are simply excluded from the
 # sum, not treated as zero -- consistent with the aggregation rule used
-# throughout (see get_trend_data()/get_all_disease_series() above).
+# throughout (see get_trend_data()/get_all_disease_series() above). Likewise
+# a province/week only counts as "NR" (see get_district_disease_series()
+# above) when EVERY district contributing to it is itself NR that week --
+# if even one district actually reported, the province shows that real
+# (partial) total rather than being masked as NR.
 get_province_disease_series <- function(district_series) {
   district_series %>%
     group_by(Province, Year, Week) %>%
     summarise(
       Reported  = if (all(is.na(Reported)))  NA_real_ else sum(Reported,  na.rm = TRUE),
       Projected = if (all(is.na(Projected))) NA_real_ else sum(Projected, na.rm = TRUE),
+      IsNR      = is.na(Reported) && all(IsNR),
       .groups = "drop"
     )
 }
@@ -1402,9 +1426,23 @@ server <- function(input, output, session) {
     sd_wide <- as.data.frame(sd_matrix)
     colnames(sd_wide) <- paste0(week_cols, "_sd")
 
+    # One TRUE/FALSE per disease/week: was this specifically a genuine NR
+    # (Not Reported) week, as opposed to just no row at all (a disease not
+    # in that week's bulletin, which is not shown as NR -- see IsNR's
+    # definition in get_all_disease_series() above).
+    nr_matrix <- sapply(weeks_to_show, function(w) {
+      sapply(diseases_here, function(dis) {
+        r <- series[series$Disease == dis & series$Year == yr & series$Week == w, ]
+        if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
+      })
+    })
+    nr_wide <- as.data.frame(nr_matrix)
+    colnames(nr_wide) <- paste0(week_cols, "_nr")
+
     list(
       display_values = values_wide_wide,
       sd = sd_wide,
+      nr = nr_wide,
       week_cols = week_cols,
       year = yr, n_wk = n_wk, diseases = diseases_here, weeks = weeks_to_show,
       value_col = value_col
@@ -1414,25 +1452,46 @@ server <- function(input, output, session) {
   output$weekly_table <- renderDT({
     tbl <- weekly_table_reactive()
 
-    display_df <- cbind(tbl$display_values, tbl$sd)
+    display_df <- cbind(tbl$display_values, tbl$sd, tbl$nr)
     sd_col_names <- paste0(tbl$week_cols, "_sd")
-    sd_col_index <- which(names(display_df) %in% sd_col_names) - 1
+    nr_col_names <- paste0(tbl$week_cols, "_nr")
+    hidden_idx <- which(names(display_df) %in% c(sd_col_names, nr_col_names)) - 1
 
     label <- if (tbl$value_col == "Projected") "projected total" else "reported"
+
+    # A custom render per week column (rather than DT::formatRound()) so a
+    # genuine NR week can show the text "NR" instead of a number -- each
+    # column's render only reads ITS OWN hidden "_nr" companion column, via
+    # the full raw row array DataTables passes as the 3rd render argument.
+    week_column_defs <- lapply(tbl$week_cols, function(wc) {
+      col_idx <- which(names(display_df) == wc) - 1
+      nr_idx  <- which(names(display_df) == paste0(wc, "_nr")) - 1
+      list(
+        targets = col_idx,
+        render = JS(sprintf(
+          "function(data, type, row) {
+             if (type !== 'display') return data;
+             if (row[%d]) return '<span style=\"color:#888; font-style:italic;\">NR</span>';
+             if (data === null) return '';
+             return Math.round(data).toLocaleString();
+           }", nr_idx
+        ))
+      )
+    })
 
     dt <- datatable(
       display_df,
       rownames = FALSE,
+      escape = FALSE,
       options = list(
         pageLength = 25,
-        columnDefs = list(list(visible = FALSE, targets = sd_col_index))
+        columnDefs = c(list(list(visible = FALSE, targets = hidden_idx)), week_column_defs)
       ),
       caption = paste0(
         "Weekly ", label, " cases by disease, ", input$location_tbl,
         ", most recent ", tbl$n_wk, " weeks of ", tbl$year
       )
-    ) %>%
-      formatRound(columns = tbl$week_cols, digits = 0)
+    )
 
     dt <- formatStyle(
       dt,
@@ -1450,8 +1509,10 @@ server <- function(input, output, session) {
   # hidden until that province's arrow is clicked). Because province and
   # district rows are literal rows of the SAME table -- not a separate
   # nested table -- the week columns always line up exactly with the
-  # header, and the usual formatRound()/formatStyle() SD-shading pipeline
-  # (identical to the Weekly summary table) applies to every row uniformly.
+  # header, and the usual formatStyle() SD-shading pipeline (identical to
+  # the Weekly summary table) applies to every row uniformly. Each week
+  # column also gets a custom render (see output$district_table below) so a
+  # genuine NR week displays as "NR" text rather than a blank/zero.
 
   district_table_reactive <- reactive({
     req(input$disease_district_tbl, input$n_weeks_district)
@@ -1467,27 +1528,33 @@ server <- function(input, output, session) {
     weeks_to_show <- tail(weeks_available, n_wk)
     week_cols <- paste0("Wk ", weeks_to_show)
     sd_cols   <- paste0(week_cols, "_sd")
+    nr_cols   <- paste0(week_cols, "_nr")
 
     value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
 
     provinces_here <- sort(unique(district_series$Province))
 
-    # Pulls the week_cols/sd_cols values for one (sub-)series -- a single
-    # province's or district's own Year/Week rows -- as a one-row data
-    # frame, in the exact column order/names used throughout this table.
+    # Pulls the week_cols/sd_cols/nr_cols values for one (sub-)series -- a
+    # single province's or district's own Year/Week rows -- as a one-row
+    # data frame, in the exact column order/names used throughout this table.
     row_for_series <- function(s, label) {
       vals <- sapply(weeks_to_show, function(w) {
         r <- s[s$Year == yr & s$Week == w, ]
         if (nrow(r) == 0) NA_real_ else r[[value_col]][1]
       })
       sds <- sapply(weeks_to_show, function(w) cusum_z_at(s, yr, w, value_col = value_col))
-      # check.names = FALSE: week_cols/sd_cols contain spaces (e.g. "Wk 24")
-      # which as.data.frame() would otherwise silently mangle into "Wk.24",
-      # breaking every downstream reference to these column names by string.
+      nrs <- sapply(weeks_to_show, function(w) {
+        r <- s[s$Year == yr & s$Week == w, ]
+        if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
+      })
+      # check.names = FALSE: week_cols/sd_cols/nr_cols contain spaces (e.g.
+      # "Wk 24") which as.data.frame() would otherwise silently mangle into
+      # "Wk.24", breaking every downstream reference to these column names.
       row <- as.data.frame(c(
         list(Toggle = "", Location = label),
         setNames(as.list(vals), week_cols),
-        setNames(as.list(sds), sd_cols)
+        setNames(as.list(sds), sd_cols),
+        setNames(as.list(nrs), nr_cols)
       ), stringsAsFactors = FALSE, check.names = FALSE)
       row
     }
@@ -1516,6 +1583,7 @@ server <- function(input, output, session) {
       display_df = display_df,
       week_cols = week_cols,
       sd_cols = sd_cols,
+      nr_cols = nr_cols,
       year = yr, n_wk = n_wk,
       value_col = value_col,
       disease = input$disease_district_tbl
@@ -1527,14 +1595,37 @@ server <- function(input, output, session) {
     df  <- tbl$display_df
     week_cols <- tbl$week_cols
     sd_cols   <- tbl$sd_cols
+    nr_cols   <- tbl$nr_cols
 
     toggle_idx   <- which(names(df) == "Toggle")   - 1
     location_idx <- which(names(df) == "Location") - 1
     sd_idx       <- which(names(df) %in% sd_cols)  - 1
+    nr_idx       <- which(names(df) %in% nr_cols)  - 1
     rowtype_idx  <- which(names(df) == "RowType")  - 1
     group_idx    <- which(names(df) == "Group")    - 1
 
     label <- if (tbl$value_col == "Projected") "projected total" else "reported"
+
+    # A custom render per week column (rather than DT::formatRound()) so a
+    # genuine NR week can show the text "NR" instead of a number -- each
+    # column's render only reads ITS OWN hidden "_nr" companion column, via
+    # the full raw row array DataTables passes as the 3rd render argument.
+    # Same technique as the Weekly summary table's output$weekly_table above.
+    week_column_defs <- lapply(week_cols, function(wc) {
+      col_idx <- which(names(df) == wc) - 1
+      wc_nr_idx <- which(names(df) == paste0(wc, "_nr")) - 1
+      list(
+        targets = col_idx,
+        render = JS(sprintf(
+          "function(data, type, row) {
+             if (type !== 'display') return data;
+             if (row[%d]) return '<span style=\"color:#888; font-style:italic;\">NR</span>';
+             if (data === null) return '';
+             return Math.round(data).toLocaleString();
+           }", wc_nr_idx
+        ))
+      )
+    })
 
     dt <- datatable(
       df,
@@ -1543,25 +1634,28 @@ server <- function(input, output, session) {
       colnames = c(" " = "Toggle", "Province / District" = "Location"),
       options = list(
         paging = FALSE, ordering = FALSE, searching = FALSE, info = FALSE, dom = "t",
-        columnDefs = list(
+        columnDefs = c(
           list(
-            targets = toggle_idx, className = "details-control", width = "18px",
-            render = JS(sprintf(
-              "function(data, type, row) { return row[%d] === 'province' ? '&#9654;' : ''; }", rowtype_idx
-            ))
+            list(
+              targets = toggle_idx, className = "details-control", width = "18px",
+              render = JS(sprintf(
+                "function(data, type, row) { return row[%d] === 'province' ? '&#9654;' : ''; }", rowtype_idx
+              ))
+            ),
+            list(
+              targets = location_idx,
+              render = JS(sprintf(
+                "function(data, type, row) {
+                   if (type !== 'display') return data;
+                   return row[%d] === 'district'
+                     ? '<span style=\"padding-left:26px; color:#333;\">' + data + '</span>'
+                     : '<strong>' + data + '</strong>';
+                 }", rowtype_idx
+              ))
+            ),
+            list(visible = FALSE, targets = c(sd_idx, nr_idx, rowtype_idx, group_idx))
           ),
-          list(
-            targets = location_idx,
-            render = JS(sprintf(
-              "function(data, type, row) {
-                 if (type !== 'display') return data;
-                 return row[%d] === 'district'
-                   ? '<span style=\"padding-left:26px; color:#333;\">' + data + '</span>'
-                   : '<strong>' + data + '</strong>';
-               }", rowtype_idx
-            ))
-          ),
-          list(visible = FALSE, targets = c(sd_idx, rowtype_idx, group_idx))
+          week_column_defs
         ),
         # Hide every district row up front, and re-hide it on any redraw
         # (createdRow only fires once per row here since paging is off, but
@@ -1590,8 +1684,7 @@ server <- function(input, output, session) {
         "District-level weekly ", label, " cases of ", tbl$disease, " by province, most recent ",
         tbl$n_wk, " weeks of ", tbl$year, ". Click the arrow on a province row to expand its districts."
       )
-    ) %>%
-      formatRound(columns = week_cols, digits = 0)
+    )
 
     dt <- formatStyle(
       dt,

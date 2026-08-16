@@ -1072,6 +1072,39 @@ find_header_line <- function(lines, header_keywords, min_matches){
   hits[1]
 }
 
+# ---- Generic helper: page-footer / running-header boilerplate ----------
+# Every bulletin repeats a page footer ("Page 4 |" in most issues) and,
+# immediately below it, a running header ("IDSR Weekly Epidemiological
+# Bulletin"). Some older issues (seen so far: bulletins from 2023) render
+# the word "Page" with letter-tracking applied by the PDF's own font --
+# pdftools then extracts it as individual space-separated letters, e.g.
+# "4 | P a g e" instead of "Page 4 |" or "4|Page". A plain substring check
+# for "Page" doesn't catch that rendering, which matters because these two
+# lines land as ordinary (non-data) lines in the middle of a table that
+# spans a page break -- and merge_wrapped_lines()/the multi-line row-label
+# logic elsewhere in this file treats any non-data line immediately before
+# a data line as a WRAPPED CONTINUATION of that data line's row label. If
+# the footer/header isn't recognised and dropped first, it gets glued onto
+# the next real row's name instead (observed: Week 16 2023's KP district
+# table, where the page break after "Kolai Palas" left the next real row,
+# "Lakki Marwat", extracted as "4|P a g e IDSR Weekly Epidemiological
+# Bulletin Lakki Marwat").
+#
+# spaced_pattern() turns a literal phrase into a regex that matches it with
+# OPTIONAL whitespace between every character, so a single check catches
+# both the normal contiguous rendering and the letter-tracked one.
+spaced_pattern <- function(phrase) paste(strsplit(phrase, "")[[1]], collapse = "\\s*")
+
+FOOTER_HEADER_PATTERNS <- c(
+  paste0("^\\s*\\d*\\s*\\|?\\s*", spaced_pattern("Page"), "\\b"),  # "4|P a g e", "4 | Page", "Page 4"
+  paste0(spaced_pattern("Page"), "\\s*\\|"),                        # "Page |4" / "Page| 4"
+  "IDSR\\s*Weekly\\s*Epidemiological\\s*Bulletin"                   # running header line
+)
+
+is_footer_or_header_line <- function(line){
+  any(vapply(FOOTER_HEADER_PATTERNS, grepl, logical(1), x = line, ignore.case = TRUE, perl = TRUE))
+}
+
 # ---- Main disease-counts table ------------------------------------------
 
 extract_table_rows <- function(pdf_text){
@@ -1150,7 +1183,7 @@ extract_table_rows <- function(pdf_text){
   if(length(figure_idx) > 0){
     rows <- rows[seq_len(min(figure_idx) - 1)]
   }
-  rows <- rows[!grepl("Page\\s*\\|", rows, ignore.case = TRUE)]   # <-- drop footer lines
+  rows <- rows[!vapply(rows, is_footer_or_header_line, logical(1))]   # <-- drop footer/header lines
   rows <- merge_wrapped_lines(rows, n_cols = length(matched_cols), variant_map = disease_variant_map, column_names = matched_cols)
   
   list(
@@ -1675,6 +1708,15 @@ write_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data
 # district names are kept as-is (with a warning) rather than causing the
 # whole page to fail, so the pipeline degrades gracefully when it does.
 
+# Row labels that turn up in these tables but are NOT a real geographic
+# district -- lab/facility-type subtotals folded into the same "district
+# wise" table (seen so far only in Sindh's case tables: "Sindh Labs",
+# "Sindh Private TCH"). Matched case-insensitively against the trimmed raw
+# label and dropped outright (not kept-as-unmatched), so they never show up
+# in the dashboard as if they were districts. Extend this list as more
+# turn up.
+DISTRICT_NON_LOCATION_LABELS <- c("sindh labs", "sindh private tch", "private tch")
+
 district_region_lookup <- list(
   AJK = list(
     "Neelum"          = c("neelum"),
@@ -1768,11 +1810,22 @@ district_region_lookup <- list(
     "Mansehra"                  = c("mansehra"),
     "Mardan"                    = c("mardan"),
     "Mohmand"                   = c("mohmand"),
-    "North Waziristan"          = c("north waziristan"),
+    # "NWA" (North Waziristan Agency) is the abbreviation seen for this
+    # district in some bulletins' compliance tables.
+    "North Waziristan"          = c("north waziristan", "nwa"),
     "Nowshera"                  = c("nowshera"),
     "Orakzai"                   = c("orakzai"),
     "Peshawar"                  = c("peshawar"),
+    # "SD <district>" ("Sub Division") rows appear alongside their parent
+    # district in some bulletins' compliance tables as a genuinely separate
+    # reporting line (its own site counts), not just an alternate spelling
+    # of the parent -- so, matching the existing SD DI Khan/SD Peshawar/SD
+    # Tank entries below, each is kept as its own canonical district rather
+    # than folded into its parent.
+    "SD Bannu"                  = c("sd bannu"),
     "SD DI Khan"                = c("sd di khan", "sd d.i. khan"),
+    "SD Kohat"                  = c("sd kohat"),
+    "SD Lakki"                  = c("sd lakki", "sd lakki marwat"),
     "SD Peshawar"               = c("sd peshawar"),
     "SD Tank"                   = c("sd tank"),
     "Shangla"                   = c("shangla"),
@@ -1784,8 +1837,15 @@ district_region_lookup <- list(
     # refuses to resolve on its own -- so it's kept as its own canonical
     # district here, matched only by the unqualified form.
     "South Waziristan"          = c("south waziristan"),
-    "South Waziristan (Lower)"  = c("south waziristan (lower)", "south waziristan lower", "swl"),
-    "South Waziristan (Upper)"  = c("south waziristan (upper)", "south waziristan upper", "swu"),
+    # "SW (L)"/"SW(U)" (with the space+parens) are a distinct abbreviation
+    # from the already-handled no-space "swl"/"swu" forms -- both are kept
+    # since bulletins are inconsistent about which one they use.
+    "South Waziristan (Lower)"  = c("south waziristan (lower)", "south waziristan lower", "swl", "sw (l)", "sw(l)"),
+    "South Waziristan (Upper)"  = c("south waziristan (upper)", "south waziristan upper", "swu", "sw (u)", "sw(u)"),
+    # "SWA" (South Waziristan Agency) is ambiguous between the Lower/Upper
+    # split seen elsewhere -- rather than guess, it's kept as its own
+    # canonical district (matched only by the unqualified "swa" form), same
+    # reasoning as the bare "South Waziristan" entry above.
     "SWA"                       = c("swa"),
     "Swabi"                     = c("swabi"),
     "Swat"                      = c("swat"),
@@ -1839,7 +1899,15 @@ district_to_region <- unlist(lapply(names(district_region_lookup), function(regi
 }))
 
 district_variant_map <- build_matcher(district_lookup)
-match_district_name   <- function(x) fuzzy_match(x, district_variant_map, max_dist = 2)
+# A district's row-label sometimes gets an explicit "Nr" (Not Reported)
+# marker glued onto the end of the name itself, rather than only living in
+# the row's numeric cells (observed: "Gwadar Nr" for an NR week). Stripped
+# before matching so the name still resolves to its real district -- no
+# canonical district name legitimately ends in "Nr", so this is unambiguous.
+match_district_name <- function(x){
+  x_clean <- sub("\\s+NR$", "", x, ignore.case = TRUE)
+  fuzzy_match(x_clean, district_variant_map, max_dist = 2)
+}
 region_of_district     <- function(canonical_district) unname(district_to_region[canonical_district])
 
 # ---- Generic: find every "Table N:" title line across the document -------
@@ -1878,7 +1946,7 @@ table_end_page <- function(all_titles, start_page, start_line, n_pages){
 }
 
 drop_footer_lines <- function(lines){
-  lines[!grepl("Page\\s*\\|", lines, ignore.case = TRUE)]
+  lines[!vapply(lines, is_footer_or_header_line, logical(1))]
 }
 
 
@@ -2177,7 +2245,21 @@ convert_district_cases_table <- function(extracted){
       District     = vapply(District, match_district_name, character(1)),
       District     = coalesce(District, District_raw)
     )
-  
+
+  # Drop rows that look like a table row but aren't a real geographic
+  # district (see DISTRICT_NON_LOCATION_LABELS above), plus a defensive
+  # backstop for the running-header boilerplate ("IDSR ... Bulletin") in
+  # case it ever survives drop_footer_lines() glued onto a real row's label
+  # instead of appearing as its own line -- these are dropped outright, not
+  # kept-as-unmatched, since neither belongs in the dashboard as a district.
+  non_location <- tolower(trimws(data$District_raw)) %in% DISTRICT_NON_LOCATION_LABELS |
+    grepl("idsr\\s*weekly\\s*epidemiological\\s*bulletin", data$District_raw, ignore.case = TRUE)
+  if(any(non_location)){
+    message(sprintf('District table "%s": dropped %d non-district row(s): %s',
+                    extracted$title, sum(non_location), paste(unique(data$District_raw[non_location]), collapse = "; ")))
+  }
+  data <- data[!non_location, ]
+
   unmatched <- data |> filter(District == District_raw & !(District %in% names(district_lookup)) & District_raw != "Total")
   if(nrow(unmatched) > 0){
     warning(sprintf('District table "%s": %d district name(s) unmatched, kept as-is: %s',
@@ -2652,82 +2734,5 @@ extract_PAK_data_main <- function(extract_all = FALSE,
                                   district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
                                   include_district = TRUE){
   
-  bulletin_url <-
-    "https://www.nih.org.pk/phb/weekly-bulletin"
   
-  links <- get_bulletin_links(
-    bulletin_url
-  )
-  
-  link_metadata <- extract_report_date(links)
-  
-  if(file.exists(cases_file)){
-    existing <- read_csv(cases_file, show_col_types = FALSE) |>
-      distinct(Year, Week)
-  } else {
-    existing <- tibble(Year = numeric(0), Week = numeric(0))
-  }
-  
-  if(extract_all){
-    
-    new_rows     <- link_metadata
-    changed_rows <- link_metadata[0, ]
-    
-  } else {
-    
-    # ---- New weeks: not already present in the cases CSV at all ----------
-    new_rows <- link_metadata |>
-      anti_join(existing, by = c("year" = "Year", "week" = "Week"))
-    
-    new_rows <- new_rows %>% filter(year >= 2026) # ignore those that are before 2026 and have changed
-    
-    # ---- Changed weeks: present, but the bulletin's link has changed -----
-    changed_rows <- detect_changed_links(link_metadata, cases_file)
-  }
-  
-  rows_to_run <- bind_rows(new_rows, changed_rows) |>
-    distinct(year, week, .keep_all = TRUE)
-  
-  if(nrow(rows_to_run) == 0){
-    message("No new or changed bulletins — dataset is already up to date.")
-    return(invisible(list(new = 0L, changed = 0L)))
-  }
-  
-  message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
-  
-  # Clear out the old data for any changed week BEFORE reprocessing it.
-  # The district-level files are only cleared when this run is actually
-  # going to re-extract district data -- if include_district = FALSE, any
-  # district-level rows already on file from a PREVIOUS (district-including)
-  # run for that week are left untouched rather than being wiped without a
-  # replacement.
-  if(nrow(changed_rows) > 0){
-    for(i in seq_len(nrow(changed_rows))){
-      message("Link changed for Week ", changed_rows$week[i], ", ", changed_rows$year[i],
-             " — replacing existing data for that week.")
-      remove_existing_week(cases_file, changed_rows$year[i], changed_rows$week[i])
-      remove_existing_week(compliance_file, changed_rows$year[i], changed_rows$week[i])
-      if(include_district){
-        remove_existing_week(district_cases_file, changed_rows$year[i], changed_rows$week[i])
-        remove_existing_week(district_compliance_file, changed_rows$year[i], changed_rows$week[i])
-      }
-    }
-  }
-
-  for(i_row in seq_len(nrow(rows_to_run))){
-
-    process_one_bulletin(
-      week                     = rows_to_run$week[i_row],
-      year                     = rows_to_run$year[i_row],
-      link                     = rows_to_run$link[i_row],
-      title                    = rows_to_run$title[i_row],
-      cases_file               = cases_file,
-      compliance_file          = compliance_file,
-      district_cases_file      = district_cases_file,
-      district_compliance_file = district_compliance_file,
-      include_district         = include_district
-    )
-  }
-  
-  invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
 }
