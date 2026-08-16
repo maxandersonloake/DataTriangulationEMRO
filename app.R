@@ -188,6 +188,66 @@ compliance_data <- read_csv(COMPLIANCE_PATH, show_col_types = FALSE) %>%
 disease_choices  <- sort(unique(raw_data$Disease))
 location_choices <- c("National", sort(unique(raw_data$Province[raw_data$Province != "Total"])))
 
+# ---- Load district-level data ----------------------------------------------
+# District-level breakdowns of the same weekly bulletins, used by the
+# "District-level data" tab. Note that district-level case data is
+# currently only published/extracted for a subset of provinces (whichever
+# ones the source bulletin breaks down by district that week) -- the tab
+# naturally only shows whichever provinces/districts are present.
+DISTRICT_DATA_PATH       <- "Data/PAK_IDSR_Data_District.csv"
+DISTRICT_COMPLIANCE_PATH <- "Data/PAK_IDSR_Compliance_District.csv"
+
+raw_district_data <- read_csv(DISTRICT_DATA_PATH, show_col_types = FALSE) %>%
+  mutate(
+    Disease  = as.character(Disease),
+    Province = as.character(Province),
+    District = as.character(District),
+    Cases    = suppressWarnings(as.numeric(Cases)),
+    Week     = as.integer(Week),
+    Year     = as.integer(Year),
+    Status   = as.character(Status)
+  ) %>%
+  filter(!is.na(Week), !is.na(Year), !is.na(Province), !is.na(District)) %>%
+  # Same "keep a real report or an explicit non-report row, drop anything
+  # else" rule as raw_data above. The district pipeline uses both "NR" and
+  # "Missing" for a row that's present but has no usable case count -- both
+  # are treated the same way (Cases NA, row kept) as "no report" downstream.
+  filter(!is.na(Cases) | Status %in% c("NR", "Missing"))
+
+# A district/week can have more than one row here -- e.g. a separate "IDSR
+# Reporting Site" row and a "Tertiary Care Hospital" row for the same
+# district and week, each with its own Total/Reported Sites and Compliance
+# (%). These are combined into a single district/week compliance figure by
+# summing sites across facility types and recomputing the percentage from
+# those totals, rather than picking or averaging the individual rows'
+# already-computed percentages (which would need a sites-weighted
+# combination to be correct, and summing the raw counts gets there
+# directly). Same division-by-zero-artefact guard as compliance_data above:
+# a district/week with 0 or missing total sites gets Compliance = NA, never
+# mistaken for 100%.
+district_compliance_data <- read_csv(DISTRICT_COMPLIANCE_PATH, show_col_types = FALSE) %>%
+  mutate(
+    Region          = as.character(Region),
+    District        = as.character(District),
+    `Total Sites`    = suppressWarnings(as.numeric(`Total Sites`)),
+    `Reported Sites` = suppressWarnings(as.numeric(`Reported Sites`)),
+    Week = as.integer(Week),
+    Year = as.integer(Year)
+  ) %>%
+  filter(!is.na(Region), !is.na(District)) %>%
+  group_by(Region, District, Week, Year) %>%
+  summarise(
+    `Total Sites`    = sum(`Total Sites`, na.rm = TRUE),
+    `Reported Sites` = sum(`Reported Sites`, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Compliance = ifelse(`Total Sites` <= 0, NA_real_, 100 * `Reported Sites` / `Total Sites`)
+  ) %>%
+  select(Province = Region, District, Week, Year, Compliance)
+
+district_disease_choices <- sort(unique(raw_district_data$Disease))
+
 latest_year <- max(raw_data$Year, na.rm = TRUE)
 latest_week <- max(raw_data$Week[raw_data$Year == latest_year], na.rm = TRUE)
 
@@ -257,6 +317,38 @@ get_all_disease_series <- function(location) {
     left_join(compliance_data, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
     mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
     select(Disease, Year, Week, Reported = Cases, Projected, Compliance)
+}
+
+# ---- Helper: district-level weekly series for a single disease, across ----
+# every province/district that has district-level data for it. Projected
+# uses the matching district's own compliance (Province + District + Week +
+# Year), the same reported/(compliance/100) formula as get_trend_data().
+get_district_disease_series <- function(disease) {
+  raw_district_data %>%
+    filter(Disease == disease) %>%
+    group_by(Province, District, Year, Week) %>%
+    # See get_trend_data() above for why this isn't a plain sum(na.rm=TRUE).
+    summarise(Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE), .groups = "drop") %>%
+    left_join(district_compliance_data, by = c("Province", "District", "Week", "Year")) %>%
+    mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
+    select(Province, District, Year, Week, Reported = Cases, Projected, Compliance)
+}
+
+# ---- Helper: province-level totals derived by summing a district series --
+# Used for the parent (province) rows on the District-level data tab, and
+# for CUSUM shading of those province totals. A province/week is NA only if
+# EVERY one of its districts is NA that week (no usable report anywhere in
+# the province); otherwise missing districts are simply excluded from the
+# sum, not treated as zero -- consistent with the aggregation rule used
+# throughout (see get_trend_data()/get_all_disease_series() above).
+get_province_disease_series <- function(district_series) {
+  district_series %>%
+    group_by(Province, Year, Week) %>%
+    summarise(
+      Reported  = if (all(is.na(Reported)))  NA_real_ else sum(Reported,  na.rm = TRUE),
+      Projected = if (all(is.na(Projected))) NA_real_ else sum(Projected, na.rm = TRUE),
+      .groups = "drop"
+    )
 }
 
 
@@ -796,6 +888,12 @@ ui <- tagList(
             choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
             selected = "reported"
           ),
+          tags$p(
+            style = "font-size: 12px; color: #555;",
+            strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+            "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
+            "a projected total case estimate of 40."
+          ),
           tags$hr(),
           div(
             style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
@@ -821,6 +919,66 @@ ui <- tagList(
             "See the ", strong("Alerts"), " tab."
           ),
           DTOutput("weekly_table")
+        )
+      )
+      )
+    ),
+
+    # ---------------------------------------------------------
+    tabPanel(
+      "District-level data",
+      div(
+        style = "padding-top: 16px;",
+        div(
+          class = "info-card",
+          style = "border-left: 6px solid #F4A81D; background-color: #FEF7E8; margin: 0 24px 14px 24px; padding: 10px 16px;",
+          icon("triangle-exclamation", style = "color:#B0121A;"),
+          strong(" Work in progress: "),
+          "District-level data extraction is still being refined and may contain gaps or errors. Cross-check figures ",
+          "against the source IDSR bulletins (see the ", strong("References"), " tab) before relying on them."
+        ),
+      sidebarLayout(
+        sidebarPanel(
+          width = 3,
+          selectInput("disease_district_tbl", "Disease", choices = district_disease_choices,
+                      selected = district_disease_choices[1]),
+          numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+          radioButtons(
+            "case_type_district_tbl", "Case counts to display",
+            choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+            selected = "reported"
+          ),
+          tags$p(
+            style = "font-size: 12px; color: #555;",
+            strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+            "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
+            "a projected total case estimate of 40."
+          ),
+          tags$hr(),
+          div(
+            style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
+            "Cell shading"
+          ),
+          div(
+            lapply(rev(seq_along(SD_BG_PAL)), function(i) {
+              div(class = "sd-legend-row",
+                  span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
+                  SD_LEGEND_LABELS[i])
+            })
+          ),
+          tags$p(
+            style = "font-size: 12px; color: #555; margin-top: 8px;",
+            "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+          )
+        ),
+        mainPanel(
+          width = 9,
+          p(
+            style = "font-size: 13px; color:#555;",
+            icon("circle-info"), " Click the arrow on a province row to expand district-level case counts within it. ",
+            "District-level data is currently only available for the provinces shown below."
+          ),
+          DTOutput("district_table")
         )
       )
       )
@@ -878,11 +1036,27 @@ ui <- tagList(
                 ),
 
                 div(
-                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; background-color:#FFFFFF;",
+                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; margin-bottom:14px; background-color:#FFFFFF;",
                   h5("Reporting compliance data", style = "margin-top:0; color:var(--who-navy);"),
                   p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
                     "Weekly reporting compliance (%) by region."),
                   downloadButton("download_idsr_compliance", "Download PAK_IDSR_Compliance.csv", class = "btn-who-download")
+                ),
+
+                div(
+                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; margin-bottom:14px; background-color:#FFFFFF;",
+                  h5("District-level IDSR case data", style = "margin-top:0; color:var(--who-navy);"),
+                  p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
+                    "Weekly reported case counts by disease, province, and district."),
+                  downloadButton("download_idsr_data_district", "Download PAK_IDSR_Data_District.csv", class = "btn-who-download")
+                ),
+
+                div(
+                  style = "border:1px solid #C9DEF3; border-radius:6px; padding:16px; background-color:#FFFFFF;",
+                  h5("District-level reporting compliance data", style = "margin-top:0; color:var(--who-navy);"),
+                  p(style = "font-size: 12.5px; color:#555; margin-bottom:10px;",
+                    "Weekly reporting compliance (%) by province and district."),
+                  downloadButton("download_idsr_compliance_district", "Download PAK_IDSR_Compliance_District.csv", class = "btn-who-download")
                 )
               )
             )
@@ -1270,6 +1444,165 @@ server <- function(input, output, session) {
     dt
   })
 
+  # ---------------- District-level data tab -------------------------------
+  # A single flat table: one row per province (bold, always visible) is
+  # immediately followed by one row per district within it (indented,
+  # hidden until that province's arrow is clicked). Because province and
+  # district rows are literal rows of the SAME table -- not a separate
+  # nested table -- the week columns always line up exactly with the
+  # header, and the usual formatRound()/formatStyle() SD-shading pipeline
+  # (identical to the Weekly summary table) applies to every row uniformly.
+
+  district_table_reactive <- reactive({
+    req(input$disease_district_tbl, input$n_weeks_district)
+
+    district_series <- get_district_disease_series(input$disease_district_tbl)
+    validate(need(nrow(district_series) > 0, "No district-level data available for this disease."))
+
+    province_series <- get_province_disease_series(district_series)
+
+    yr <- max(district_series$Year, na.rm = TRUE)
+    weeks_available <- sort(unique(district_series$Week[district_series$Year == yr]))
+    n_wk <- min(input$n_weeks_district, length(weeks_available))
+    weeks_to_show <- tail(weeks_available, n_wk)
+    week_cols <- paste0("Wk ", weeks_to_show)
+    sd_cols   <- paste0(week_cols, "_sd")
+
+    value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
+
+    provinces_here <- sort(unique(district_series$Province))
+
+    # Pulls the week_cols/sd_cols values for one (sub-)series -- a single
+    # province's or district's own Year/Week rows -- as a one-row data
+    # frame, in the exact column order/names used throughout this table.
+    row_for_series <- function(s, label) {
+      vals <- sapply(weeks_to_show, function(w) {
+        r <- s[s$Year == yr & s$Week == w, ]
+        if (nrow(r) == 0) NA_real_ else r[[value_col]][1]
+      })
+      sds <- sapply(weeks_to_show, function(w) cusum_z_at(s, yr, w, value_col = value_col))
+      # check.names = FALSE: week_cols/sd_cols contain spaces (e.g. "Wk 24")
+      # which as.data.frame() would otherwise silently mangle into "Wk.24",
+      # breaking every downstream reference to these column names by string.
+      row <- as.data.frame(c(
+        list(Toggle = "", Location = label),
+        setNames(as.list(vals), week_cols),
+        setNames(as.list(sds), sd_cols)
+      ), stringsAsFactors = FALSE, check.names = FALSE)
+      row
+    }
+
+    rows <- list()
+    for (p in provinces_here) {
+      s_prov <- province_series %>% filter(Province == p) %>% arrange(Year, Week)
+      prov_row <- row_for_series(s_prov, p)
+      prov_row$RowType <- "province"
+      prov_row$Group   <- p
+      rows[[length(rows) + 1]] <- prov_row
+
+      districts_here <- sort(unique(district_series$District[district_series$Province == p]))
+      for (dis in districts_here) {
+        s_dist <- district_series %>% filter(Province == p, District == dis) %>% arrange(Year, Week)
+        dist_row <- row_for_series(s_dist, dis)
+        dist_row$RowType <- "district"
+        dist_row$Group   <- p
+        rows[[length(rows) + 1]] <- dist_row
+      }
+    }
+
+    display_df <- bind_rows(rows)
+
+    list(
+      display_df = display_df,
+      week_cols = week_cols,
+      sd_cols = sd_cols,
+      year = yr, n_wk = n_wk,
+      value_col = value_col,
+      disease = input$disease_district_tbl
+    )
+  })
+
+  output$district_table <- renderDT({
+    tbl <- district_table_reactive()
+    df  <- tbl$display_df
+    week_cols <- tbl$week_cols
+    sd_cols   <- tbl$sd_cols
+
+    toggle_idx   <- which(names(df) == "Toggle")   - 1
+    location_idx <- which(names(df) == "Location") - 1
+    sd_idx       <- which(names(df) %in% sd_cols)  - 1
+    rowtype_idx  <- which(names(df) == "RowType")  - 1
+    group_idx    <- which(names(df) == "Group")    - 1
+
+    label <- if (tbl$value_col == "Projected") "projected total" else "reported"
+
+    dt <- datatable(
+      df,
+      rownames = FALSE,
+      escape = FALSE,
+      colnames = c(" " = "Toggle", "Province / District" = "Location"),
+      options = list(
+        paging = FALSE, ordering = FALSE, searching = FALSE, info = FALSE, dom = "t",
+        columnDefs = list(
+          list(
+            targets = toggle_idx, className = "details-control", width = "18px",
+            render = JS(sprintf(
+              "function(data, type, row) { return row[%d] === 'province' ? '&#9654;' : ''; }", rowtype_idx
+            ))
+          ),
+          list(
+            targets = location_idx,
+            render = JS(sprintf(
+              "function(data, type, row) {
+                 if (type !== 'display') return data;
+                 return row[%d] === 'district'
+                   ? '<span style=\"padding-left:26px; color:#333;\">' + data + '</span>'
+                   : '<strong>' + data + '</strong>';
+               }", rowtype_idx
+            ))
+          ),
+          list(visible = FALSE, targets = c(sd_idx, rowtype_idx, group_idx))
+        ),
+        # Hide every district row up front, and re-hide it on any redraw
+        # (createdRow only fires once per row here since paging is off, but
+        # this keeps behaviour correct if that ever changes).
+        createdRow = JS(sprintf(
+          "function(row, data, dataIndex) {
+             if (data[%d] === 'district') { $(row).hide(); }
+             $(row).attr('data-group', data[%d]);
+           }", rowtype_idx, group_idx
+        ))
+      ),
+      callback = JS(
+        "table.column(0).nodes().to$().css({cursor: 'pointer'});",
+        "table.on('click', 'td.details-control', function() {",
+        "  var tr  = $(this).closest('tr');",
+        "  var row = table.row(tr);",
+        sprintf("  if (row.data()[%d] !== 'province') return;", rowtype_idx),
+        sprintf("  var grp = row.data()[%d];", group_idx),
+        "  var $children = $(table.table().body()).find('tr[data-group=\"' + grp + '\"]').not(tr);",
+        "  var willShow = !$children.first().is(':visible');",
+        "  $children.toggle(willShow);",
+        "  $(this).html(willShow ? '&#9660;' : '&#9654;');",
+        "});"
+      ),
+      caption = paste0(
+        "District-level weekly ", label, " cases of ", tbl$disease, " by province, most recent ",
+        tbl$n_wk, " weeks of ", tbl$year, ". Click the arrow on a province row to expand its districts."
+      )
+    ) %>%
+      formatRound(columns = week_cols, digits = 0)
+
+    dt <- formatStyle(
+      dt,
+      columns = week_cols,
+      valueColumns = sd_cols,
+      backgroundColor = styleInterval(SD_BREAKS, SD_BG_PAL),
+      color = styleInterval(SD_BREAKS, SD_FONT_PAL)
+    )
+    dt
+  })
+
   # ---------------- Alerts tab (single list, grouped by disease) ---------
   alerts_reactive <- reactive({
     req(input$asof_week_alerts)
@@ -1371,6 +1704,16 @@ server <- function(input, output, session) {
   output$download_idsr_compliance <- downloadHandler(
     filename = function() basename(COMPLIANCE_PATH),
     content = function(file) file.copy(COMPLIANCE_PATH, file)
+  )
+
+  output$download_idsr_data_district <- downloadHandler(
+    filename = function() basename(DISTRICT_DATA_PATH),
+    content = function(file) file.copy(DISTRICT_DATA_PATH, file)
+  )
+
+  output$download_idsr_compliance_district <- downloadHandler(
+    filename = function() basename(DISTRICT_COMPLIANCE_PATH),
+    content = function(file) file.copy(DISTRICT_COMPLIANCE_PATH, file)
   )
 }
 

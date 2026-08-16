@@ -13,6 +13,7 @@ if (!requireNamespace("renv", quietly = TRUE)) {
 #renv::snapshot()
 #renv::restore()
 
+renv::snapshot()
 rsconnect::writeManifest()
 
 #######################

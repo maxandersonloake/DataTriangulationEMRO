@@ -467,7 +467,7 @@
       "description": {
         "Package": "bslib",
         "Title": "Custom 'Bootstrap' 'Sass' Themes for 'shiny' and 'rmarkdown'",
-        "Version": "0.11.0",
+        "Version": "0.12.0",
         "Authors@R": "c(\n    person(\"Carson\", \"Sievert\", , \"carson@posit.co\", role = c(\"aut\", \"cre\"),\n           comment = c(ORCID = \"0000-0002-4958-2844\")),\n    person(\"Joe\", \"Cheng\", , \"joe@posit.co\", role = \"aut\"),\n    person(\"Garrick\", \"Aden-Buie\", , \"garrick@posit.co\", role = \"aut\",\n           comment = c(ORCID = \"0000-0002-7111-0077\")),\n    person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")),\n    person(, \"Bootstrap contributors\", role = \"ctb\",\n           comment = \"Bootstrap library\"),\n    person(, \"Twitter, Inc\", role = \"cph\",\n           comment = \"Bootstrap library\"),\n    person(\"Javi\", \"Aguilar\", role = c(\"ctb\", \"cph\"),\n           comment = \"Bootstrap colorpicker library\"),\n    person(\"Thomas\", \"Park\", role = c(\"ctb\", \"cph\"),\n           comment = \"Bootswatch library\"),\n    person(, \"PayPal\", role = c(\"ctb\", \"cph\"),\n           comment = \"Bootstrap accessibility plugin\")\n  )",
         "Description": "Simplifies custom 'CSS' styling of both 'shiny' and\n    'rmarkdown' via 'Bootstrap' 'Sass'. Supports 'Bootstrap' 3, 4 and 5 as\n    well as their various 'Bootswatch' themes. An interactive widget is\n    also provided for previewing themes in real time.",
         "License": "MIT + file LICENSE",
@@ -484,21 +484,21 @@
         "Config/testthat/parallel": "true",
         "Config/testthat/start-first": "zzzz-bs-sass, fonts, zzz-precompile,\ntheme-*, rmd-*",
         "Encoding": "UTF-8",
-        "Collate": "'accordion.R' 'breakpoints.R' 'bs-current-theme.R'\n'bs-dependencies.R' 'bs-global.R' 'bs-remove.R'\n'bs-theme-layers.R' 'bs-theme-preset-bootswatch.R'\n'bs-theme-preset-brand.R' 'bs-theme-preset-builtin.R'\n'bs-theme-preset.R' 'utils.R' 'bs-theme-preview.R'\n'bs-theme-update.R' 'bs-theme.R' 'bslib-package.R' 'buttons.R'\n'card.R' 'deprecated.R' 'files.R' 'fill.R' 'imports.R'\n'input-code-editor.R' 'input-dark-mode.R' 'input-submit.R'\n'input-switch.R' 'layout.R' 'nav-items.R' 'nav-update.R'\n'navbar_options.R' 'navs-legacy.R' 'navs.R' 'onLoad.R' 'page.R'\n'popover.R' 'precompiled.R' 'print.R' 'shiny-devmode.R'\n'sidebar.R' 'staticimports.R' 'toast.R' 'toolbar.R' 'tooltip.R'\n'utils-deps.R' 'utils-shiny.R' 'utils-tags.R' 'value-box.R'\n'version-default.R' 'versions.R'",
+        "Collate": "'accordion.R' 'breakpoints.R' 'bs-current-theme.R'\n'bs-dependencies.R' 'bs-global.R' 'bs-remove.R'\n'bs-theme-layers.R' 'bs-theme-preset-bootswatch.R'\n'bs-theme-preset-brand.R' 'bs-theme-preset-builtin.R'\n'bs-theme-preset.R' 'utils.R' 'bs-theme-preview.R'\n'bs-theme-update.R' 'bs-theme.R' 'bslib-package.R' 'buttons.R'\n'card.R' 'deprecated.R' 'files.R' 'fill.R' 'imports.R'\n'input-code-editor.R' 'input-dark-mode.R' 'input-submit.R'\n'input-switch.R' 'layout.R' 'nav-items.R' 'nav-update.R'\n'navbar_options.R' 'navs-legacy.R' 'navs.R' 'offcanvas.R'\n'onLoad.R' 'page.R' 'popover.R' 'precompiled.R' 'print.R'\n'shiny-devmode.R' 'sidebar.R' 'staticimports.R' 'toast.R'\n'toolbar.R' 'tooltip.R' 'utils-deps.R' 'utils-shiny.R'\n'utils-tags.R' 'value-box.R' 'version-default.R' 'versions.R'",
         "NeedsCompilation": "no",
-        "Packaged": "2026-05-15 15:16:19 UTC; cpsievert",
+        "Packaged": "2026-08-03 22:55:38 UTC; cpsievert",
         "Author": "Carson Sievert [aut, cre] (ORCID:\n    <https://orcid.org/0000-0002-4958-2844>),\n  Joe Cheng [aut],\n  Garrick Aden-Buie [aut] (ORCID:\n    <https://orcid.org/0000-0002-7111-0077>),\n  Posit Software, PBC [cph, fnd],\n  Bootstrap contributors [ctb] (Bootstrap library),\n  Twitter, Inc [cph] (Bootstrap library),\n  Javi Aguilar [ctb, cph] (Bootstrap colorpicker library),\n  Thomas Park [ctb, cph] (Bootswatch library),\n  PayPal [ctb, cph] (Bootstrap accessibility plugin)",
         "Maintainer": "Carson Sievert <carson@posit.co>",
         "Repository": "RSPM",
-        "Date/Publication": "2026-05-16 08:10:07 UTC",
-        "Built": "R 4.5.0; ; 2026-05-17 05:32:49 UTC; windows",
+        "Date/Publication": "2026-08-04 00:40:02 UTC",
+        "Built": "R 4.5.0; ; 2026-08-04 05:10:08 UTC; windows",
         "RemoteType": "standard",
         "RemoteRef": "bslib",
         "RemotePkgRef": "bslib",
         "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
         "RemoteReposName": "CRAN",
         "RemotePkgPlatform": "x86_64-w64-mingw32",
-        "RemoteSha": "0.11.0"
+        "RemoteSha": "0.12.0"
       }
     },
     "cachem": {
@@ -2249,33 +2249,33 @@
       "description": {
         "Package": "plotly",
         "Title": "Create Interactive Web Graphics via 'plotly.js'",
-        "Version": "4.12.0",
+        "Version": "4.12.1",
         "Authors@R": "c(person(\"Carson\", \"Sievert\", role = c(\"aut\", \"cre\"),\n    email = \"cpsievert1@gmail.com\", comment = c(ORCID = \"0000-0002-4958-2844\")),\n    person(\"Chris\", \"Parmer\", role = \"aut\",\n    email = \"chris@plot.ly\"),\n    person(\"Toby\", \"Hocking\", role = \"aut\",\n    email = \"tdhock5@gmail.com\"),\n    person(\"Scott\", \"Chamberlain\", role = \"aut\",\n    email = \"myrmecocystus@gmail.com\"),\n    person(\"Karthik\", \"Ram\", role = \"aut\",\n    email = \"karthik.ram@gmail.com\"),\n    person(\"Marianne\", \"Corvellec\", role = \"aut\",\n    email = \"marianne.corvellec@igdore.org\", comment = c(ORCID = \"0000-0002-1994-3581\")),\n    person(\"Pedro\", \"Despouy\", role = \"aut\",\n    email = \"pedro@plot.ly\"),\n    person(\"Salim\", \"Brüggemann\", role = \"ctb\",\n    email = \"salim-b@pm.me\", comment = c(ORCID = \"0000-0002-5329-5987\")),\n    person(\"Plotly Technologies Inc.\", role = \"cph\"))",
         "License": "MIT + file LICENSE",
         "Description": "Create interactive web graphics from 'ggplot2' graphs and/or a custom interface to the (MIT-licensed) JavaScript library 'plotly.js' inspired by the grammar of graphics.",
         "URL": "https://plotly-r.com, https://github.com/plotly/plotly.R,\nhttps://plotly.com/r/",
         "BugReports": "https://github.com/plotly/plotly.R/issues",
         "Depends": "R (>= 3.5.0), ggplot2 (>= 3.0.0)",
-        "Imports": "tools, scales, httr (>= 1.3.0), jsonlite (>= 1.6), magrittr,\ndigest, viridisLite, base64enc, htmltools (>= 0.3.6),\nhtmlwidgets (>= 1.5.2.9001), tidyr (>= 1.0.0), RColorBrewer,\ndplyr, vctrs, tibble, lazyeval (>= 0.2.0), rlang (>= 1.0.0),\ncrosstalk, purrr, data.table, promises",
+        "Imports": "tools, scales, httr (>= 1.3.0), jsonlite (>= 1.6), magrittr,\ndigest, viridisLite, base64enc, htmltools (>= 0.3.6),\nhtmlwidgets (>= 1.5.2.9001), tidyr (>= 1.0.0), RColorBrewer,\ndplyr, vctrs, tibble, rlang (>= 1.0.0), crosstalk, purrr,\ndata.table, promises",
         "Suggests": "MASS, maps, hexbin, ggthemes, GGally, ggalluvial, testthat,\nknitr, shiny (>= 1.1.0), shinytest2, curl, rmarkdown, Cairo,\nbroom, webshot, listviewer, dendextend, sf, png, IRdisplay,\nprocessx, plotlyGeoAssets, forcats, withr, palmerpenguins,\nrversions, reticulate, rsvg, ggridges",
         "LazyData": "true",
         "RoxygenNote": "7.3.3",
         "Encoding": "UTF-8",
         "Config/Needs/check": "tidyverse/ggplot2, ggobi/GGally, rcmdcheck,\ndevtools, reshape2, s2",
         "NeedsCompilation": "no",
-        "Packaged": "2026-01-24 00:53:27 UTC; cpsievert",
+        "Packaged": "2026-07-21 23:17:16 UTC; cpsievert",
         "Author": "Carson Sievert [aut, cre] (ORCID:\n    <https://orcid.org/0000-0002-4958-2844>),\n  Chris Parmer [aut],\n  Toby Hocking [aut],\n  Scott Chamberlain [aut],\n  Karthik Ram [aut],\n  Marianne Corvellec [aut] (ORCID:\n    <https://orcid.org/0000-0002-1994-3581>),\n  Pedro Despouy [aut],\n  Salim Brüggemann [ctb] (ORCID: <https://orcid.org/0000-0002-5329-5987>),\n  Plotly Technologies Inc. [cph]",
         "Maintainer": "Carson Sievert <cpsievert1@gmail.com>",
         "Repository": "RSPM",
-        "Date/Publication": "2026-01-24 07:50:02 UTC",
-        "Built": "R 4.5.0; ; 2026-01-25 04:35:37 UTC; windows",
+        "Date/Publication": "2026-07-22 06:10:02 UTC",
+        "Built": "R 4.5.0; ; 2026-07-23 15:54:29 UTC; windows",
         "RemoteType": "standard",
         "RemoteRef": "plotly",
         "RemotePkgRef": "plotly",
         "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
         "RemoteReposName": "CRAN",
         "RemotePkgPlatform": "x86_64-w64-mingw32",
-        "RemoteSha": "4.12.0"
+        "RemoteSha": "4.12.1"
       }
     },
     "prettyunits": {
@@ -2599,14 +2599,9 @@
         "Packaged": "2026-05-16 18:11:48 UTC; kevin",
         "Author": "Kevin Ushey [aut, cre] (ORCID: <https://orcid.org/0000-0003-2880-7407>),\n  Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>),\n  Posit Software, PBC [cph, fnd]",
         "Maintainer": "Kevin Ushey <kevin@rstudio.com>",
-        "Repository": "CRAN",
+        "Repository": "RSPM",
         "Date/Publication": "2026-05-16 21:50:15 UTC",
-        "Built": "R 4.5.3; ; 2026-07-14 09:45:09 UTC; windows",
-        "RemoteType": "standard",
-        "RemotePkgRef": "renv",
-        "RemoteRef": "renv",
-        "RemoteRepos": "https://cran.rstudio.com",
-        "RemoteSha": "1.2.3"
+        "Built": "R 4.5.3; ; 2026-08-09 05:50:19 UTC; windows"
       }
     },
     "rlang": {
@@ -3126,8 +3121,8 @@
       "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "stringi",
-        "Version": "1.8.7",
-        "Date": "2025-03-27",
+        "Version": "1.8.9",
+        "Date": "2026-07-30",
         "Title": "Fast and Portable Character String Processing Facilities",
         "Description": "A collection of character string/text/natural language\n    processing tools for pattern searching (e.g., with 'Java'-like regular\n    expressions or the 'Unicode' collation algorithm), random string generation,\n    case mapping, string transliteration, concatenation, sorting, padding,\n    wrapping, Unicode normalisation, date-time formatting and parsing,\n    and many more. They are fast, consistent, convenient, and -\n    thanks to 'ICU' (International Components for Unicode) -\n    portable across all locales and platforms. Documentation about 'stringi' is\n    provided via its website at <https://stringi.gagolewski.com/> and\n    the paper by Gagolewski (2022, <doi:10.18637/jss.v103.i02>).",
         "URL": "https://stringi.gagolewski.com/,\nhttps://github.com/gagolews/stringi, https://icu.unicode.org/",
@@ -3139,16 +3134,16 @@
         "Biarch": "TRUE",
         "License": "file LICENSE",
         "Authors@R": "c(person(given = \"Marek\",\n                      family = \"Gagolewski\",\n                      role = c(\"aut\", \"cre\", \"cph\"),\n                      email = \"marek@gagolewski.com\",\n                      comment = c(ORCID = \"0000-0003-0637-6028\")),\n               person(given = \"Bartek\",\n                      family = \"Tartanus\",\n                      role = \"ctb\"),\n               person(\"Unicode, Inc. and others\", role=\"ctb\",\n                      comment = \"ICU4C source code, Unicode Character Database\")\n    )",
-        "RoxygenNote": "7.3.2",
         "Encoding": "UTF-8",
+        "Config/roxygen2/version": "8.0.0",
         "NeedsCompilation": "yes",
-        "Packaged": "2025-03-27 10:27:19 UTC; gagolews",
-        "Author": "Marek Gagolewski [aut, cre, cph]\n    (<https://orcid.org/0000-0003-0637-6028>),\n  Bartek Tartanus [ctb],\n  Unicode, Inc. and others [ctb] (ICU4C source code, Unicode Character\n    Database)",
+        "Packaged": "2026-07-30 08:44:50 UTC; gagolews",
+        "Author": "Marek Gagolewski [aut, cre, cph] (ORCID:\n    <https://orcid.org/0000-0003-0637-6028>),\n  Bartek Tartanus [ctb],\n  Unicode, Inc. and others [ctb] (ICU4C source code, Unicode Character\n    Database)",
         "Maintainer": "Marek Gagolewski <marek@gagolewski.com>",
         "License_is_FOSS": "yes",
         "Repository": "RSPM",
-        "Date/Publication": "2025-03-27 13:10:02 UTC",
-        "Built": "R 4.5.0; x86_64-w64-mingw32; 2025-12-02 12:32:52 UTC; windows",
+        "Date/Publication": "2026-08-04 16:30:03 UTC",
+        "Built": "R 4.5.0; x86_64-w64-mingw32; 2026-08-05 05:53:03 UTC; windows",
         "Archs": "x64",
         "RemoteType": "standard",
         "RemoteRef": "stringi",
@@ -3156,7 +3151,7 @@
         "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
         "RemoteReposName": "CRAN",
         "RemotePkgPlatform": "x86_64-w64-mingw32",
-        "RemoteSha": "1.8.7"
+        "RemoteSha": "1.8.9"
       }
     },
     "stringr": {
@@ -3830,44 +3825,80 @@
     }
   },
   "files": {
+    ".github/workflows/update_data.yml": {
+      "checksum": "0d341db22ff651dd25de52e4cccb180e"
+    },
+    ".Rbuildignore": {
+      "checksum": "7f3003188f3a78fd085feca239edcc60"
+    },
     ".Rprofile": {
-      "checksum": "1140021089b2db565a2f47bf028a8bec"
+      "checksum": "80c98926c1e60f833ee4ff988638484a"
+    },
+    "1_1_DownloadData_PAK_v3.R": {
+      "checksum": "d031b9a7ab29821a1766e9bc8d4e4bf5"
+    },
+    "1_1_DownloadData_PAK_v4.R": {
+      "checksum": "291be2831f9d724ec69769cb3592eec4"
     },
     "app.R": {
-      "checksum": "216cf98d9ea4be78966a848aad1f9bf5"
+      "checksum": "a5c6c527aa3e70caca4e3a8799ba53b3"
     },
     "Data/failed_reports.txt": {
-      "checksum": "5c04e3caa283a57a780f60abb2e96df2"
-    },
-    "Data/failed_reports_Extracted_2026_07_19.txt": {
-      "checksum": "607a7140c607808c3a1a4b2072ae0a30"
+      "checksum": "2a4c4135b8ff3ead44c66ea639cc718c"
     },
     "Data/PAK_IDSR_Compliance.csv": {
-      "checksum": "69b341be5343b5a2ef22b9691b9f2eb9"
+      "checksum": "540c758ea08c96cb532a1c4a16dd1a2a"
+    },
+    "Data/PAK_IDSR_Compliance_District.csv": {
+      "checksum": "3309dbe71cb199b4e59cd5ad9f184fe8"
     },
     "Data/PAK_IDSR_Data.csv": {
-      "checksum": "94cbba3673bfdb16f0f47061ee4b14b6"
+      "checksum": "236d3787243ac55fa49190a2e22b88c9"
     },
-    "Data/PAK_IDSR_Data_Extracted_2026_07_19.csv": {
+    "Data/PAK_IDSR_Data_District.csv": {
+      "checksum": "7270a130fc38eefce688342333e388a5"
+    },
+    "Data/run_log.txt": {
+      "checksum": "15fcc93a047c86723984fd1d57d137a8"
+    },
+    "Data_preAug13/failed_reports.txt": {
+      "checksum": "3c7b2bb0e0eebe0792e43a2597216cfd"
+    },
+    "Data_preAug13/failed_reports_Extracted_2026_07_19.txt": {
+      "checksum": "607a7140c607808c3a1a4b2072ae0a30"
+    },
+    "Data_preAug13/failed_reports_Extracted_2026_07_26.txt": {
+      "checksum": "5c04e3caa283a57a780f60abb2e96df2"
+    },
+    "Data_preAug13/PAK_IDSR_Compliance_Extracted_2026_07_26.csv": {
+      "checksum": "0ae9cd80ec895ef2a369c53be074d0b3"
+    },
+    "Data_preAug13/PAK_IDSR_Data_Extracted_2026_07_19.csv": {
       "checksum": "357e806d51343c051ccae2565b75a5c1"
     },
-    "Data/pakistan_admin1.geojson": {
+    "Data_preAug13/PAK_IDSR_Data_Extracted_2026_07_26.csv": {
+      "checksum": "b4468f33b391da541aff5e75ade1171f"
+    },
+    "Data_preAug13/pakistan_admin1.geojson": {
       "checksum": "a3b0f7d40f3af5a13e0f5078f057c6b5"
     },
-    "main.R": {
-      "checksum": "10a3de19969a664462f193febaa5e7a4"
+    "Data_preAug13/run_log.txt": {
+      "checksum": "d6beae58b25567756eaf3fb1c64d66c8"
     },
-    "R/1.1_DownloadData_PAK.R": {
+    "DESCRIPTION": {
+      "checksum": "3da34d46a95442991b6c7e837be611a6"
+    },
+    "main.R": {
+      "checksum": "8d43b35aa8e0914c691c6d4712c58c3d"
+    },
+    "pipeline/1.1_DownloadData_PAK.R": {
       "checksum": "b9bac480a8c4e86f62c8d22710bcf390"
     },
-    "R/1.1_DownloadData_PAK_v2.R": {
+    "pipeline/1.1_DownloadData_PAK_v2.R": {
       "checksum": "aff82498f56229091f2e9592d85265bf"
     },
-    "R/1.1_DownloadData_PAK_v3.R": {
-      "checksum": "16e1dfc1984df1b0a9f39b1f9da78686"
-    },
-    "R/3_RShinyDashboard.R": {
-      "checksum": "d41d8cd98f00b204e9800998ecf8427e"
+    "pipeline/1.1_DownloadData_PAK_v3.R": {
+      "checksum": "4d11900f075f941aa73d64d9382e9920"
     },
     "README.md": {
       "checksum": "c82463ee2aa1319ea6136508ece563d4"
@@ -3876,13 +3907,19 @@
       "checksum": "897b93a1d3630a35aa3815392f5b7ca4"
     },
     "renv.lock": {
-      "checksum": "57eabbd0d9df7940a90f0726007169df"
+      "checksum": "189097cd35e85179fac1c10242048a91"
+    },
+    "run_pipeline.R": {
+      "checksum": "d361aad1f5810c76287fea539998ac2e"
+    },
+    "run_pipeline_v3.R": {
+      "checksum": "1deefce9ff3196a4424842e297daab08"
     },
     "www/logo.png": {
       "checksum": "e5142f9c9544447ffbd73fe1368a05f9"
     },
     "www/who_brand.css": {
-      "checksum": "6e1d157f9cdd5c17656e183959b6d5f9"
+      "checksum": "27e147758713d594fa568871550484d1"
     }
   },
   "users": null
