@@ -1,5 +1,5 @@
-PAK IDSR data pipeline run -- 2026-08-17 05:40:35 UTC
-Mode: province-level + district-leveltrue)
+PAK IDSR data pipeline run -- 2026-08-17 23:00:14 UTC
+Mode: province-level only (district-level skipped -- INCLUDE_DISTRICT=false)
 
 New weeks processed: 
 Changed weeks reprocessed: 
