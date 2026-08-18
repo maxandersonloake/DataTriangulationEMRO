@@ -2733,6 +2733,83 @@ extract_PAK_data_main <- function(extract_all = FALSE,
                                   district_cases_file      = 'Data/PAK_IDSR_Data_District.csv',
                                   district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
                                   include_district = TRUE){
+  bulletin_url <-
+    "https://www.nih.org.pk/phb/weekly-bulletin"
   
+  links <- get_bulletin_links(
+    bulletin_url
+  )
+  
+  link_metadata <- extract_report_date(links)
+  
+  if(file.exists(cases_file)){
+    existing <- read_csv(cases_file, show_col_types = FALSE) |>
+      distinct(Year, Week)
+  } else {
+    existing <- tibble(Year = numeric(0), Week = numeric(0))
+  }
+  
+  if(extract_all){
+    
+    new_rows     <- link_metadata
+    changed_rows <- link_metadata[0, ]
+    
+  } else {
+    
+    # ---- New weeks: not already present in the cases CSV at all ----------
+    new_rows <- link_metadata |>
+      anti_join(existing, by = c("year" = "Year", "week" = "Week"))
+    
+    new_rows <- new_rows %>% filter(year >= 2026) # ignore those that are before 2026 and have changed
+    
+    # ---- Changed weeks: present, but the bulletin's link has changed -----
+    changed_rows <- detect_changed_links(link_metadata, cases_file)
+  }
+  
+  rows_to_run <- bind_rows(new_rows, changed_rows) |>
+    distinct(year, week, .keep_all = TRUE)
+  
+  if(nrow(rows_to_run) == 0){
+    message("No new or changed bulletins — dataset is already up to date.")
+    return(invisible(list(new = 0L, changed = 0L)))
+  }
+  
+  message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
+  
+  # Clear out the old data for any changed week BEFORE reprocessing it.
+  # The district-level files are only cleared when this run is actually
+  # going to re-extract district data -- if include_district = FALSE, any
+  # district-level rows already on file from a PREVIOUS (district-including)
+  # run for that week are left untouched rather than being wiped without a
+  # replacement.
+  if(nrow(changed_rows) > 0){
+    for(i in seq_len(nrow(changed_rows))){
+      message("Link changed for Week ", changed_rows$week[i], ", ", changed_rows$year[i],
+             " — replacing existing data for that week.")
+      remove_existing_week(cases_file, changed_rows$year[i], changed_rows$week[i])
+      remove_existing_week(compliance_file, changed_rows$year[i], changed_rows$week[i])
+      if(include_district){
+        remove_existing_week(district_cases_file, changed_rows$year[i], changed_rows$week[i])
+        remove_existing_week(district_compliance_file, changed_rows$year[i], changed_rows$week[i])
+      }
+    }
+  }
+
+  for(i_row in seq_len(nrow(rows_to_run))){
+
+    process_one_bulletin(
+      week                     = rows_to_run$week[i_row],
+      year                     = rows_to_run$year[i_row],
+      link                     = rows_to_run$link[i_row],
+      title                    = rows_to_run$title[i_row],
+      cases_file               = cases_file,
+      compliance_file          = compliance_file,
+      district_cases_file      = district_cases_file,
+      district_compliance_file = district_compliance_file,
+      include_district         = include_district
+    )
+  }
+  
+  invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
   
 }
