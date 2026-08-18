@@ -1932,3 +1932,12 @@ Diagnostics:
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
+[2026-08-18 01:15:17] Week 31, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-31-2026 (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:17] Week 31, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-31-2026 (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:17] Week 31, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-31-2026 (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:22] Week 23, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-23-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:22] Week 23, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-23-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:22] Week 23, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-23-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:27] Week 22, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-22-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:27] Week 22, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-22-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-18 01:15:27] Week 22, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/07/IDSRS Weekly Report-22-2026.pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)

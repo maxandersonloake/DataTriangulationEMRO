@@ -1,7 +1,20 @@
-PAK IDSR data pipeline run -- 2026-08-17 23:00:14 UTC
-Mode: province-level only (district-level skipped -- INCLUDE_DISTRICT=false)
+PAK IDSR data pipeline run -- 2026-08-18 01:15:27 UTC
+Mode: province-level + district-leveltrue)
 
-New weeks processed: 
-Changed weeks reprocessed: 
+New weeks processed: 3
+Changed weeks reprocessed: 0
 
-No warnings or errors.
+=== WARNINGS (10) -- review recommended ===
+(fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
+
+[MESSAGE] 3 new week(s) and 0 changed week(s) to (re-)extract.
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+
