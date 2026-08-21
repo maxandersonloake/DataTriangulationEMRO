@@ -274,6 +274,31 @@ parse_asof <- function(x) {
   list(year = as.integer(parts[1]), week = as.integer(parts[2]))
 }
 
+# ---- Helper: the N weeks leading up to (and including) an "as of" week ----
+# Used by the Weekly summary table and District-level data tabs' "As of
+# week" selector. Walks back through `week_calendar`'s global chronological
+# week_idx -- the same mechanism compute_cusum_stats_at() above uses for its
+# baseline lookback -- rather than a per-year tail(), so the window is
+# correct even when it reaches back across a year boundary (e.g. "as of"
+# Week 3, 2026 with 8 weeks requested pulls in Weeks 48-52, 2025 too). If
+# the as-of week has fewer than n_weeks of history behind it, the window is
+# simply shorter (starts at week_idx 1) rather than erroring.
+# Returns a data frame with one row per week, in chronological order:
+# Year, Week, and week_lab (the display label -- "Wk N", or "Wk N 'YY" when
+# the window spans more than one year, so columns stay unambiguous).
+weeks_up_to <- function(asof, n_weeks) {
+  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+  start_idx  <- max(1, target_idx - n_weeks + 1)
+
+  wc <- week_calendar[week_calendar$week_idx >= start_idx & week_calendar$week_idx <= target_idx, c("Year", "Week")]
+  wc <- wc[order(wc$Year, wc$Week), ]
+
+  multi_year <- length(unique(wc$Year)) > 1
+  wc$week_lab <- if (multi_year) paste0("Wk ", wc$Week, " '", substr(wc$Year, 3, 4)) else paste0("Wk ", wc$Week)
+  wc
+}
+
 # Small null-coalesce helper (base R has no built-in %||%)
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -906,6 +931,7 @@ ui <- tagList(
         sidebarPanel(
           width = 3,
           selectInput("location_tbl", "Location", choices = location_choices, selected = "National"),
+          selectInput("asof_week_tbl", "As of week", choices = WEEK_CHOICES, selected = LATEST_WEEK_CHOICE),
           numericInput("n_weeks", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
           radioButtons(
             "case_type_tbl", "Case counts to display",
@@ -966,6 +992,7 @@ ui <- tagList(
           width = 3,
           selectInput("disease_district_tbl", "Disease", choices = district_disease_choices,
                       selected = district_disease_choices[1]),
+          selectInput("asof_week_district_tbl", "As of week", choices = WEEK_CHOICES, selected = LATEST_WEEK_CHOICE),
           numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
           radioButtons(
             "case_type_district_tbl", "Case counts to display",
@@ -1394,33 +1421,35 @@ server <- function(input, output, session) {
   # ---------------- Weekly table tab ----------------
 
   weekly_table_reactive <- reactive({
-    req(input$location_tbl, input$n_weeks)
+    req(input$location_tbl, input$n_weeks, input$asof_week_tbl)
     series <- get_all_disease_series(input$location_tbl)
     validate(need(nrow(series) > 0, "No data available for this selection."))
 
-    yr <- max(series$Year, na.rm = TRUE)
-    weeks_available <- sort(unique(series$Week[series$Year == yr]))
-    n_wk <- min(input$n_weeks, length(weeks_available))
-    weeks_to_show <- tail(weeks_available, n_wk)
+    asof      <- parse_asof(input$asof_week_tbl)
+    weeks_cal <- weeks_up_to(asof, input$n_weeks)
+    n_wk      <- nrow(weeks_cal)
+    week_cols <- weeks_cal$week_lab
     diseases_here <- sort(unique(series$Disease))
 
     value_col <- if (identical(input$case_type_tbl, "projected")) "Projected" else "Reported"
 
+    # Joined against weeks_cal (rather than filtered on a single Year) so the
+    # window is correct even when it crosses a year boundary -- see
+    # weeks_up_to()'s comment above.
     values_wide <- series %>%
-      filter(Year == yr, Week %in% weeks_to_show) %>%
-      select(Disease, Week, Value = all_of(value_col)) %>%
-      complete(Disease = diseases_here, Week = weeks_to_show, fill = list(Value = NA_real_)) %>%
-      mutate(Week_lab = paste0("Wk ", Week)) %>%
-      select(Disease, Week_lab, Value)
+      inner_join(weeks_cal, by = c("Year", "Week")) %>%
+      select(Disease, week_lab, Value = all_of(value_col)) %>%
+      complete(Disease = diseases_here, week_lab = week_cols, fill = list(Value = NA_real_)) %>%
+      select(Disease, week_lab, Value)
 
-    week_cols <- paste0("Wk ", weeks_to_show)
-    values_wide_wide <- values_wide %>% pivot_wider(names_from = Week_lab, values_from = Value)
+    values_wide_wide <- values_wide %>% pivot_wider(names_from = week_lab, values_from = Value)
     values_wide_wide <- values_wide_wide[, c("Disease", week_cols)]
 
-    sd_matrix <- sapply(weeks_to_show, function(w) {
+    sd_matrix <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+      yy <- weeks_cal$Year[i]; ww <- weeks_cal$Week[i]
       sapply(diseases_here, function(dis) {
         s <- series %>% filter(Disease == dis)
-        cusum_z_at(s, yr, w, value_col = value_col)
+        cusum_z_at(s, yy, ww, value_col = value_col)
       })
     })
     sd_wide <- as.data.frame(sd_matrix)
@@ -1430,9 +1459,10 @@ server <- function(input, output, session) {
     # (Not Reported) week, as opposed to just no row at all (a disease not
     # in that week's bulletin, which is not shown as NR -- see IsNR's
     # definition in get_all_disease_series() above).
-    nr_matrix <- sapply(weeks_to_show, function(w) {
+    nr_matrix <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+      yy <- weeks_cal$Year[i]; ww <- weeks_cal$Week[i]
       sapply(diseases_here, function(dis) {
-        r <- series[series$Disease == dis & series$Year == yr & series$Week == w, ]
+        r <- series[series$Disease == dis & series$Year == yy & series$Week == ww, ]
         if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
       })
     })
@@ -1444,7 +1474,7 @@ server <- function(input, output, session) {
       sd = sd_wide,
       nr = nr_wide,
       week_cols = week_cols,
-      year = yr, n_wk = n_wk, diseases = diseases_here, weeks = weeks_to_show,
+      year = asof$year, week = asof$week, n_wk = n_wk, diseases = diseases_here, weeks_cal = weeks_cal,
       value_col = value_col
     )
   })
@@ -1483,13 +1513,14 @@ server <- function(input, output, session) {
       display_df,
       rownames = FALSE,
       escape = FALSE,
+      selection = "none",   # no built-in row click-select (and its blue highlight) -- this table has no use for it
       options = list(
         pageLength = 25,
         columnDefs = c(list(list(visible = FALSE, targets = hidden_idx)), week_column_defs)
       ),
       caption = paste0(
         "Weekly ", label, " cases by disease, ", input$location_tbl,
-        ", most recent ", tbl$n_wk, " weeks of ", tbl$year
+        ", ", tbl$n_wk, " week(s) up to and including Week ", tbl$week, ", ", tbl$year
       )
     )
 
@@ -1515,18 +1546,17 @@ server <- function(input, output, session) {
   # genuine NR week displays as "NR" text rather than a blank/zero.
 
   district_table_reactive <- reactive({
-    req(input$disease_district_tbl, input$n_weeks_district)
+    req(input$disease_district_tbl, input$n_weeks_district, input$asof_week_district_tbl)
 
     district_series <- get_district_disease_series(input$disease_district_tbl)
     validate(need(nrow(district_series) > 0, "No district-level data available for this disease."))
 
     province_series <- get_province_disease_series(district_series)
 
-    yr <- max(district_series$Year, na.rm = TRUE)
-    weeks_available <- sort(unique(district_series$Week[district_series$Year == yr]))
-    n_wk <- min(input$n_weeks_district, length(weeks_available))
-    weeks_to_show <- tail(weeks_available, n_wk)
-    week_cols <- paste0("Wk ", weeks_to_show)
+    asof      <- parse_asof(input$asof_week_district_tbl)
+    weeks_cal <- weeks_up_to(asof, input$n_weeks_district)
+    n_wk      <- nrow(weeks_cal)
+    week_cols <- weeks_cal$week_lab
     sd_cols   <- paste0(week_cols, "_sd")
     nr_cols   <- paste0(week_cols, "_nr")
 
@@ -1538,13 +1568,15 @@ server <- function(input, output, session) {
     # single province's or district's own Year/Week rows -- as a one-row
     # data frame, in the exact column order/names used throughout this table.
     row_for_series <- function(s, label) {
-      vals <- sapply(weeks_to_show, function(w) {
-        r <- s[s$Year == yr & s$Week == w, ]
+      vals <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        r <- s[s$Year == weeks_cal$Year[i] & s$Week == weeks_cal$Week[i], ]
         if (nrow(r) == 0) NA_real_ else r[[value_col]][1]
       })
-      sds <- sapply(weeks_to_show, function(w) cusum_z_at(s, yr, w, value_col = value_col))
-      nrs <- sapply(weeks_to_show, function(w) {
-        r <- s[s$Year == yr & s$Week == w, ]
+      sds <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        cusum_z_at(s, weeks_cal$Year[i], weeks_cal$Week[i], value_col = value_col)
+      })
+      nrs <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        r <- s[s$Year == weeks_cal$Year[i] & s$Week == weeks_cal$Week[i], ]
         if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
       })
       # check.names = FALSE: week_cols/sd_cols/nr_cols contain spaces (e.g.
@@ -1584,7 +1616,7 @@ server <- function(input, output, session) {
       week_cols = week_cols,
       sd_cols = sd_cols,
       nr_cols = nr_cols,
-      year = yr, n_wk = n_wk,
+      year = asof$year, week = asof$week, n_wk = n_wk,
       value_col = value_col,
       disease = input$disease_district_tbl
     )
@@ -1631,6 +1663,7 @@ server <- function(input, output, session) {
       df,
       rownames = FALSE,
       escape = FALSE,
+      selection = "none",   # no built-in row click-select (and its blue highlight) -- expand/collapse uses its own click handler below, independent of DT's selection
       colnames = c(" " = "Toggle", "Province / District" = "Location"),
       options = list(
         paging = FALSE, ordering = FALSE, searching = FALSE, info = FALSE, dom = "t",
@@ -1681,8 +1714,9 @@ server <- function(input, output, session) {
         "});"
       ),
       caption = paste0(
-        "District-level weekly ", label, " cases of ", tbl$disease, " by province, most recent ",
-        tbl$n_wk, " weeks of ", tbl$year, ". Click the arrow on a province row to expand its districts."
+        "District-level weekly ", label, " cases of ", tbl$disease, " by province, ",
+        tbl$n_wk, " week(s) up to and including Week ", tbl$week, ", ", tbl$year,
+        ". Click the arrow on a province row to expand its districts."
       )
     )
 

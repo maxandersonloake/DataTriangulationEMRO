@@ -2055,10 +2055,22 @@ find_header_block <- function(lines, anchor){
 # national table, just matched against the district lookup for row names.
 
 extract_district_case_tables <- function(pdf_text){
-  
+
   all_titles <- find_all_table_titles(pdf_text)
-  title_hits <- all_titles |> filter(grepl("district\\s*wise\\s*distribution", text, ignore.case = TRUE))
-  
+  # "District" and "wise" have been seen joined by a plain space ("District
+  # wise"), no separator at all, AND -- starting with some 2026 bulletins --
+  # a hyphen ("District-wise"). [[:space:]-]* tolerates any of those
+  # (including a hyphen with no adjacent spaces) -- note this MUST use the
+  # POSIX [[:space:]] class rather than the GNU \\s escape: \\s is honoured
+  # by R's default (non-perl) regex engine outside a bracket expression, but
+  # NOT inside one, where it was silently read as the two literal characters
+  # "\" and "s" instead of "whitespace". The previous \\s*-only pattern (with
+  # no hyphen tolerance at all) missed the hyphenated form outright and
+  # silently skipped the whole table for that province/week (seen:
+  # Balochistan Week 25 & 28 2026, KP Week 28 2026 -- all three titled with
+  # the hyphen).
+  title_hits <- all_titles |> filter(grepl("district[[:space:]-]*wise[[:space:]-]*distribution", text, ignore.case = TRUE))
+
   if(nrow(title_hits) == 0) return(list())
   
   results <- list()
@@ -2733,6 +2745,7 @@ extract_PAK_data_main <- function(extract_all = FALSE,
                                   district_cases_file      = 'Data/PAK_IDSR_Data_District.csv',
                                   district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
                                   include_district = TRUE){
+<<<<<<< Updated upstream
   bulletin_url <-
     "https://www.nih.org.pk/phb/weekly-bulletin"
   
@@ -2742,12 +2755,25 @@ extract_PAK_data_main <- function(extract_all = FALSE,
   
   link_metadata <- extract_report_date(links)
   
+=======
+
+  bulletin_url <-
+    "https://www.nih.org.pk/phb/weekly-bulletin"
+
+  links <- get_bulletin_links(
+    bulletin_url
+  )
+
+  link_metadata <- extract_report_date(links)
+
+>>>>>>> Stashed changes
   if(file.exists(cases_file)){
     existing <- read_csv(cases_file, show_col_types = FALSE) |>
       distinct(Year, Week)
   } else {
     existing <- tibble(Year = numeric(0), Week = numeric(0))
   }
+<<<<<<< Updated upstream
   
   if(extract_all){
     
@@ -2769,13 +2795,42 @@ extract_PAK_data_main <- function(extract_all = FALSE,
   rows_to_run <- bind_rows(new_rows, changed_rows) |>
     distinct(year, week, .keep_all = TRUE)
   
+=======
+
+  if(extract_all){
+
+    new_rows     <- link_metadata
+    changed_rows <- link_metadata[0, ]
+
+  } else {
+
+    # ---- New weeks: not already present in the cases CSV at all ----------
+    new_rows <- link_metadata |>
+      anti_join(existing, by = c("year" = "Year", "week" = "Week"))
+
+    new_rows <- new_rows %>% filter(year >= 2026) # ignore those that are before 2026 and have changed
+
+    # ---- Changed weeks: present, but the bulletin's link has changed -----
+    changed_rows <- detect_changed_links(link_metadata, cases_file)
+  }
+
+  rows_to_run <- bind_rows(new_rows, changed_rows) |>
+    distinct(year, week, .keep_all = TRUE)
+
+>>>>>>> Stashed changes
   if(nrow(rows_to_run) == 0){
     message("No new or changed bulletins — dataset is already up to date.")
     return(invisible(list(new = 0L, changed = 0L)))
   }
+<<<<<<< Updated upstream
   
   message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
   
+=======
+
+  message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
+
+>>>>>>> Stashed changes
   # Clear out the old data for any changed week BEFORE reprocessing it.
   # The district-level files are only cleared when this run is actually
   # going to re-extract district data -- if include_district = FALSE, any
@@ -2809,7 +2864,12 @@ extract_PAK_data_main <- function(extract_all = FALSE,
       include_district         = include_district
     )
   }
+<<<<<<< Updated upstream
   
   invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
   
+=======
+
+  invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
+>>>>>>> Stashed changes
 }

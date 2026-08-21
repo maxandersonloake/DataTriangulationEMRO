@@ -74,9 +74,21 @@ new_lines <- if (length(failed_after) > failed_before) {
 # the ERROR-tagged lines belong in the "ERRORS" section below.
 new_failures <- new_lines[grepl(": \\[ERROR\\]", new_lines)]
 
+# (Two-branch string built separately, not inline in paste0() below --
+# paste0() concatenates EVERY argument regardless of which arm of an
+# embedded if/else fires, so passing the trailing include_district_env/")"
+# pieces as separate paste0() arguments appended them unconditionally on
+# BOTH branches, producing garbled text like "...+ district-leveltrue)" on
+# a completely normal run.)
+mode_line <- if (include_district) {
+  "Mode: province-level + district-level"
+} else {
+  paste0("Mode: province-level only (district-level skipped -- INCLUDE_DISTRICT=", include_district_env, ")")
+}
+
 lines <- c(
   paste0("PAK IDSR data pipeline run -- ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
-  paste0("Mode: province-level ", if (include_district) "+ district-level" else "only (district-level skipped -- INCLUDE_DISTRICT=", include_district_env, ")"),
+  mode_line,
   "",
   paste0("New weeks processed: ", result$new),
   paste0("Changed weeks reprocessed: ", result$changed),
