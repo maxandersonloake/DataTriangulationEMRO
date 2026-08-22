@@ -3435,8 +3435,8 @@
       }
     },
     "terra": {
-      "Source": "URL",
-      "Repository": "CRAN",
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
       "description": {
         "Package": "terra",
         "Type": "Package",
@@ -3462,10 +3462,8 @@
         "Author": "Robert J. Hijmans [cre, aut] (ORCID:\n    <https://orcid.org/0000-0001-5872-2872>),\n  Andrew Brown [aut] (ORCID: <https://orcid.org/0000-0002-4565-533X>),\n  Márcia Barbosa [aut] (ORCID: <https://orcid.org/0000-0001-8972-7713>),\n  Krzysztof Dyba [ctb] (ORCID: <https://orcid.org/0000-0002-8614-3816>),\n  Roger Bivand [ctb] (ORCID: <https://orcid.org/0000-0003-2392-6140>),\n  Michael Chirico [ctb] (ORCID: <https://orcid.org/0000-0003-0787-087X>),\n  Emanuele Cordano [ctb] (ORCID: <https://orcid.org/0000-0002-3508-5898>),\n  Edzer Pebesma [ctb] (ORCID: <https://orcid.org/0000-0001-8049-7069>),\n  Barry Rowlingson [ctb] (ORCID: <https://orcid.org/0000-0002-8586-6625>),\n  Michael D. Sumner [ctb] (ORCID:\n    <https://orcid.org/0000-0002-2471-7511>)",
         "Repository": "CRAN",
         "Date/Publication": "2026-05-10 05:10:02 UTC",
-        "Built": "R 4.5.3; x86_64-w64-mingw32; 2026-08-22 07:13:48 UTC; windows",
-        "Archs": "x64",
-        "RemoteType": "url",
-        "RemoteUrl": "https://cran.r-project.org/src/contrib/Archive/terra/terra_1.9-27.tar.gz"
+        "Built": "R 4.5.3; x86_64-w64-mingw32; 2026-08-22 07:25:03 UTC; windows",
+        "Archs": "x64"
       }
     },
     "tibble": {
@@ -4074,7 +4072,7 @@
       "checksum": "7f3003188f3a78fd085feca239edcc60"
     },
     ".Rprofile": {
-      "checksum": "2f0baf0868a41b06212b5106292a26b5"
+      "checksum": "d491530f7bbac4be225a9ae1f78e577a"
     },
     "1_1_DownloadData_PAK_v3.R": {
       "checksum": "d031b9a7ab29821a1766e9bc8d4e4bf5"
@@ -4191,7 +4189,7 @@
       "checksum": "3da34d46a95442991b6c7e837be611a6"
     },
     "main.R": {
-      "checksum": "77685c8b118f1d9ce307d865e67ca111"
+      "checksum": "e0a5a7e6d963a89fb0eb565a74227397"
     },
     "pipeline/1.1_DownloadData_PAK.R": {
       "checksum": "b9bac480a8c4e86f62c8d22710bcf390"
@@ -4209,7 +4207,7 @@
       "checksum": "64f88780984a303f016989f27f9062d3"
     },
     "renv.lock": {
-      "checksum": "f3fa5c41616731728f8effef579596b6"
+      "checksum": "77fa5a7fd4a3ff5f8b515b13693dae04"
     },
     "run_pipeline.R": {
       "checksum": "6ce8718195b71a9d11519e0c6f6233f2"
