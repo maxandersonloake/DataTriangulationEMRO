@@ -636,7 +636,37 @@ merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map
       if(length(parts) > 1 && all(is_numeric_tok(parts))) parts else tok
     }))
   }
-  
+
+  # A row's own label occasionally sits snug against its FIRST data value
+  # with only a single space between them, rather than the 2+ spaces
+  # normally separating the label column from the data columns -- the same
+  # tight-kerning artifact as split_falsely_merged_numeric_tokens() above,
+  # just at the label/data boundary instead of between two data values
+  # (observed: "Kech (Turbat) 285", "Killa Abdullah 176", "Killa
+  # Saifullah 5" -- each a real multi-word district name immediately
+  # followed by that row's first value with no real gap). Left alone, the
+  # whole glued blob reads as one non-numeric token, so the row comes up
+  # one value short and everything after it is misattributed to the wrong
+  # column, while the stray digits stay stuck onto the district name
+  # itself (silently absorbed by fuzzy_match()'s edit-distance tolerance
+  # rather than ever being flagged). Any TRAILING run of whitespace-
+  # separated words that are ALL valid values is safe to peel off the end
+  # of an otherwise non-numeric coarse token and restored as its own
+  # value(s) -- a genuine row label never ends in what looks like data.
+  split_trailing_values_glued_to_label <- function(coarse_tokens){
+    unlist(lapply(coarse_tokens, function(tok){
+      if(is_numeric_tok(tok)) return(tok)
+      words <- str_split(tok, "\\s+")[[1]]
+      words <- words[nzchar(words)]
+      if(length(words) < 2) return(tok)
+      is_val <- is_numeric_tok(words)
+      n <- length(words); k <- 0
+      while(k < n && is_val[n - k]) k <- k + 1
+      if(k == 0 || k == n) return(tok)
+      c(paste(words[seq_len(n - k)], collapse = " "), words[(n - k + 1):n])
+    }))
+  }
+
   score_name <- function(name, vmap = variant_map){
     clean <- tolower(trimws(name))
     if(nchar(clean) == 0) return(Inf)
@@ -675,6 +705,7 @@ merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map
     coarse_tokens <- get_tokens_coarse(ln)
     if(length(coarse_tokens) == 0) next
     coarse_tokens <- split_falsely_merged_numeric_tokens(coarse_tokens)
+    coarse_tokens <- split_trailing_values_glued_to_label(coarse_tokens)
 
     is_num <- is_numeric_tok(coarse_tokens)
 
@@ -833,35 +864,70 @@ merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map
     }
     
     # ---- Both sides present ------------------------------------------------
-    # First, check whether attaching the ENTIRE run to one side gives an
-    # exact match. This matters because summing score_name(left) +
-    # score_name(right) breaks down when one side is still completely
-    # nameless (e.g. a "numbers first, name second" table layout, where a
-    # run sits between two number-only rows that haven't received their own
-    # dedicated name run yet): an empty side scores Inf, and a mediocre
-    # finite fuzzy split across both sides can numerically beat a perfect
-    # exact match on just one side purely because Inf so heavily dominates
-    # the sum. An outright exact match on one full side is always the right
-    # call regardless of what state the other side is in, so it's checked
-    # first and short-circuits the additive search entirely.
-    full_run         <- paste(tok, collapse = " ")
-    left_full_score  <- score_name(paste(c(left_base, full_run), collapse = " "))
-    right_full_score <- score_name(paste(c(full_run, right_base), collapse = " "))
-    
-    if(left_full_score == 0){
-      
-      # Prefer completing the left (preceding) row whenever that's an
-      # exact match -- including when the right side would ALSO score an
-      # exact match (which happens when both adjacent rows are still
-      # completely nameless, e.g. right_base == "" too: appending the run
-      # to either trivially "matches" itself). A name run belongs to the
-      # row whose numbers already appeared, not the row still to come.
+    # First, check whether the LEFT (preceding) row's name-in-progress can
+    # be completed EXACTLY using just a PREFIX of this run -- searching
+    # shortest prefix first, same "shortest exact match wins" rule already
+    # used for a trailing run above. This is checked before anything else
+    # because a name split across two lines can otherwise be mis-resolved:
+    # matching the run's FULL text as one unit against the right side can
+    # coincidentally score an exact "match" too (e.g. a reversed-word-order
+    # alias such as "Lower Kohistan" registered for "Kohistan Lower") even
+    # though the run's first token genuinely belongs to the left row and
+    # only the remainder belongs to the right (observed: "Kohistan" /
+    # "Lower" / "Kohistan" -- with "Lower Kohistan" a recognised alias of
+    # "Kohistan Lower" -- previously resolved to rows "Kohistan" and "Lower
+    # Kohistan" instead of the correct "Kohistan Lower" and "Kohistan",
+    # leaving the latter an ambiguous prefix match against two real
+    # district names downstream in fuzzy_match()). Only tried when the left
+    # row already has a name in progress -- an empty left_base has nothing
+    # to complete, and is handled by the empty-side shortcut below instead.
+    left_prefix_s <- NA_integer_
+    if(nchar(trimws(left_base)) > 0){
+      for(s in seq_len(m)){
+        if(score_name(paste(c(left_base, tok[seq_len(s)]), collapse = " ")) == 0){
+          left_prefix_s <- s
+          break
+        }
+      }
+    }
+
+    if(!is.na(left_prefix_s)){
+
+      # Prefer completing the left (preceding) row whenever some prefix of
+      # the run makes it an exact match -- including when attaching the
+      # WHOLE run to the right would ALSO look like a match (see above). A
+      # name run belongs to the row whose numbers already appeared, not the
+      # row still to come.
+      best_s <- left_prefix_s
+
+    } else if({
+      # Second check: whether attaching the ENTIRE run to one side gives an
+      # exact match. This matters because summing score_name(left) +
+      # score_name(right) breaks down when one side is still completely
+      # nameless (e.g. a "numbers first, name second" table layout, where a
+      # run sits between two number-only rows that haven't received their
+      # own dedicated name run yet): an empty side scores Inf, and a
+      # mediocre finite fuzzy split across both sides can numerically beat
+      # a perfect exact match on just one side purely because Inf so
+      # heavily dominates the sum. An outright exact match on one full side
+      # is always the right call regardless of what state the other side
+      # is in, so it's checked next and short-circuits the additive search
+      # entirely.
+      full_run        <- paste(tok, collapse = " ")
+      left_full_score  <- score_name(paste(c(left_base, full_run), collapse = " "))
+      left_full_score == 0
+    }){
+
       best_s <- m
-      
-    } else if(right_full_score == 0){
-      
+
+    } else if({
+      full_run         <- paste(tok, collapse = " ")
+      right_full_score <- score_name(paste(c(full_run, right_base), collapse = " "))
+      right_full_score == 0
+    }){
+
       best_s <- 0
-      
+
     } else {
       
       # No unambiguous whole-run exact match -- fall back to the
@@ -875,16 +941,32 @@ merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map
         running_left <- paste(running_left, tok[min_split])
       }
       
+      # On an exact TIE between two candidate split points, prefer the one
+      # that hands MORE of the run to the left (preceding) row rather than
+      # the first (smallest-s) tie encountered. This mirrors the same
+      # "prefer left on ambiguity" rule already applied above for a
+      # whole-run exact match, and matters in practice: a district whose
+      # name itself got split by pagination AND happens to have a
+      # reversed-word-order alias registered (e.g. "Kohistan" / "Lower" /
+      # "Kohistan" / "Upper", where "Lower Kohistan" is a recognised alias
+      # of "Kohistan Lower") can score identically whether the run is
+      # attributed entirely to the right row or split so the left row's
+      # already-in-progress name is completed first -- ties towards the
+      # right silently glued the wrong fragment onto the wrong district
+      # (observed: "Kohistan"/"Lower"/"Kohistan" resolving to rows
+      # "Kohistan" and "Lower Kohistan" instead of "Kohistan Lower" and
+      # "Kohistan", making the latter an ambiguous prefix match against
+      # both real district names downstream in fuzzy_match()).
       best_s     <- min_split
       best_score <- Inf
-      
+
       for(s in min_split:m){
         left_name  <- paste(c(left_base, tok[seq_len(s)]), collapse = " ")
         right_name <- if(s < m) paste(c(tok[(s + 1):m], right_base), collapse = " ") else right_base
-        
+
         score <- score_name(left_name) + score_name(right_name)
-        
-        if(score < best_score){
+
+        if(score <= best_score){
           best_score <- score
           best_s     <- s
         }
@@ -1094,6 +1176,31 @@ find_header_line <- function(lines, header_keywords, min_matches){
 # OPTIONAL whitespace between every character, so a single check catches
 # both the normal contiguous rendering and the letter-tracked one.
 spaced_pattern <- function(phrase) paste(strsplit(phrase, "")[[1]], collapse = "\\s*")
+
+# ---- Ligature-drop-tolerant literal-phrase regex builder ------------------
+# add_ligature_variants() (top of file) compensates for the "ti"-ligature
+# text-extraction defect for LOOKUP-based matching (individual disease/
+# region names, resolved against a closed vocabulary via fuzzy_match()).
+# Table TITLES are identified a different way -- matched directly against a
+# literal phrase via grepl(), not through a lookup -- so they need their own
+# tolerant-matching helper. This escapes regex metacharacters in `phrase`
+# and replaces every "ti" occurrence with a group that ALSO matches a
+# single stray space or nothing in its place, e.g. "distribution" (used to
+# identify the district case tables) also matches "distribu on" and
+# "distribuon", and "reporting"/"tertiary" (used to identify the district
+# compliance tables) also match "repor ng"/"reporng" and "ter ary"/"terary".
+# Seen so far: Week 03 2025's Sindh/Balochistan/KP case tables were all
+# titled "distribu on", silently skipping all three -- there was no error,
+# the table's title simply never matched the literal "distribution" the old
+# regex required. Since which word(s) are affected depends on which PDF
+# font subset that particular bulletin used, this is applied to every
+# literal phrase used for table identification rather than patched
+# case-by-case as each new affected bulletin turns up.
+ligature_tolerant_pattern <- function(phrase){
+  esc <- function(x) gsub("([][{}()^$.|*+?\\\\])", "\\\\\\1", x)
+  parts <- strsplit(phrase, "ti", fixed = TRUE)[[1]]
+  paste(vapply(parts, esc, character(1)), collapse = "(?:ti|[[:space:]]?)")
+}
 
 FOOTER_HEADER_PATTERNS <- c(
   paste0("^\\s*\\d*\\s*\\|?\\s*", spaced_pattern("Page"), "\\b"),  # "4|P a g e", "4 | Page", "Page 4"
@@ -1995,6 +2102,24 @@ tokenize_with_offsets <- function(line){
   )
 }
 
+# Sub-tokenizes a single already-extracted blob at the individual WORD
+# level (splits on any run of whitespace), recomputing each word's own
+# precise start/end offset within the ORIGINAL line (not relative to the
+# blob) -- used only by the repair pass in merge_multiline_header() below,
+# never as the primary tokenizer (see that function's comment for why).
+tokenize_words_in_span <- function(line, span_start, span_end){
+  segment <- substr(line, span_start, span_end)
+  matches <- gregexpr("\\S+", segment)[[1]]
+  if(length(matches) == 1 && matches[1] == -1){
+    return(data.frame(start = integer(0), end = integer(0), text = character(0)))
+  }
+  starts <- as.integer(matches) + span_start - 1L
+  lens   <- attr(matches, "match.length")
+  ends   <- starts + lens - 1L
+  text   <- substring(line, starts, ends)
+  data.frame(start = starts, end = ends, text = text, stringsAsFactors = FALSE)
+}
+
 merge_multiline_header <- function(lines, gap_threshold = 4){
   toks <- do.call(rbind, lapply(seq_along(lines), function(i){
     t <- tokenize_with_offsets(lines[i])
@@ -2006,6 +2131,166 @@ merge_multiline_header <- function(lines, gap_threshold = 4){
   toks <- toks[order(toks$start), ]
   breaks <- c(TRUE, diff(toks$start) > gap_threshold)
   toks$cluster <- cumsum(breaks)
+
+  # ---- Repair: a same-line blob gluing the TAILS of two different
+  # columns together ---------------------------------------------------
+  # tokenize_with_offsets() above only splits a line on runs of 2+ spaces,
+  # so two DIFFERENT columns' final wrapped fragments occasionally end up
+  # as one indivisible blob when they happen to print on the same physical
+  # header line separated by just a single space -- no other column having
+  # any text on that particular line to force a wider gap between them
+  # (observed: Week 07 2025 Sindh's header, where "cholera)" -- the tail of
+  # "AD (non-cholera)" -- and "years" -- the tail of "ALRI < 5 years" --
+  # print immediately next to each other on the header's last line,
+  # producing one blob "cholera) years" that then clusters as a single
+  # unit instead of joining its own column's other fragments).
+  #
+  # Every individual blob TOKEN with an internal space is a candidate --
+  # not just a whole one-member cluster, since the AD example above is
+  # actually a multi-member cluster already (its "AD" and "(non-"
+  # fragments from other lines already joined it): the glued blob
+  # "cholera) years" is just ONE member of that larger cluster, sitting
+  # alongside genuinely-correct siblings. Each candidate token is tested
+  # in isolation -- everything else (including its own cluster's OTHER
+  # members) counts as a potential home for its individual words. A
+  # genuine single-line multi-word column label (e.g. "ALRI <5 Years",
+  # self-contained with no wrapped fragments anywhere else in the header)
+  # looks the same going in, so word-splitting it blindly would wrongly
+  # break it apart -- the deciding test below is geometric: split the
+  # candidate token into its individual words and check whether EACH word
+  # lands close enough to an existing OTHER token to just be a missing
+  # fragment of that token's cluster. Only when every word has its own
+  # distinct nearby home, with at least one differing from the token's
+  # own current cluster, is this actually a same-line collision between
+  # two columns -- a genuinely self-contained label has nowhere else for
+  # its words to go (every other token sits far away in the header) and
+  # is left untouched, exactly preserving the original behaviour there.
+  toks$id <- seq_len(nrow(toks))
+  candidate_ids <- toks$id[grepl("\\s", toks$text)]
+
+  for(this_id in candidate_ids){
+    row_idx <- which(toks$id == this_id)
+    if(length(row_idx) != 1) next  # already consumed by an earlier repair
+    this_row <- toks[row_idx, , drop = FALSE]
+
+    words <- tokenize_words_in_span(lines[this_row$line], this_row$start, this_row$end)
+    if(nrow(words) < 2) next
+
+    other <- toks[toks$id != this_id, , drop = FALSE]
+    if(nrow(other) == 0) next
+
+    # Each word first gets "first refusal" from this token's OWN current
+    # cluster: if another member of that SAME cluster is within threshold,
+    # the word stays home without even considering a different cluster --
+    # regardless of whether some unrelated token from another column
+    # happens to sit a character or two closer purely by kerning
+    # coincidence. Without this preference, a short/punctuation word (e.g.
+    # the "<" in "ALRI <", immediately followed a few characters later by
+    # an unrelated column's "B. Diarrhea") can measure marginally closer
+    # to that unrelated column than to its own already-confirmed siblings
+    # ("5" / "years" a couple of characters further off) and get wrongly
+    # pulled away from a column that was already correctly assembled
+    # before this repair pass ever ran (observed: Week 03 2025
+    # Balochistan's "ALRI < 5 years" -- already complete and correct --
+    # losing its "<" to "B. Diarrhea", becoming "ALRI 5 years" and
+    # "< B. Diarrhea"). Only a word with NO same-cluster support nearby is
+    # actually eligible to be reassigned elsewhere.
+    own_others <- other[other$cluster == this_row$cluster, , drop = FALSE]
+    next_new_cluster <- max(toks$cluster) + 1L
+
+    # Each word is resolved in priority order: (1) stay with this token's
+    # OWN cluster if a fellow member is nearby (the "first refusal" rule
+    # above); (2) otherwise join a DIFFERENT existing cluster if one is
+    # nearby -- genuine evidence this word is really that column's stray
+    # fragment; (3) otherwise, if nothing nearby claims it at all, the
+    # word becomes its own brand-new singleton cluster rather than being
+    # forced into either neighbour. That third case matters for a blob
+    # gluing a genuinely self-contained column straight onto an unrelated
+    # fragment with no wrapped siblings of its own anywhere -- e.g.
+    # "Malaria < 5", where "Malaria" is its own complete one-line column
+    # (nothing else nearby to claim it) while "<" and "5" are stray
+    # fragments of "ALRI < 5 years" wrapped elsewhere in the header.
+    # Forcing "Malaria" to match some unrelated existing cluster would be
+    # wrong, but leaving the whole blob glued (the old behaviour) is
+    # wrong too -- letting it stand alone as its own column is what the
+    # source table actually intends.
+    target_cluster <- rep(NA_integer_, nrow(words))
+    for(w in seq_len(nrow(words))){
+      if(nrow(own_others) > 0){
+        own_dist <- min(abs(own_others$start - words$start[w]))
+        if(own_dist <= gap_threshold){
+          target_cluster[w] <- this_row$cluster
+          next
+        }
+      }
+      dists <- if(nrow(other) > 0) abs(other$start - words$start[w]) else numeric(0)
+      best  <- if(length(dists) > 0) which.min(dists) else NA_integer_
+      if(!is.na(best) && dists[best] <= gap_threshold){
+        target_cluster[w] <- other$cluster[best]
+      } else {
+        target_cluster[w] <- next_new_cluster
+        next_new_cluster  <- next_new_cluster + 1L
+      }
+    }
+
+    # Only apply the split when at least one word has POSITIVE evidence of
+    # belonging to a different, already-established column (moving to an
+    # existing cluster distinct from this token's own) -- a word that
+    # merely fell back to a brand-new singleton isn't, by itself, enough
+    # justification (that would just as readily mis-split a genuinely
+    # self-contained multi-word label with no nearby siblings at all,
+    # e.g. "ALRI <5 Years" alone on one line in a bulletin where that
+    # column never wraps).
+    moved <- target_cluster[target_cluster != this_row$cluster]
+    moved_to_existing <- moved[moved %in% other$cluster]
+    if(length(moved_to_existing) > 0){
+      toks <- toks[toks$id != this_id, , drop = FALSE]
+      words$line    <- this_row$line
+      words$cluster <- target_cluster
+      words$id      <- max(toks$id) + seq_len(nrow(words))
+      toks <- rbind(toks, words[, c("start", "end", "text", "line", "cluster", "id")])
+    }
+  }
+  toks$id <- NULL
+
+  # ---- Repair: a lone comparison/number fragment stranded just outside
+  # gap_threshold of its true column ---------------------------------
+  # A wrapped column name occasionally sheds a token that's PURELY a
+  # digit or comparison symbol (e.g. the "5" in "ALRI < 5 years") just
+  # far enough from its column's other fragments to fall outside the
+  # normal clustering gap, while ALSO not being close enough to anything
+  # else to get glued into a same-line blob the repair pass above could
+  # split (observed: Week 21 2025 Balochistan's "5", 5 characters from
+  # its own "ALRI < years" cluster -- one more than gap_threshold -- and
+  # further still from every other column, landing as its own unmatched
+  # single-character column). No real column is ever named just "5" or
+  # "<" on its own, so reattaching a fragment like this to whichever
+  # OTHER cluster is nearest is always safe -- unlike the general
+  # same-line-collision repair above, there's no risk of this rule ever
+  # mistaking a genuine short standalone column (e.g. "TB", "CL") for an
+  # orphan, since those never match the narrow digit/comparison-only
+  # pattern this checks for. A wider gap allowance is used here
+  # specifically because the normal threshold has already, by
+  # definition, failed to place it anywhere.
+  orphan_pattern <- "^[0-9<>=,.]+$"
+  cluster_sizes  <- table(toks$cluster)
+  orphan_clusters <- as.integer(names(cluster_sizes)[cluster_sizes == 1])
+  orphan_clusters <- orphan_clusters[vapply(orphan_clusters, function(cl){
+    grepl(orphan_pattern, trimws(toks$text[toks$cluster == cl][1]))
+  }, logical(1))]
+
+  for(cl_id in orphan_clusters){
+    row_idx <- which(toks$cluster == cl_id)
+    if(length(row_idx) != 1) next
+    other <- toks[toks$cluster != cl_id, , drop = FALSE]
+    if(nrow(other) == 0) next
+    dists <- abs(other$start - toks$start[row_idx])
+    best  <- which.min(dists)
+    if(dists[best] <= gap_threshold * 2){
+      toks$cluster[row_idx] <- other$cluster[best]
+    }
+  }
+
   agg <- do.call(rbind, lapply(split(toks, toks$cluster), function(g){
     g <- g[order(g$line), ]
     data.frame(text = paste(g$text, collapse = " "), start = min(g$start))
@@ -2020,6 +2305,30 @@ is_data_line <- function(ln, min_numeric = 1){
   sum(grepl("^(NR|[0-9,]+)$", toks)) >= min_numeric
 }
 
+# ---- Bullet-point narrative line detector ---------------------------------
+# The bullet glyph these bulletins actually use in the extracted text is
+# NOT a plain Unicode bullet -- it's almost always a Private Use Area
+# codepoint (e.g. U+F0B7), the standard PDF-extraction artifact for a
+# Wingdings/Symbol-font bullet character (the font maps its bullet glyph to
+# a PUA codepoint mirroring the ASCII layout, shifted into U+F000-U+F8FF,
+# rather than to the "real" Unicode bullet U+2022). "•"/"●" are
+# kept too in case a bulletin's PDF ever does use a real Unicode bullet, but
+# matching the whole PUA range is what actually catches the glyph these
+# bulletins use in practice, whichever exact codepoint that font happens to
+# pick -- rather than needing a new codepoint added here each time a
+# differently-fonted bulletin turns up.
+#
+# Uses stringr::str_detect() (stringi/ICU-backed) rather than base grepl():
+# base R's regex engine needs to translate a UTF-8 pattern against a
+# UTF-8-flagged string into the process's current locale before matching,
+# which FAILS OUTRIGHT (a hard error, not a false negative) under a non-UTF-8
+# locale such as the plain "C" locale a CI runner can default to -- observed
+# directly: `grepl("^\\s*[•●]", ...)` crashed with "unable to
+# translate ... to a wide string" while processing Week 03 2025's bulletin.
+# str_detect() doesn't go through that locale-dependent translation at all,
+# so it works the same regardless of the running environment's locale.
+is_bullet_line <- function(x) str_detect(x, "^\\s*[•●\\x{E000}-\\x{F8FF}]\\s")
+
 # Given the line index of a header anchor (a line known to be part of the
 # header block, e.g. containing "Districts"), grow upward and downward to
 # capture every header line, stopping at the table title, a bullet-point
@@ -2030,7 +2339,7 @@ find_header_block <- function(lines, anchor){
         nzchar(trimws(lines[begin - 1])) &&
         !is_data_line(lines[begin - 1]) &&
         !grepl("^\\s*Table\\s*\\d+\\s*:", lines[begin - 1], ignore.case = TRUE) &&
-        !grepl("^\\s*[•●]", lines[begin - 1])){
+        !is_bullet_line(lines[begin - 1])){
     begin <- begin - 1
   }
   end <- anchor
@@ -2069,7 +2378,11 @@ extract_district_case_tables <- function(pdf_text){
   # silently skipped the whole table for that province/week (seen:
   # Balochistan Week 25 & 28 2026, KP Week 28 2026 -- all three titled with
   # the hyphen).
-  title_hits <- all_titles |> filter(grepl("district[[:space:]-]*wise[[:space:]-]*distribution", text, ignore.case = TRUE))
+  # ligature_tolerant_pattern("distribution") additionally tolerates a
+  # dropped "ti" ligature glyph in "distribution" itself (seen: Week 03 2025
+  # titled every one of these tables "distribu on", silently skipping all
+  # three provinces -- see that helper's comment for the full explanation).
+  title_hits <- all_titles |> filter(grepl(paste0("district[[:space:]-]*wise[[:space:]-]*", ligature_tolerant_pattern("distribution")), text, ignore.case = TRUE, perl = TRUE))
 
   if(nrow(title_hits) == 0) return(list())
   
@@ -2189,7 +2502,7 @@ extract_district_case_tables <- function(pdf_text){
     # Stop at the next bullet-point narrative block (a line starting with the
     # bullet character), in case pagination pulls in the start of the next
     # section's prose before the next Table title is reached.
-    bullet_idx <- which(grepl("^\\s*[•●]", rows))
+    bullet_idx <- which(is_bullet_line(rows))
     if(length(bullet_idx) > 0){
       rows <- rows[seq_len(min(bullet_idx) - 1)]
     }
@@ -2250,7 +2563,44 @@ convert_district_cases_table <- function(extracted){
     as_tibble(.name_repair = ~ matched_cols)
   
   colnames(data) <- matched_cols
-  
+
+  # A disease name occasionally resolves to the SAME canonical column
+  # twice within one table -- seen so far only as a genuine duplication
+  # artifact in the source bulletin itself (Week 15 2026 Balochistan's
+  # header literally repeats "ILI" as both its 2nd and 10th column, with
+  # every row's last value being a byte-for-byte copy of its first --
+  # apparently a copy/paste slip when the original table was authored,
+  # not anything this pipeline's own matching got wrong). Left alone this
+  # crashes pivot_longer() below outright ("Can't transform a data frame
+  # with duplicate names"), losing the WHOLE table over one redundant
+  # column. Since the values are identical, dropping the repeat is lossless;
+  # if some future case turns up where the "duplicate" column's values
+  # actually DIFFER, the first copy is kept and the second discarded with
+  # a warning (rather than crashing) so the rest of the table still comes
+  # through -- that's a data problem in the source document either way,
+  # not one this pipeline can resolve on its own.
+  if(anyDuplicated(matched_cols) > 0){
+    for(dn in unique(matched_cols[duplicated(matched_cols)])){
+      dup_idx  <- which(matched_cols == dn)
+      keep_idx <- dup_idx[1]
+      drop_idx <- dup_idx[-1]
+      same <- vapply(drop_idx, function(di) identical(data[[di]], data[[keep_idx]]), logical(1))
+      if(all(same)){
+        message(sprintf('District table "%s": column "%s" appeared %d times with identical values (a duplication artifact in the source bulletin) -- the repeat(s) were dropped.',
+                        extracted$title, dn, length(dup_idx)))
+      } else {
+        warning(sprintf('District table "%s": column "%s" appeared %d times with DIFFERING values -- kept only the first copy and discarded the rest rather than failing the whole table.',
+                        extracted$title, dn, length(dup_idx)))
+      }
+    }
+    drop_all <- unlist(lapply(unique(matched_cols[duplicated(matched_cols)]), function(dn){
+      idx <- which(matched_cols == dn)
+      idx[-1]
+    }))
+    data         <- data[, -drop_all, drop = FALSE]
+    matched_cols <- matched_cols[-drop_all]
+  }
+
   data <- data |>
     mutate(
       District_raw = District,
@@ -2381,7 +2731,10 @@ write_district_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/
 extract_district_compliance_tables <- function(pdf_text){
   
   all_titles <- find_all_table_titles(pdf_text)
-  title_hits <- all_titles |> filter(grepl("reporting\\s+(districts?|tertiary)", text, ignore.case = TRUE))
+  # ligature_tolerant_pattern() covers a dropped "ti" ligature glyph in
+  # either "reporting" or "tertiary" (both contain "ti") -- see that
+  # helper's comment above for the full explanation and an observed example.
+  title_hits <- all_titles |> filter(grepl(paste0(ligature_tolerant_pattern("reporting"), "\\s+(districts?|", ligature_tolerant_pattern("tertiary"), ")"), text, ignore.case = TRUE, perl = TRUE))
   
   if(nrow(title_hits) == 0) return(list())
   
@@ -2745,17 +3098,6 @@ extract_PAK_data_main <- function(extract_all = FALSE,
                                   district_cases_file      = 'Data/PAK_IDSR_Data_District.csv',
                                   district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
                                   include_district = TRUE){
-<<<<<<< Updated upstream
-  bulletin_url <-
-    "https://www.nih.org.pk/phb/weekly-bulletin"
-  
-  links <- get_bulletin_links(
-    bulletin_url
-  )
-  
-  link_metadata <- extract_report_date(links)
-  
-=======
 
   bulletin_url <-
     "https://www.nih.org.pk/phb/weekly-bulletin"
@@ -2766,36 +3108,12 @@ extract_PAK_data_main <- function(extract_all = FALSE,
 
   link_metadata <- extract_report_date(links)
 
->>>>>>> Stashed changes
   if(file.exists(cases_file)){
     existing <- read_csv(cases_file, show_col_types = FALSE) |>
       distinct(Year, Week)
   } else {
     existing <- tibble(Year = numeric(0), Week = numeric(0))
   }
-<<<<<<< Updated upstream
-  
-  if(extract_all){
-    
-    new_rows     <- link_metadata
-    changed_rows <- link_metadata[0, ]
-    
-  } else {
-    
-    # ---- New weeks: not already present in the cases CSV at all ----------
-    new_rows <- link_metadata |>
-      anti_join(existing, by = c("year" = "Year", "week" = "Week"))
-    
-    new_rows <- new_rows %>% filter(year >= 2026) # ignore those that are before 2026 and have changed
-    
-    # ---- Changed weeks: present, but the bulletin's link has changed -----
-    changed_rows <- detect_changed_links(link_metadata, cases_file)
-  }
-  
-  rows_to_run <- bind_rows(new_rows, changed_rows) |>
-    distinct(year, week, .keep_all = TRUE)
-  
-=======
 
   if(extract_all){
 
@@ -2817,20 +3135,13 @@ extract_PAK_data_main <- function(extract_all = FALSE,
   rows_to_run <- bind_rows(new_rows, changed_rows) |>
     distinct(year, week, .keep_all = TRUE)
 
->>>>>>> Stashed changes
   if(nrow(rows_to_run) == 0){
     message("No new or changed bulletins — dataset is already up to date.")
     return(invisible(list(new = 0L, changed = 0L)))
   }
-<<<<<<< Updated upstream
-  
-  message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
-  
-=======
 
   message(nrow(new_rows), " new week(s) and ", nrow(changed_rows), " changed week(s) to (re-)extract.")
 
->>>>>>> Stashed changes
   # Clear out the old data for any changed week BEFORE reprocessing it.
   # The district-level files are only cleared when this run is actually
   # going to re-extract district data -- if include_district = FALSE, any
@@ -2864,12 +3175,6 @@ extract_PAK_data_main <- function(extract_all = FALSE,
       include_district         = include_district
     )
   }
-<<<<<<< Updated upstream
-  
-  invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
-  
-=======
 
   invisible(list(new = nrow(new_rows), changed = nrow(changed_rows)))
->>>>>>> Stashed changes
 }
