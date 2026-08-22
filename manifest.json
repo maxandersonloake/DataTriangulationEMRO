@@ -4079,7 +4079,7 @@
       "checksum": "7f3003188f3a78fd085feca239edcc60"
     },
     ".Rprofile": {
-      "checksum": "74d4a978c68620724aa253cbef6d4616"
+      "checksum": "63b74abcbd150ed7e475902d230e2ec1"
     },
     "1_1_DownloadData_PAK_v3.R": {
       "checksum": "d031b9a7ab29821a1766e9bc8d4e4bf5"
@@ -4143,6 +4143,9 @@
     },
     "Data/pakistan_admin1.geojson": {
       "checksum": "37034ddcc1e6af7bdedc469963f6fe33"
+    },
+    "Data/run_log.txt": {
+      "checksum": "707636c9b019090171bee4555c169f60"
     },
     "Data_preAug13/failed_reports.txt": {
       "checksum": "3c7b2bb0e0eebe0792e43a2597216cfd"
