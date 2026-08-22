@@ -309,7 +309,21 @@ DISTRICT_NAME_ALIASES <- c(
   lckurram    = "kurram",
   upperkurram = "kurram",
   naseerabad  = "nasirabad",
-  lasbella    = "lasbela"
+  lasbella    = "lasbela",
+  # CSV "Battagram" vs. boundary "Batagram"
+  battagram          = "batagram",
+  # CSV "Kamber Shadadkot" vs. boundary "Kambar Shahdad Kot"
+  kambershadadkot    = "kambarshahdadkot",
+  # CSV "Naushero Feroze" vs. boundary "Naushahro Feroze"
+  nausheroferoze     = "naushahroferoze",
+  # Karachi's 6 CSV sub-districts are worded "Karachi <X>"; the boundary
+  # file words them "<X> Karachi"
+  karachimalir       = "malirkarachi",
+  karachieast        = "eastkarachi",
+  karachikorangi     = "korangikarachi",
+  karachicentral     = "centralkarachi",
+  karachisouth       = "southkarachi",
+  karachiwest        = "westkarachi"
 )
 
 resolve_dist_key <- function(x) {
@@ -774,6 +788,31 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week) {
   list(alerts = alerts, missing = missing, reported_counts = reported_counts)
 }
 
+# ---- Helper: which weeks in a candidate set a series was "alerting" ------
+# (CUSUM level > 0), most-recent-first. Used by the Alerts tab's per-alert
+# dropdown to show a short history (last 10 weeks / this year) alongside
+# the current week's alert. `weeks_df` is any data frame with Year/Week
+# columns -- e.g. weeks_up_to()'s output, or a year-to-date slice of
+# week_calendar.
+alert_weeks_in <- function(series, weeks_df, value_col) {
+  hits <- lapply(seq_len(nrow(weeks_df)), function(i) {
+    yy <- weeks_df$Year[i]; ww <- weeks_df$Week[i]
+    stats <- compute_cusum_stats_at(series, yy, ww, value_col = value_col)
+    if (stats$status == "ok" && stats$level > 0L) data.frame(Year = yy, Week = ww) else NULL
+  })
+  hits <- bind_rows(hits)
+  if (is.null(hits) || nrow(hits) == 0) return(data.frame(Year = integer(), Week = integer()))
+  hits[order(hits$Year, hits$Week, decreasing = TRUE), , drop = FALSE]
+}
+
+# "Week 31, 2026, Week 30, 2026, ..." -- most-recent-first, matching
+# alert_weeks_in()'s ordering. "none" when the set is empty (still reads
+# fine inline: "0 alerts in the last 10 weeks: none").
+format_week_list <- function(weeks_df) {
+  if (nrow(weeks_df) == 0) return("none")
+  paste(paste0("Week ", weeks_df$Week, ", ", weeks_df$Year), collapse = ", ")
+}
+
 # ---- Shared continuous diverging colour scale for SD-from-baseline -------
 # Same CUSUM/C2 method as the Alerts tab (rolling 9-week window, 2-week
 # guard band, 7-week baseline). This is the SAME scale used by the Data
@@ -807,6 +846,74 @@ sd_continuous_colour <- local({
     out
   }
 })
+
+# R-side twin of sd_continuous_font_js() below -- same luminance rule,
+# used wherever a cell's background is computed in R (via
+# sd_continuous_colour() above) rather than client-side by DT, e.g. the
+# Alerts tab's per-alert week-by-week row.
+sd_continuous_font_colour <- function(z) {
+  bg  <- sd_continuous_colour(z)
+  out <- rep(NA_character_, length(bg))
+  ok  <- !is.na(bg)
+  if (any(ok)) {
+    rgb_vals <- grDevices::col2rgb(bg[ok])
+    lum <- (0.299 * rgb_vals["red", ] + 0.587 * rgb_vals["green", ] + 0.114 * rgb_vals["blue", ]) / 255
+    out[ok] <- ifelse(lum < 0.55, "#FFFFFF", "#111111")
+  }
+  out
+}
+
+# ---- Helper: a small, static (non-DT) week-by-week row for one series ----
+# Used by the Alerts tab's per-alert dropdown -- a single disease/location
+# already fixed by the alert itself, so a plain styled HTML table is
+# simpler than standing up a dynamic DT output per alert. Shaded with the
+# exact same continuous SD scale as the Weekly summary table / District-
+# level data table (sd_continuous_colour()/sd_continuous_font_colour()
+# above are the R-side twins of that table's client-side JS versions).
+build_alert_week_row <- function(series, asof, value_col, n_weeks = 10) {
+  weeks_cal <- weeks_up_to(asof, n_weeks)
+
+  cell_at <- function(i) {
+    r <- series[series$Year == weeks_cal$Year[i] & series$Week == weeks_cal$Week[i], ]
+    list(
+      value = if (nrow(r) == 0) NA_real_ else r[[value_col]][1],
+      is_nr = if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
+    )
+  }
+  cells <- lapply(seq_len(nrow(weeks_cal)), cell_at)
+  zs    <- sapply(seq_len(nrow(weeks_cal)), function(i) cusum_z_at(series, weeks_cal$Year[i], weeks_cal$Week[i], value_col = value_col))
+  bgs   <- sd_continuous_colour(zs)
+  fts   <- sd_continuous_font_colour(zs)
+
+  header_cells <- lapply(weeks_cal$week_lab, function(wl) {
+    tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4;", wl)
+  })
+  value_cells <- lapply(seq_along(cells), function(i) {
+    c_ <- cells[[i]]
+    txt <- if (c_$is_nr) {
+      tags$span(style = "color:#888; font-style:italic;", "NR")
+    } else if (is.na(c_$value)) {
+      ""
+    } else {
+      format(round(c_$value), big.mark = ",")
+    }
+    cell_bg <- if (is.na(bgs[i])) "#FFFFFF" else bgs[i]
+    cell_ft <- if (is.na(fts[i])) "#111111" else fts[i]
+    tags$td(
+      style = sprintf(
+        "padding:4px 8px; font-size:12.5px; text-align:center; background-color:%s; color:%s;",
+        cell_bg, cell_ft
+      ),
+      txt
+    )
+  })
+
+  tags$table(
+    style = "border-collapse:collapse; margin:6px 0;",
+    tags$thead(tags$tr(header_cells)),
+    tags$tbody(tags$tr(value_cells))
+  )
+}
 
 # JS-side equivalents of the same 3-point gradient, for continuous cell
 # shading in the Weekly summary table and District-level data table (DT
@@ -1400,6 +1507,11 @@ ui <- tagList(
                 p("Weekly IDSR bulletins published by Pakistan's National Institute of Health (NIH):"),
                 tags$a(href = "https://www.nih.org.pk/phb/weekly-bulletin", target = "_blank",
                        "https://www.nih.org.pk/phb/weekly-bulletin"),
+                h4("District-level admin boundaries", style = "margin-top: 20px;"),
+                p("The district outlines used on the ", strong("District-level data"), " tab's map come from the ",
+                  "UN OCHA Common Operational Datasets (COD) for Pakistan administrative boundaries:"),
+                tags$a(href = "https://data.humdata.org/dataset/cod-ab-pak", target = "_blank",
+                       "https://data.humdata.org/dataset/cod-ab-pak"),
                 h4("Alert detection methodology", style = "margin-top: 20px;"),
                 p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
                   "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
@@ -2280,11 +2392,25 @@ server <- function(input, output, session) {
     compute_alerts_long(value_col = value_col, sel_year = asof$year, sel_week = asof$week)
   })
 
+  # Fired by an alert's "Data Visualisation" link (see output$alerts_output
+  # below) -- a plain JS onclick posts {disease, location} via
+  # Shiny.setInputValue() with priority "event" (rather than binding a
+  # separate Shiny input per alert row, which would need dynamically
+  # (re)registered observers every time the alert list changes). Jumps to
+  # the Data visualisation tab with that disease/region already selected.
+  observeEvent(input$alerts_goto, {
+    req(input$alerts_goto$disease, input$alerts_goto$location)
+    updateSelectInput(session, "disease", selected = input$alerts_goto$disease)
+    updateSelectInput(session, "location", selected = input$alerts_goto$location)
+    updateNavbarPage(session, "who_nav", selected = "Data visualisation")
+  })
+
   output$alerts_output <- renderUI({
     result <- alerts_reactive()
     alerts  <- result$alerts
     missing <- result$missing
-    label <- if (identical(input$case_type_alerts, "projected")) "projected total" else "reported"
+    label     <- if (identical(input$case_type_alerts, "projected")) "projected total" else "reported"
+    value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
     asof  <- parse_asof(input$asof_week_alerts)
 
     note <- p(
@@ -2317,9 +2443,70 @@ server <- function(input, output, session) {
           filter(Disease == dis) %>%
           arrange(desc(Location == "National"), desc(Level), desc(Z))
         max_lvl <- max(d$Level)
-        loc_text <- paste0(as.character(d$Location), " (", round(d$Z, 1), "SD)")
+
+        # One expandable row per (disease, location) alert -- clicking it
+        # reveals its recent-alert history, the week-by-week table for
+        # that region, and a link over to the Data visualisation tab
+        # already filtered to this disease/region. Purely client-side
+        # (a plain div visibility toggle) since the detail content is
+        # already fully rendered server-side; only the "Data
+        # visualisation" link needs a round-trip to the server (it has to
+        # change other tabs' inputs).
+        rows <- lapply(seq_len(nrow(d)), function(i) {
+          loc <- as.character(d$Location[i])
+          z   <- d$Z[i]
+          row_id <- paste0("alert_detail_", gsub("[^A-Za-z0-9]+", "_", paste(dis, loc, i)))
+
+          series <- get_all_disease_series(loc) %>% filter(Disease == dis)
+
+          weeks_last10 <- weeks_up_to(asof, 10)
+          alert_hist_10 <- alert_weeks_in(series, weeks_last10, value_col)
+
+          weeks_ytd <- week_calendar %>%
+            filter(Year == asof$year, Week <= asof$week) %>%
+            select(Year, Week)
+          alert_hist_ytd <- alert_weeks_in(series, weeks_ytd, value_col)
+
+          goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
+
+          tagList(
+            tags$div(
+              class = "alert-row-header",
+              style = "cursor:pointer; display:flex; align-items:center; gap:6px; padding:3px 0;",
+              onclick = sprintf(
+                "var el=document.getElementById('%s'); el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';",
+                row_id
+              ),
+              icon("caret-down", style = "font-size:11px; color:#888;"),
+              span(paste0(loc, " (", round(z, 1), "SD)"))
+            ),
+            tags$div(
+              id = row_id,
+              style = "display:none; margin:2px 0 10px 20px; padding:10px 14px; background-color:#FAFBFC; border:1px solid #E5E8EB; border-radius:5px;",
+              tags$p(
+                style = "font-size:12.5px; margin:0;",
+                sprintf("%d alert%s in the last 10 weeks: %s", nrow(alert_hist_10), ifelse(nrow(alert_hist_10) == 1, "", "s"), format_week_list(alert_hist_10))
+              ),
+              tags$p(
+                style = "font-size:12.5px; margin:2px 0 0 0;",
+                sprintf("%d alert%s this year: %s", nrow(alert_hist_ytd), ifelse(nrow(alert_hist_ytd) == 1, "", "s"), format_week_list(alert_hist_ytd))
+              ),
+              div(style = "overflow-x:auto;", build_alert_week_row(series, asof, value_col, n_weeks = 10)),
+              tags$a(
+                href = "#",
+                style = "font-size:12.5px; color:var(--who-blue); font-weight:600; text-decoration:none;",
+                onclick = sprintf(
+                  "Shiny.setInputValue('alerts_goto', %s, {priority:'event'}); return false;",
+                  goto_payload
+                ),
+                "Data Visualisation →"
+              )
+            )
+          )
+        })
+
         div(class = paste("qv-box", level_class[as.character(max_lvl)]),
-            strong(dis), ": ", paste(loc_text, collapse = ", "))
+            strong(dis), rows)
       })
       tagList(lines)
     }
