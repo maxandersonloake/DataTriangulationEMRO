@@ -1,0 +1,11 @@
+PAK IDSR data pipeline run -- 2026-08-22 05:33:32 UTC
+Mode: province-level + district-level
+
+New weeks processed: 0
+Changed weeks reprocessed: 0
+
+=== WARNINGS (1) -- review recommended ===
+(fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
+
+[MESSAGE] No new or changed bulletins — dataset is already up to date.
+
