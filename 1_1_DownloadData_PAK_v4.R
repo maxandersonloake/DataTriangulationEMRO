@@ -2650,12 +2650,28 @@ convert_district_cases_table <- function(extracted){
                     extracted$title, nrow(unmatched), paste(unique(unmatched$District_raw), collapse = "; ")))
   }
   
-  # The "Total" row is a column-sum check row, not a real district -- drop it
-  # from the output, but use it to sanity-check the province total reported
-  # in the national Table 1 (best-effort: any mismatch is only a warning).
+  # The "Total" row is a column-sum checksum printed in the source PDF
+  # itself, one per province/week/disease. Rather than discarding it and
+  # letting downstream consumers (the dashboard's province-level rows)
+  # recompute a total by summing whichever individual district rows this
+  # pipeline managed to extract, it's kept as its OWN row (District ==
+  # "Total") right alongside the real district rows -- summing is only an
+  # approximation of the true province total, since it silently undercounts
+  # whenever even one district's row failed to parse or wasn't captured
+  # this week, while the bulletin's own printed Total is the authoritative
+  # figure straight from the source document. A table with no usable Total
+  # row at all (none matched, or something odd like more than one) simply
+  # contributes no "Total" row here -- deliberately left for downstream to
+  # treat as missing rather than falling back to an approximate sum.
   total_row <- data |> filter(tolower(District_raw) == "total")
-  data <- data |> filter(tolower(District_raw) != "total")
-  
+  if(nrow(total_row) > 1){
+    warning(sprintf('District table "%s": found %d "Total" rows instead of one -- keeping only the first and dropping the rest from the data.',
+                    extracted$title, nrow(total_row)))
+    extra_total_idx <- which(tolower(data$District_raw) == "total")[-1]
+    data <- data[-extra_total_idx, ]
+    total_row <- total_row[1, ]
+  }
+
   cases_table <- data |>
     select(-District_raw) |>
     pivot_longer(-District, names_to = "Disease", values_to = "Cases") |>
@@ -2676,40 +2692,40 @@ convert_district_cases_table <- function(extracted){
     filter(!is.na(Cases) | Status %in% c("NR", "Missing")) |>
     mutate(
       Province = extracted$province,
+      # region_of_district("Total") never resolves (it isn't a real
+      # district), so the Total row's Region falls back to the province
+      # itself -- exactly the grouping a province-level total belongs
+      # under.
       Region   = coalesce(region_of_district(District), Province)
     ) |>
     select(Province, Region, District, Disease, Cases, Status)
 
-  # ---- Best-effort sanity check against the table's own "Total" row -----
-  # The "Total" row is a column-sum checksum printed in the source PDF
-  # itself. Comparing it against the actual sum of this table's own
-  # district-level values catches extraction problems that don't raise a
-  # parse error but DO produce a wrong number -- e.g. a value whose digits
-  # get split across two different positions in the PDF (observed: a
-  # province's ILI total rendered partly as a stray value on its own
-  # separate line and partly as a much smaller number on the Total row's
-  # own line, extracting as "9" instead of the true "5,209" -- the stray
-  # part has nowhere reliable to attach to, so is dropped with its own
-  # warning, and the Total row is left visibly wrong here rather than
-  # silently). Only checked for diseases with no "NR"/"Missing" rows in
-  # this table, since an exact reconciliation isn't possible to know
-  # either way once any district's true count is unknown.
+  # ---- Best-effort sanity check: printed Total vs. summed district rows --
+  # Now that the printed Total is taken as authoritative, this comparison
+  # is purely diagnostic -- it flags (but no longer excludes) a Total that
+  # doesn't match summing this table's own district rows, since that
+  # mismatch usually means EITHER a district row failed to extract
+  # correctly, or the Total itself has a text-extraction glitch (e.g. a
+  # value whose digits got split across two different positions in the
+  # PDF) -- either way worth a human glancing at the source bulletin. Only
+  # checked for diseases with no "NR"/"Missing" rows in this table, since
+  # an exact reconciliation isn't possible to know either way once any
+  # district's true count is unknown.
   if(nrow(total_row) == 1){
     for(disease_col in matched_cols[-1]){
-      col_rows <- cases_table |> filter(Disease == disease_col)
+      col_rows <- cases_table |> filter(Disease == disease_col, District != "Total")
       if(nrow(col_rows) == 0 || any(col_rows$Status %in% c("NR", "Missing"))) next
       reported_sum   <- sum(col_rows$Cases, na.rm = TRUE)
       printed_total  <- suppressWarnings(as.numeric(total_row[[disease_col]]))
       if(!is.na(printed_total) && printed_total != reported_sum){
         warning(sprintf(
-          'District table "%s": printed "Total" for %s is %s but summing this table\'s own district rows gives %s -- the printed total looks wrong (likely a PDF text-extraction glitch) and is excluded from the output; only the individual district rows are kept.',
+          'District table "%s": printed "Total" for %s is %s but summing this table\'s own district rows gives %s -- kept the printed total as authoritative (worth checking the source bulletin, since one of the two extracted wrong).',
           extracted$title, disease_col, printed_total, reported_sum
         ))
       }
     }
   }
 
-  attr(cases_table, "total_row") <- total_row
   cases_table
 }
 
