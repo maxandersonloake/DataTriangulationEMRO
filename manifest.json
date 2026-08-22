@@ -3441,8 +3441,8 @@
         "Package": "terra",
         "Type": "Package",
         "Title": "Spatial Data Analysis",
-        "Version": "1.9-34",
-        "Date": "2026-06-18",
+        "Version": "1.9-45",
+        "Date": "2026-08-20",
         "Depends": "R (>= 3.5.0), methods",
         "Suggests": "parallel, tinytest, ncdf4, sf (>= 0.9-8), igraph, deldir,\nXML, leaflet (>= 2.2.1), htmlwidgets, future, future.apply",
         "LinkingTo": "Rcpp",
@@ -3470,7 +3470,7 @@
         "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
         "RemoteReposName": "CRAN",
         "RemotePkgPlatform": "x86_64-w64-mingw32",
-        "RemoteSha": "1.9-34"
+        "RemoteSha": "1.9-45"
       }
     },
     "tibble": {
@@ -4079,7 +4079,7 @@
       "checksum": "7f3003188f3a78fd085feca239edcc60"
     },
     ".Rprofile": {
-      "checksum": "44270a866f0185bb9f9dd1bb2c3b9561"
+      "checksum": "9060f2b5607d4539aabd5004a90285cc"
     },
     "1_1_DownloadData_PAK_v3.R": {
       "checksum": "d031b9a7ab29821a1766e9bc8d4e4bf5"
