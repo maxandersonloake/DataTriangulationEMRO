@@ -736,43 +736,31 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week) {
   list(alerts = alerts, missing = missing, reported_counts = reported_counts)
 }
 
-# ---- Shared diverging colour scale for SD-from-baseline tables -----------
+# ---- Shared continuous diverging colour scale for SD-from-baseline -------
 # Same CUSUM/C2 method as the Alerts tab (rolling 9-week window, 2-week
-# guard band, 7-week baseline). Deliberately wide neutral band: a week
-# within +-2 SD of its expected baseline stays plain white. Colour escalates
-# through graduated tiers on both sides -- green shades the further below
-# baseline, red shades the further above -- independent of the Alerts tab's
-# own (separately styled) yellow/medium-red/dark-red boxes.
-SD_BREAKS   <- c(-4, -3, -2, 2, 3, 4)
-SD_BG_PAL   <- c("#1B7837", "#5AAE61", "#C7E9C0", "#FFFFFF", "#FCE9B0", who_red, who_red_dark)
-SD_FONT_PAL <- c("#FFFFFF", "#111111", "#111111", "#111111", "#111111", "#FFFFFF", "#FFFFFF")
-SD_LEGEND_LABELS <- c(
-  "More than 4 SD below baseline",
-  "3 to 4 SD below baseline",
-  "2 to 3 SD below baseline",
-  "Within \u00b12 SD (typical)",
-  "2 to 3 SD above baseline",
-  "3 to 4 SD above baseline",
-  "More than 4 SD above baseline"
-)
+# guard band, 7-week baseline). This is the SAME scale used by the Data
+# visualisation tab's region map (scale_fill_gradient2(low = SD_SCALE_LOW,
+# mid = SD_SCALE_MID, high = SD_SCALE_HIGH, midpoint = 0, limits = c(-lim,
+# lim))) -- kept as shared constants so the Weekly summary table, the
+# District-level data table, and the District-level data map all read on
+# exactly the same green-white-red gradient, clamped at +-4 SD.
+SD_SCALE_LOW   <- "#1A9850"   # 4+ SD below baseline
+SD_SCALE_MID   <- "#FFFFFF"   # at baseline
+SD_SCALE_HIGH  <- who_red_dark  # 4+ SD above baseline
+SD_SCALE_LIMIT <- 4
 
-# ---- Continuous version of the above, for the District-level data map ----
-# The weekly table snaps a week's SD into one of the 7 discrete bins above;
-# the district map instead needs a smooth function of z so a district's fill
-# colour reads as a genuine gradient rather than banding. Control points sit
-# at the SAME breakpoints (+-2/3/4 SD) using the SAME colours as SD_BG_PAL,
-# with a flat white plateau between -2 and +2 SD (matching the table's wide
-# neutral band) and the colour clamped beyond +-5 SD.
+# R-side continuous colour function (used by the District-level data map's
+# leaflet fill). A smooth 3-point linear interpolation across RGB space,
+# clamped at +-SD_SCALE_LIMIT.
 sd_continuous_colour <- local({
-  ctrl_x   <- c(-5, -4, -3, -2, 2, 3, 4, 5)
-  ctrl_col <- c(SD_BG_PAL[1], SD_BG_PAL[2], SD_BG_PAL[3], SD_BG_PAL[4],
-                SD_BG_PAL[4], SD_BG_PAL[5], SD_BG_PAL[6], SD_BG_PAL[7])
+  ctrl_x   <- c(-SD_SCALE_LIMIT, 0, SD_SCALE_LIMIT)
+  ctrl_col <- c(SD_SCALE_LOW, SD_SCALE_MID, SD_SCALE_HIGH)
   ctrl_rgb <- grDevices::col2rgb(ctrl_col)
   function(z) {
     out <- rep(NA_character_, length(z))
     ok  <- !is.na(z)
     if (any(ok)) {
-      zc <- pmin(pmax(z[ok], min(ctrl_x)), max(ctrl_x))
+      zc <- pmin(pmax(z[ok], -SD_SCALE_LIMIT), SD_SCALE_LIMIT)
       r <- approx(ctrl_x, ctrl_rgb["red", ],   xout = zc)$y
       g <- approx(ctrl_x, ctrl_rgb["green", ], xout = zc)$y
       b <- approx(ctrl_x, ctrl_rgb["blue", ],  xout = zc)$y
@@ -782,13 +770,90 @@ sd_continuous_colour <- local({
   }
 })
 
-# Fill colours for the two "no usable colour" cases on the district map --
-# deliberately different shades so a viewer can tell them apart at a glance:
-#   - a whole province with NO subnational reporting at all (grey)
-#   - one district within a COVERED province that just has no usable value
-#     for the current disease/week/case-type selection (pale neutral)
-DISTRICT_PROVINCE_NOT_COVERED_COLOUR <- "#B7BCC2"
+# JS-side equivalents of the same 3-point gradient, for continuous cell
+# shading in the Weekly summary table and District-level data table (DT
+# tables shade client-side, so the colour math needs a JS twin of
+# sd_continuous_colour() above). These build a JS *expression* -- not a
+# full function -- meant to be dropped into DT::formatStyle(), where the
+# variable `value` is already in scope for whichever cell is being styled.
+# `value` is NULL for weeks with no SD (no report / insufficient baseline),
+# in which case no background/font colour override is applied (the cell
+# keeps its default look; those weeks already read "NR" in italics).
+sd_continuous_bg_js <- function() {
+  JS(sprintf(
+    "(function() {
+       if (value === null || value === undefined || isNaN(value)) return '';
+       var lim = %s, lo = '%s', mid = '%s', hi = '%s';
+       var z = Math.max(-lim, Math.min(lim, value));
+       function hex2rgb(h) { return [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)]; }
+       var a = z <= 0 ? hex2rgb(lo) : hex2rgb(mid);
+       var b = z <= 0 ? hex2rgb(mid) : hex2rgb(hi);
+       var t = z <= 0 ? (z + lim) / lim : z / lim;
+       var r = Math.round(a[0] + (b[0]-a[0])*t);
+       var g = Math.round(a[1] + (b[1]-a[1])*t);
+       var bl = Math.round(a[2] + (b[2]-a[2])*t);
+       return 'rgb(' + r + ',' + g + ',' + bl + ')';
+     })()",
+    SD_SCALE_LIMIT, SD_SCALE_LOW, SD_SCALE_MID, SD_SCALE_HIGH
+  ))
+}
+sd_continuous_font_js <- function() {
+  JS(sprintf(
+    "(function() {
+       if (value === null || value === undefined || isNaN(value)) return '';
+       var lim = %s, lo = '%s', mid = '%s', hi = '%s';
+       var z = Math.max(-lim, Math.min(lim, value));
+       function hex2rgb(h) { return [parseInt(h.substr(1,2),16), parseInt(h.substr(3,2),16), parseInt(h.substr(5,2),16)]; }
+       var a = z <= 0 ? hex2rgb(lo) : hex2rgb(mid);
+       var b = z <= 0 ? hex2rgb(mid) : hex2rgb(hi);
+       var t = z <= 0 ? (z + lim) / lim : z / lim;
+       var r = a[0] + (b[0]-a[0])*t, g = a[1] + (b[1]-a[1])*t, bl = a[2] + (b[2]-a[2])*t;
+       var lum = (0.299*r + 0.587*g + 0.114*bl) / 255;
+       return lum < 0.55 ? '#FFFFFF' : '#111111';
+     })()",
+    SD_SCALE_LIMIT, SD_SCALE_LOW, SD_SCALE_MID, SD_SCALE_HIGH
+  ))
+}
+
+# Reusable UI: a horizontal colour-bar legend for the shared SD scale above,
+# used on the Weekly summary table tab, the District-level data table, and
+# the District-level data map, so all three explain the same continuous
+# scale the same way. `show_no_data` adds a grey swatch for "no data
+# available" (used on the map, where whole provinces/districts can be
+# shaded grey; not needed on the tables, where a missing week just reads
+# "NR" in text rather than being shaded).
+sd_gradient_legend_ui <- function(show_no_data = FALSE) {
+  tagList(
+    div(
+      style = sprintf(
+        "height:14px; border-radius:3px; border:1px solid #C7CBD1; background:linear-gradient(to right, %s 0%%, %s 50%%, %s 100%%);",
+        SD_SCALE_LOW, SD_SCALE_MID, SD_SCALE_HIGH
+      )
+    ),
+    div(
+      style = "display:flex; justify-content:space-between; font-size:11px; color:#555; margin-top:3px;",
+      span(paste0("-", SD_SCALE_LIMIT, " SD")), span("-2 SD"), span("0"), span("+2 SD"), span(paste0("+", SD_SCALE_LIMIT, " SD"))
+    ),
+    if (show_no_data) {
+      div(
+        style = "display:flex; align-items:center; gap:6px; margin-top:8px;",
+        span(style = paste0(
+          "display:inline-block; width:16px; height:16px; border-radius:3px; border:1px solid #C9CDD1; flex-shrink:0; background-color:",
+          DISTRICT_NO_DATA_COLOUR, ";"
+        )),
+        span(style = "font-size:12.5px; color:#333;", "No data available")
+      )
+    }
+  )
+}
+
+# Fill colour for districts/provinces with no usable value on the map --
+# one shared grey for BOTH "a whole province with no subnational reporting
+# at all" and "a district within a covered province with no report / no
+# usable value this week", so the map reads with a single, consistent
+# "no data" colour rather than two similar-but-different greys.
 DISTRICT_NO_DATA_COLOUR              <- "#E8ECEF"
+DISTRICT_PROVINCE_NOT_COVERED_COLOUR <- DISTRICT_NO_DATA_COLOUR
 
 # ---- Fixed year -> colour map ----------------------------------------------
 # Assigned once from every year present in the data (most recent = WHO Navy,
@@ -1123,13 +1188,7 @@ ui <- tagList(
             style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
             "Cell shading"
           ),
-          div(
-            lapply(rev(seq_along(SD_BG_PAL)), function(i) {
-              div(class = "sd-legend-row",
-                  span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
-                  SD_LEGEND_LABELS[i])
-            })
-          ),
+          sd_gradient_legend_ui(show_no_data = FALSE),
           tags$p(
             style = "font-size: 12px; color: #555; margin-top: 8px;",
             "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
@@ -1182,11 +1241,14 @@ ui <- tagList(
         # rather than a renderUI/uiOutput) --------------------------------
         div(
           class = "info-disclosure",
-          icon("circle-info"), strong(" Geographic coverage: "),
-          sprintf(
-            "district-level data is currently only reported for %s. No district-level breakdown is available for %s -- these provinces are shown in grey on the map below, and don't appear in the table.",
-            paste(provinces_with_district_data, collapse = ", "),
-            if (length(provinces_without_district_data) > 0) paste(provinces_without_district_data, collapse = ", ") else "none"
+          tags$p(
+            style = "font-size: 12.5px; color: #555; margin: 0;",
+            strong("Geographic coverage: "),
+            sprintf(
+              "district-level data is currently only reported for %s. No district-level breakdown is available for %s -- these provinces are shown in grey on the map below, and don't appear in the table.",
+              paste(provinces_with_district_data, collapse = ", "),
+              if (length(provinces_without_district_data) > 0) paste(provinces_without_district_data, collapse = ", ") else "none"
+            )
           ),
           tags$p(
             style = "font-size: 12.5px; color: #555; margin: 6px 0 0 0;",
@@ -1196,13 +1258,18 @@ ui <- tagList(
           )
         ),
 
-        # ---- Epi curve (left) + map (right) --------------------------------
+        # ---- Weekly case trend (left) + map (right) -------------------------
+        # display:flex on the row stretches both viz-panel cards (which are
+        # height:100%) to match the taller one, so the two boxes are always
+        # the same size even though the left card carries an extra
+        # Province/District selector row that the map card doesn't have.
         fluidRow(
+          style = "display:flex; flex-wrap:wrap;",
           column(
             width = 6,
             div(
               class = "viz-panel",
-              h4("District epidemic curve"),
+              h4("Weekly case trend"),
               uiOutput("district_trend_subtitle"),
               div(
                 style = "display:flex; gap:16px; margin-bottom:10px;",
@@ -1229,44 +1296,48 @@ ui <- tagList(
               leafletOutput("district_map", height = "360px"),
               div(
                 class = "viz-panel-controls",
-                style = "min-height: 60px; font-size: 12px; color: #555;",
-                "Hover a district for its case counts and deviation from baseline. Provinces with no district-level ",
-                "reporting are shown in grey; scroll or use the +/- controls to zoom, and drag to pan."
+                style = "min-height: 60px;",
+                sd_gradient_legend_ui(show_no_data = TRUE),
+                tags$p(
+                  style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+                  "SD shows how many standard deviations a week's case count is from its expected baseline, ",
+                  "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). ",
+                  "See the ", strong("Home"), " tab for full details."
+                )
               )
             )
           )
         ),
 
         # ---- Table, with "recent weeks" + cell shading to its left --------
-        fluidRow(
+        # Boxed the same way as the plots above (viz-panel), per user request
+        # to give the table and its controls a matching card style.
+        div(
+          class = "viz-panel",
           style = "margin-top: 16px;",
-          column(
-            width = 3,
-            numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
-            tags$hr(),
-            div(
-              style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
-              "Cell shading"
+          fluidRow(
+            column(
+              width = 3,
+              numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+              tags$hr(),
+              div(
+                style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
+                "Cell shading"
+              ),
+              sd_gradient_legend_ui(show_no_data = FALSE),
+              tags$p(
+                style = "font-size: 12px; color: #555; margin-top: 8px;",
+                "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+              )
             ),
-            div(
-              lapply(rev(seq_along(SD_BG_PAL)), function(i) {
-                div(class = "sd-legend-row",
-                    span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
-                    SD_LEGEND_LABELS[i])
-              })
-            ),
-            tags$p(
-              style = "font-size: 12px; color: #555; margin-top: 8px;",
-              "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+            column(
+              width = 9,
+              p(
+                style = "font-size: 13px; color:#555;",
+                icon("circle-info"), " Click the arrow on a province row to expand district-level case counts within it."
+              ),
+              DTOutput("district_table")
             )
-          ),
-          column(
-            width = 9,
-            p(
-              style = "font-size: 13px; color:#555;",
-              icon("circle-info"), " Click the arrow on a province row to expand district-level case counts within it."
-            ),
-            DTOutput("district_table")
           )
         )
       )
@@ -1550,7 +1621,7 @@ server <- function(input, output, session) {
 
     rc <- region_change_data()
     sf_map <- pak_regions_sf %>% left_join(rc, by = c("province" = "region"))
-    sf_map$z_capped <- pmin(pmax(sf_map$z, -4), 4)
+    sf_map$z_capped <- pmin(pmax(sf_map$z, -SD_SCALE_LIMIT), SD_SCALE_LIMIT)
 
     # Label points guaranteed to sit inside each polygon (unlike a plain
     # centroid, which can fall outside oddly-shaped or multi-part regions)
@@ -1570,8 +1641,8 @@ server <- function(input, output, session) {
     p <- ggplot(sf_map) +
       geom_sf(aes(fill = z_capped), color = "#8A8F94", linewidth = 0.3) +
       scale_fill_gradient2(
-        low = "#1A9850", mid = "#FFFFFF", high = who_red_dark, midpoint = 0,
-        limits = c(-4, 4), na.value = "#B7BCC2", name = "SD from\nbaseline",
+        low = SD_SCALE_LOW, mid = SD_SCALE_MID, high = SD_SCALE_HIGH, midpoint = 0,
+        limits = c(-SD_SCALE_LIMIT, SD_SCALE_LIMIT), na.value = "#B7BCC2", name = "SD from\nbaseline",
         labels = function(x) paste0(x, " SD")
       ) +
       ggrepel::geom_text_repel(
@@ -1765,8 +1836,8 @@ server <- function(input, output, session) {
       dt,
       columns = tbl$week_cols,
       valueColumns = sd_col_names,
-      backgroundColor = styleInterval(SD_BREAKS, SD_BG_PAL),
-      color = styleInterval(SD_BREAKS, SD_FONT_PAL)
+      backgroundColor = sd_continuous_bg_js(),
+      color = sd_continuous_font_js()
     )
     dt
   })
@@ -1961,8 +2032,8 @@ server <- function(input, output, session) {
       dt,
       columns = week_cols,
       valueColumns = sd_cols,
-      backgroundColor = styleInterval(SD_BREAKS, SD_BG_PAL),
-      color = styleInterval(SD_BREAKS, SD_FONT_PAL)
+      backgroundColor = sd_continuous_bg_js(),
+      color = sd_continuous_font_js()
     )
     dt
   })
