@@ -2214,15 +2214,37 @@ merge_multiline_header <- function(lines, gap_threshold = 4){
     # wrong, but leaving the whole blob glued (the old behaviour) is
     # wrong too -- letting it stand alone as its own column is what the
     # source table actually intends.
+    # The "stay home" check gives its own cluster a HANDICAP/bonus rather
+    # than a flat wider allowance: a word stays home if its distance to its
+    # own cluster, after subtracting the bonus, is still no worse than its
+    # distance to the best alternative cluster (capped at 2x gap_threshold
+    # either way, so nothing absurdly far away is ever claimed). A flat
+    # wider "stay home" threshold was tried first and proved unsafe: it
+    # fixed a word sitting a little further than gap_threshold from its
+    # OWN siblings but still clearly its best option (observed: Week 19
+    # and Week 32 2025's "ALRI < 5 years", where "<" and "5" sit 5-7
+    # characters from "ALRI"/"years" and were landing on "Dog Bite" / "B.
+    # Diarrhea" instead) -- but it ALSO wrongly kept a word home in the
+    # opposite situation, where a DIFFERENT cluster is clearly the closer,
+    # correct match (observed: this regressed Week 07 2025 Sindh's fix
+    # above, pulling "years" back into "AD (non-cholera)"'s cluster at
+    # distance 6 even though "ALRI < 5"'s cluster was right there at
+    # distance 2). Comparing the two candidates directly, with a modest
+    # bonus toward the already-established home grouping, resolves both:
+    # "years" (own=6, alternative=2) still loses its bonus-adjusted
+    # comparison and moves to ALRI's cluster, while "5" (own=7,
+    # alternative=4, a near-tie) keeps its home-cluster preference.
+    home_bonus <- gap_threshold - 1
     target_cluster <- rep(NA_integer_, nrow(words))
     for(w in seq_len(nrow(words))){
-      if(nrow(own_others) > 0){
-        own_dist <- min(abs(own_others$start - words$start[w]))
-        if(own_dist <= gap_threshold){
-          target_cluster[w] <- this_row$cluster
-          next
-        }
+      own_dist <- if(nrow(own_others) > 0) min(abs(own_others$start - words$start[w])) else Inf
+      other_dist <- if(nrow(other) > 0) min(abs(other$start - words$start[w])) else Inf
+
+      if(is.finite(own_dist) && own_dist <= gap_threshold * 2 && own_dist <= other_dist + home_bonus){
+        target_cluster[w] <- this_row$cluster
+        next
       }
+
       dists <- if(nrow(other) > 0) abs(other$start - words$start[w]) else numeric(0)
       best  <- if(length(dists) > 0) which.min(dists) else NA_integer_
       if(!is.na(best) && dists[best] <= gap_threshold){
