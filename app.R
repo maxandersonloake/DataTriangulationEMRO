@@ -15,7 +15,11 @@
 #   www/logo.png          
 #   Data/PAK_IDSR_Data.csv
 #   Data/PAK_IDSR_Compliance.csv
-#   Data/pakistan_admin1.geojson  <- bundled province boundaries for the map
+#   Data/PAK_IDSR_Data_District.csv
+#   Data/PAK_IDSR_Compliance_District.csv
+#   Data/pakistan_admin1.geojson             <- dissolved province boundaries (Data visualisation tab's map)
+#   Data/pak_admin_boundaries/pak_admin1.geojson  <- province boundaries (District-level data tab's map outline)
+#   Data/pak_admin_boundaries/pak_admin2.geojson  <- district boundaries (District-level data tab's map fill)
 # ================================================================
 
 library(shiny)
@@ -29,8 +33,18 @@ library(scales)
 library(base64enc)
 library(sf)
 library(ggrepel)
+library(leaflet)
 
 REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
+
+# Admin boundary files used by the District-level data tab's map -- distinct
+# from REGIONS_GEOJSON above (which is a dissolved 7-province shape used by
+# the Data visualisation tab's static province map). These are more detailed
+# administrative boundary files, used at their adm2 ("district") level so
+# every individual district can be coloured and hovered on the map; adm1 is
+# used only to draw a thin province outline on top for visual clarity.
+DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
+DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -248,6 +262,58 @@ district_compliance_data <- read_csv(DISTRICT_COMPLIANCE_PATH, show_col_types = 
 
 district_disease_choices <- sort(unique(raw_district_data$Disease))
 
+# ---- Which provinces actually have district-level data -------------------
+# Used to grey out provinces on the District-level data map, and to note near
+# the top of that tab which provinces are/aren't covered.
+provinces_with_district_data    <- sort(unique(raw_district_data$Province))
+provinces_without_district_data <- setdiff(location_choices[location_choices != "National"], provinces_with_district_data)
+
+# ---- Matching CSV district names onto admin-boundary polygons ------------
+# Data/pak_admin_boundaries/pak_admin2.geojson is an independently-sourced
+# boundary file, so a district's name there doesn't always spell/order
+# identically to how it appears in the IDSR bulletins (which is what
+# PAK_IDSR_Data_District.csv's District column preserves verbatim). This
+# normalises both sides onto the same simplified key (lower-case, letters
+# only, parenthetical alternate names dropped, a leading "SD " sub-division
+# marker dropped) so most districts line up automatically; a short alias
+# table below covers the handful of remaining mismatches (transliteration/
+# word-order differences, or a district split into multiple CSV reporting
+# sub-units -- e.g. KP's "L & C Kurram" and "Upper Kurram" -- that share a
+# single boundary polygon). A district that still doesn't match anything
+# simply won't be found on the map; it remains fully present in the table
+# regardless, which is the authoritative view.
+normalize_dist_name <- function(x) {
+  x <- tolower(x)
+  x <- gsub("\\([^)]*\\)", "", x)   # drop "(Bolan)"-style parenthetical alt names
+  x <- trimws(x)
+  x <- sub("^sd\\s+", "", x)         # drop a leading "SD " (sub-division) marker
+  x <- gsub("[^a-z]", "", x)         # strip everything but letters (spaces, ., &, -)
+  x
+}
+
+DISTRICT_NAME_ALIASES <- c(
+  dirlower    = "lowerdir",
+  dirupper    = "upperdir",
+  kolaipalas  = "kolaipalaskohistan",
+  lckurram    = "kurram",
+  upperkurram = "kurram",
+  naseerabad  = "nasirabad",
+  lasbella    = "lasbela"
+)
+
+resolve_dist_key <- function(x) {
+  k <- normalize_dist_name(x)
+  aliased <- unname(DISTRICT_NAME_ALIASES[k])
+  ifelse(is.na(aliased), k, aliased)
+}
+
+# ---- Province code <-> admin-boundary adm1_name ---------------------------
+PROVINCE_ADM1_NAME_MAP <- c(
+  AJK = "Azad Kashmir", Balochistan = "Balochistan", GB = "Gilgit Baltistan",
+  ICT = "Islamabad", KP = "Khyber Pakhtunkhwa", Punjab = "Punjab", Sindh = "Sindh"
+)
+ADM1_NAME_PROVINCE_MAP <- setNames(names(PROVINCE_ADM1_NAME_MAP), PROVINCE_ADM1_NAME_MAP)
+
 latest_year <- max(raw_data$Year, na.rm = TRUE)
 latest_week <- max(raw_data$Week[raw_data$Year == latest_year], na.rm = TRUE)
 
@@ -400,7 +466,58 @@ get_province_disease_series <- function(district_series) {
     )
 }
 
+# ---- Helper: district series aggregated onto MAP POLYGONS -----------------
+# A handful of CSV "District" values are administrative sub-units that share
+# a single polygon in the admin2 boundary file (see resolve_dist_key()'s
+# comment above) -- these are summed together (same NA-handling rule as
+# get_province_disease_series() above) before computing a single CUSUM
+# z-score for that polygon, rather than trying to average multiple
+# already-computed z-scores (which would not be statistically meaningful).
+get_district_polygon_series <- function(district_series) {
+  district_series %>%
+    mutate(dist_key = resolve_dist_key(District)) %>%
+    group_by(Province, dist_key, Year, Week) %>%
+    summarise(
+      Reported  = if (all(is.na(Reported)))  NA_real_ else sum(Reported,  na.rm = TRUE),
+      Projected = if (all(is.na(Projected))) NA_real_ else sum(Projected, na.rm = TRUE),
+      IsNR      = is.na(Reported) && all(IsNR),
+      .groups = "drop"
+    )
+}
 
+# ---- Helper: one row per map polygon with its CUSUM stats at a given week -
+# Used by the District-level data tab's map. `asof` is a list(year, week) as
+# returned by parse_asof(). Returns Province, dist_key, z (NA unless status is
+# "ok"), status, Reported, Projected at that week -- compute_cusum_stats_at()
+# is defined further below in this file, which is fine since this function
+# body isn't evaluated until it's actually called at render time.
+get_district_map_data <- function(disease, asof, value_col = "Reported") {
+  district_series <- get_district_disease_series(disease)
+  if (nrow(district_series) == 0) {
+    return(data.frame(Province = character(), dist_key = character(), z = numeric(),
+                       status = character(), Reported = numeric(), Projected = numeric(),
+                       stringsAsFactors = FALSE))
+  }
+  poly_series <- get_district_polygon_series(district_series)
+  keys <- poly_series %>% distinct(Province, dist_key)
+
+  rows <- lapply(seq_len(nrow(keys)), function(i) {
+    p  <- keys$Province[i]
+    dk <- keys$dist_key[i]
+    s  <- poly_series %>% filter(Province == p, dist_key == dk) %>% arrange(Year, Week)
+    stats <- compute_cusum_stats_at(s, asof$year, asof$week, value_col = value_col)
+    cur <- s[s$Year == asof$year & s$Week == asof$week, ]
+    data.frame(
+      Province = p, dist_key = dk,
+      z = if (stats$status == "ok") stats$z else NA_real_,
+      status = stats$status,
+      Reported  = if (nrow(cur) > 0) cur$Reported[1]  else NA_real_,
+      Projected = if (nrow(cur) > 0) cur$Projected[1] else NA_real_,
+      stringsAsFactors = FALSE
+    )
+  })
+  bind_rows(rows)
+}
 
 # ---- Helper: CUSUM/C2-style aberration stats at a specific (year, week) --
 # `series` must be a single disease/location series (as produced by
@@ -639,6 +756,40 @@ SD_LEGEND_LABELS <- c(
   "More than 4 SD above baseline"
 )
 
+# ---- Continuous version of the above, for the District-level data map ----
+# The weekly table snaps a week's SD into one of the 7 discrete bins above;
+# the district map instead needs a smooth function of z so a district's fill
+# colour reads as a genuine gradient rather than banding. Control points sit
+# at the SAME breakpoints (+-2/3/4 SD) using the SAME colours as SD_BG_PAL,
+# with a flat white plateau between -2 and +2 SD (matching the table's wide
+# neutral band) and the colour clamped beyond +-5 SD.
+sd_continuous_colour <- local({
+  ctrl_x   <- c(-5, -4, -3, -2, 2, 3, 4, 5)
+  ctrl_col <- c(SD_BG_PAL[1], SD_BG_PAL[2], SD_BG_PAL[3], SD_BG_PAL[4],
+                SD_BG_PAL[4], SD_BG_PAL[5], SD_BG_PAL[6], SD_BG_PAL[7])
+  ctrl_rgb <- grDevices::col2rgb(ctrl_col)
+  function(z) {
+    out <- rep(NA_character_, length(z))
+    ok  <- !is.na(z)
+    if (any(ok)) {
+      zc <- pmin(pmax(z[ok], min(ctrl_x)), max(ctrl_x))
+      r <- approx(ctrl_x, ctrl_rgb["red", ],   xout = zc)$y
+      g <- approx(ctrl_x, ctrl_rgb["green", ], xout = zc)$y
+      b <- approx(ctrl_x, ctrl_rgb["blue", ],  xout = zc)$y
+      out[ok] <- grDevices::rgb(r, g, b, maxColorValue = 255)
+    }
+    out
+  }
+})
+
+# Fill colours for the two "no usable colour" cases on the district map --
+# deliberately different shades so a viewer can tell them apart at a glance:
+#   - a whole province with NO subnational reporting at all (grey)
+#   - one district within a COVERED province that just has no usable value
+#     for the current disease/week/case-type selection (pale neutral)
+DISTRICT_PROVINCE_NOT_COVERED_COLOUR <- "#B7BCC2"
+DISTRICT_NO_DATA_COLOUR              <- "#E8ECEF"
+
 # ---- Fixed year -> colour map ----------------------------------------------
 # Assigned once from every year present in the data (most recent = WHO Navy,
 # then green, pale blue, orange, ...), so a year's colour never shifts
@@ -679,6 +830,29 @@ load_pak_regions <- function() {
 }
 
 pak_regions_sf <- load_pak_regions()
+
+# ---- Helper: district-map boundary files (adm1 outline + adm2 fill) -------
+load_pak_boundary_file <- function(path) {
+  tryCatch({
+    if (!file.exists(path)) stop("boundary file not found at ", path)
+    sf_obj <- sf::st_read(path, quiet = TRUE)
+    sf::st_make_valid(sf_obj)
+  }, error = function(e) {
+    message("Could not load boundaries from ", path, ": ", conditionMessage(e))
+    NULL
+  })
+}
+
+pak_district_admin1_sf <- load_pak_boundary_file(DISTRICT_ADMIN1_GEOJSON)
+pak_district_admin2_sf <- load_pak_boundary_file(DISTRICT_ADMIN2_GEOJSON)
+
+if (!is.null(pak_district_admin2_sf)) {
+  pak_district_admin2_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin2_sf$adm1_name])
+  pak_district_admin2_sf$dist_key      <- normalize_dist_name(pak_district_admin2_sf$adm2_name)
+}
+if (!is.null(pak_district_admin1_sf)) {
+  pak_district_admin1_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin1_sf$adm1_name])
+}
 
 # =================================================================
 # UI
@@ -978,60 +1152,123 @@ ui <- tagList(
     tabPanel(
       "District-level data",
       div(
-        style = "padding-top: 16px;",
+        style = "padding: 14px 24px;",
         div(
           class = "info-card",
-          style = "border-left: 6px solid #F4A81D; background-color: #FEF7E8; margin: 0 24px 14px 24px; padding: 10px 16px;",
+          style = "border-left: 6px solid #F4A81D; background-color: #FEF7E8; margin: 0 0 14px 0; padding: 10px 16px;",
           icon("triangle-exclamation", style = "color:#B0121A;"),
           strong(" Work in progress: "),
           "District-level data extraction is still being refined and may contain gaps or errors. Cross-check figures ",
           "against the source IDSR bulletins (see the ", strong("References"), " tab) before relying on them."
         ),
-      sidebarLayout(
-        sidebarPanel(
-          width = 3,
-          selectInput("disease_district_tbl", "Disease", choices = district_disease_choices,
-                      selected = district_disease_choices[1]),
-          selectInput("asof_week_district_tbl", "As of week", choices = WEEK_CHOICES, selected = LATEST_WEEK_CHOICE),
-          numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
-          radioButtons(
-            "case_type_district_tbl", "Case counts to display",
-            choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-            selected = "reported"
+
+        # ---- Top banner: Disease / As of week / Case counts to display ----
+        div(
+          style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
+          div(style = "flex: 1 1 0;",
+              selectInput("disease_district_tbl", "Disease", choices = district_disease_choices,
+                          selected = district_disease_choices[1], width = "100%")),
+          div(style = "flex: 1 1 0;",
+              selectInput("asof_week_district_tbl", "As of week", choices = WEEK_CHOICES,
+                          selected = LATEST_WEEK_CHOICE, width = "100%")),
+          div(style = "flex: 1 1 0;",
+              radioButtons("case_type_district_tbl", "Case counts to display",
+                           choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                           selected = "reported", inline = TRUE))
+        ),
+
+        # ---- Geographic coverage note (computed once from the data at
+        # start-up -- not session-specific, so this is plain UI markup
+        # rather than a renderUI/uiOutput) --------------------------------
+        div(
+          class = "info-disclosure",
+          icon("circle-info"), strong(" Geographic coverage: "),
+          sprintf(
+            "district-level data is currently only reported for %s. No district-level breakdown is available for %s -- these provinces are shown in grey on the map below, and don't appear in the table.",
+            paste(provinces_with_district_data, collapse = ", "),
+            if (length(provinces_without_district_data) > 0) paste(provinces_without_district_data, collapse = ", ") else "none"
           ),
           tags$p(
-            style = "font-size: 12px; color: #555;",
+            style = "font-size: 12.5px; color: #555; margin: 6px 0 0 0;",
             strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
             "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
             "a projected total case estimate of 40."
-          ),
-          tags$hr(),
-          div(
-            style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
-            "Cell shading"
-          ),
-          div(
-            lapply(rev(seq_along(SD_BG_PAL)), function(i) {
-              div(class = "sd-legend-row",
-                  span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
-                  SD_LEGEND_LABELS[i])
-            })
-          ),
-          tags$p(
-            style = "font-size: 12px; color: #555; margin-top: 8px;",
-            "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
           )
         ),
-        mainPanel(
-          width = 9,
-          p(
-            style = "font-size: 13px; color:#555;",
-            icon("circle-info"), " Click the arrow on a province row to expand district-level case counts within it. ",
-            "District-level data is currently only available for the provinces shown below."
+
+        # ---- Epi curve (left) + map (right) --------------------------------
+        fluidRow(
+          column(
+            width = 6,
+            div(
+              class = "viz-panel",
+              h4("District epidemic curve"),
+              uiOutput("district_trend_subtitle"),
+              div(
+                style = "display:flex; gap:16px; margin-bottom:10px;",
+                div(style = "flex:1;",
+                    selectInput("district_curve_province", "Province",
+                                choices = provinces_with_district_data,
+                                selected = provinces_with_district_data[1], width = "100%")),
+                div(style = "flex:1;", uiOutput("district_curve_district_ui"))
+              ),
+              plotlyOutput("district_trend_plot", height = "360px"),
+              div(
+                class = "viz-panel-controls",
+                style = "min-height: 60px;",
+                uiOutput("district_year_selector")
+              )
+            )
           ),
-          DTOutput("district_table")
+          column(
+            width = 6,
+            div(
+              class = "viz-panel",
+              h4("District map"),
+              uiOutput("district_map_subtitle"),
+              leafletOutput("district_map", height = "360px"),
+              div(
+                class = "viz-panel-controls",
+                style = "min-height: 60px; font-size: 12px; color: #555;",
+                "Hover a district for its case counts and deviation from baseline. Provinces with no district-level ",
+                "reporting are shown in grey; scroll or use the +/- controls to zoom, and drag to pan."
+              )
+            )
+          )
+        ),
+
+        # ---- Table, with "recent weeks" + cell shading to its left --------
+        fluidRow(
+          style = "margin-top: 16px;",
+          column(
+            width = 3,
+            numericInput("n_weeks_district", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+            tags$hr(),
+            div(
+              style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;",
+              "Cell shading"
+            ),
+            div(
+              lapply(rev(seq_along(SD_BG_PAL)), function(i) {
+                div(class = "sd-legend-row",
+                    span(class = "sd-legend-swatch", style = paste0("background-color:", SD_BG_PAL[i], ";")),
+                    SD_LEGEND_LABELS[i])
+              })
+            ),
+            tags$p(
+              style = "font-size: 12px; color: #555; margin-top: 8px;",
+              "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+            )
+          ),
+          column(
+            width = 9,
+            p(
+              style = "font-size: 13px; color:#555;",
+              icon("circle-info"), " Click the arrow on a province row to expand district-level case counts within it."
+            ),
+            DTOutput("district_table")
+          )
         )
-      )
       )
     ),
 
@@ -1728,6 +1965,202 @@ server <- function(input, output, session) {
       color = styleInterval(SD_BREAKS, SD_FONT_PAL)
     )
     dt
+  })
+
+  # ---------------- District-level data tab: epi curve --------------------
+  # Cascading Province -> District dropdowns. District choices depend on
+  # which province is selected, so this is a renderUI (rather than a fixed
+  # selectInput in the UI above) populated from whichever districts actually
+  # have data for that province; an "All districts" option shows the
+  # province's own total (the same total used for its row in the table).
+  output$district_curve_district_ui <- renderUI({
+    req(input$district_curve_province)
+    dists <- sort(unique(raw_district_data$District[raw_district_data$Province == input$district_curve_province]))
+    choices <- c("All districts (province total)" = "__ALL__", setNames(dists, dists))
+    selectInput("district_curve_district", "District", choices = choices, selected = "__ALL__", width = "100%")
+  })
+
+  # Only 2025 and 2026 are offered here (the Data visualisation tab's own
+  # "Years to show" selector still offers every year in the data) -- fixed
+  # rather than derived from the data, per the brief.
+  output$district_year_selector <- renderUI({
+    checkboxGroupInput("district_years_selected", "Years to show",
+                        choices = c(2026, 2025), selected = c(2026, 2025), inline = TRUE)
+  })
+
+  district_curve_data_all <- reactive({
+    req(input$disease_district_tbl, input$district_curve_province)
+    ds <- get_district_disease_series(input$disease_district_tbl) %>%
+      filter(Province == input$district_curve_province)
+    sel_dist <- input$district_curve_district %||% "__ALL__"
+    if (identical(sel_dist, "__ALL__")) {
+      get_province_disease_series(ds) %>%
+        filter(Province == input$district_curve_province) %>%
+        mutate(Compliance = NA_real_) %>%
+        select(Year, Week, Reported, Projected, Compliance)
+    } else {
+      ds %>%
+        filter(District == sel_dist) %>%
+        select(Year, Week, Reported, Projected, Compliance)
+    }
+  })
+
+  output$district_trend_subtitle <- renderUI({
+    req(input$disease_district_tbl, input$district_curve_province)
+    sel_dist <- input$district_curve_district %||% "__ALL__"
+    loc_label <- if (identical(sel_dist, "__ALL__")) {
+      paste0(input$district_curve_province, " (province total)")
+    } else {
+      paste0(sel_dist, ", ", input$district_curve_province)
+    }
+    div(class = "viz-subtitle", paste0("Disease: ", input$disease_district_tbl, ", Location: ", loc_label))
+  })
+
+  output$district_trend_plot <- renderPlotly({
+    req(input$asof_week_district_tbl)
+    d <- district_curve_data_all()
+    validate(need(nrow(d) > 0, "No data available for this selection."))
+
+    years_selected <- if (is.null(input$district_years_selected)) c(2025, 2026) else as.integer(input$district_years_selected)
+    d <- d %>% filter(Year %in% years_selected)
+    validate(need(nrow(d) > 0, "No years selected."))
+
+    asof <- parse_asof(input$asof_week_district_tbl)
+    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
+    validate(need(nrow(d) > 0, "No data available up to the selected week."))
+
+    value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
+    label_txt <- if (value_col == "Projected") "Projected total cases" else "Reported cases"
+    cols <- YEAR_COLOR_MAP[as.character(sort(unique(d$Year)))]
+
+    d <- d %>%
+      arrange(Year, Week) %>%
+      group_by(Year) %>%
+      mutate(Cases = .data[[value_col]],
+             YTD = cumsum(ifelse(is.na(Cases), 0, Cases))) %>%
+      ungroup()
+
+    d <- d %>% mutate(
+      tooltip = paste0("Year: ", Year, "<br>Week: ", Week,
+                        "<br>", label_txt, ": ", comma(round(Cases)),
+                        "<br>YTD ", tolower(label_txt), ": ", comma(round(YTD)),
+                        ifelse(is.na(Compliance), "", paste0("<br>Reporting compliance: ", round(Compliance), "%")))
+    )
+    d <- d %>% filter(!is.na(Cases))
+    validate(need(nrow(d) > 0, "No data available for this combination of filters."))
+
+    # Insert explicit NA rows for any missing week (within each year's own
+    # range) so the line breaks across a gap rather than joining it up --
+    # same convention as the Data visualisation tab's epi curve.
+    d <- d %>%
+      group_by(Year) %>%
+      complete(Week = full_seq(Week, 1)) %>%
+      ungroup() %>%
+      mutate(Year_f = factor(Year, levels = sort(unique(Year))))
+
+    week_breaks <- seq(floor(min(d$Week, na.rm = TRUE)), ceiling(max(d$Week, na.rm = TRUE)), by = 1)
+    week_labels <- ifelse(week_breaks %% 5 == 0, as.character(week_breaks), "")
+
+    p <- ggplot(d, aes(x = Week, y = Cases, group = Year_f, color = Year_f, text = tooltip)) +
+      geom_line(linewidth = 1) +
+      geom_point(size = 1.4, na.rm = TRUE) +
+      scale_color_manual(values = cols, name = "Year") +
+      scale_x_continuous(breaks = week_breaks, labels = week_labels) +
+      scale_y_continuous(labels = comma) +
+      labs(x = "Week", y = "Number of cases") +
+      theme_minimal(base_size = 14) +
+      theme(
+        text = element_text(family = "sans"),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line(color = "#E6E7E8"),
+        axis.text.x = element_text(size = 9),
+        axis.ticks.x = element_line(color = "#8A8F94"),
+        axis.ticks.length.x = unit(4, "pt")
+      )
+
+    ggplotly(p, tooltip = "text") %>%
+      layout(
+        legend = list(orientation = "h", y = -0.3, title = list(text = "")),
+        margin = list(b = 70),
+        hoverlabel = list(bgcolor = "#FFFFFF", font = list(color = who_navy, family = "Source Sans Pro")),
+        xaxis = list(
+          tickmode = "array", tickvals = week_breaks, ticktext = week_labels,
+          ticks = "outside", ticklen = 4, tickwidth = 1, tickcolor = "#8A8F94",
+          showgrid = FALSE
+        )
+      ) %>%
+      config(displaylogo = FALSE)
+  })
+
+  # ---------------- District-level data tab: map ---------------------------
+  district_map_data <- reactive({
+    req(input$disease_district_tbl, input$asof_week_district_tbl, input$case_type_district_tbl)
+    asof <- parse_asof(input$asof_week_district_tbl)
+    value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
+    get_district_map_data(input$disease_district_tbl, asof, value_col)
+  })
+
+  output$district_map_subtitle <- renderUI({
+    req(input$disease_district_tbl, input$asof_week_district_tbl)
+    asof <- parse_asof(input$asof_week_district_tbl)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_district_tbl, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  output$district_map <- renderLeaflet({
+    validate(need(!is.null(pak_district_admin2_sf), "Map unavailable: district boundary file could not be read."))
+
+    md <- district_map_data()
+    sf_map <- pak_district_admin2_sf %>%
+      left_join(md, by = c("province_code" = "Province", "dist_key" = "dist_key"))
+
+    covered      <- sf_map$province_code %in% provinces_with_district_data
+    has_match    <- covered & !is.na(sf_map$status)
+    matched_ok   <- has_match & sf_map$status == "ok"
+
+    fill_col <- rep(DISTRICT_PROVINCE_NOT_COVERED_COLOUR, nrow(sf_map))
+    fill_col[covered] <- DISTRICT_NO_DATA_COLOUR
+    fill_col[matched_ok] <- sd_continuous_colour(sf_map$z[matched_ok])
+
+    status_txt <- ifelse(
+      !covered, "No district-level data currently reported for this province.",
+      ifelse(!has_match, "No matching district-level data for this district.",
+      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "no_report", "No report this week",
+      ifelse(sf_map$status == "absent", "Not in this week's bulletin",
+             "Insufficient baseline data")))))
+
+    cases_txt <- ifelse(
+      has_match & !is.na(sf_map$Reported),
+      paste0(
+        "<br>Reported cases: ", comma(round(sf_map$Reported)),
+        ifelse(is.na(sf_map$Projected), "",
+               paste0("<br>Projected total cases: ", comma(round(sf_map$Projected))))
+      ),
+      ""
+    )
+
+    tooltip <- paste0(
+      "<strong>", sf_map$adm2_name, "</strong> (", sf_map$adm1_name, ")",
+      cases_txt, "<br>", status_txt
+    )
+
+    m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        fillColor = fill_col, fillOpacity = 0.85,
+        color = "#6B7280", weight = 0.5, opacity = 0.8,
+        label = lapply(tooltip, htmltools::HTML),
+        labelOptions = labelOptions(direction = "auto", textsize = "12px"),
+        highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
+      ) %>%
+      setView(lng = 69.5, lat = 30.3, zoom = 5)
+
+    if (!is.null(pak_district_admin1_sf)) {
+      m <- m %>% addPolylines(data = pak_district_admin1_sf, color = who_navy, weight = 1.3, opacity = 0.7)
+    }
+    m
   })
 
   # ---------------- Alerts tab (single list, grouped by disease) ---------

@@ -17,7 +17,12 @@ DataTriangulationEMRO/
 └── Data/
     ├── PAK_IDSR_Data.csv
     ├── PAK_IDSR_Compliance.csv
-    └── pakistan_admin1.geojson  <- from this delivery (map boundaries)
+    ├── PAK_IDSR_Data_District.csv
+    ├── PAK_IDSR_Compliance_District.csv
+    ├── pakistan_admin1.geojson       <- Data visualisation tab's map boundaries
+    └── pak_admin_boundaries/
+        ├── pak_admin1.geojson        <- District-level data tab's map (province outline)
+        └── pak_admin2.geojson        <- District-level data tab's map (district fill)
 ```
 
 **Note:** this is a change from your original app, where `app.R` lived in
@@ -36,7 +41,7 @@ per WHO brand guidance this isn't something I can fabricate or bundle.
 ```r
 install.packages(c(
   "shiny", "dplyr", "tidyr", "readr", "ggplot2", "plotly", "DT",
-  "scales", "base64enc", "sf", "ggrepel"
+  "scales", "base64enc", "sf", "ggrepel", "leaflet"
 ))
 ```
 
@@ -46,11 +51,26 @@ Windows, the easiest route is installing from CRAN binaries
 (`install.packages("sf")` pulls prebuilt binaries on Windows — no
 separate GDAL install needed).
 
-**The map no longer uses leaflet.** After two rounds of it failing in
-your environment (first an internet-dependent download, then a blank
-render even with the bundled file), I've replaced it with a plain static
-`ggplot2` + `sf` plot (`geom_sf`) — the same tooling already used
-everywhere else in this app, rendered through the ordinary Shiny
+**The Data visualisation tab's province map still doesn't use leaflet.**
+After two earlier rounds of it failing in your environment (first an
+internet-dependent download, then a blank render even with the bundled
+file), that map remains a plain static `ggplot2` + `sf` plot (`geom_sf`) —
+the same tooling already used everywhere else in this app, rendered
+through the ordinary Shiny `renderPlot`/`plotOutput` pair rather than a JS
+widget.
+
+**The District-level data tab's new map DOES use leaflet**, since a
+zoomable/pannable map with a real basemap was specifically requested
+there. It reads the boundary files locally (no internet needed to load
+the map itself), and only the base-map tile images are fetched from the
+public internet by each viewer's own browser at view time (CartoDB
+Positron, via `leaflet::providers$CartoDB.Positron`) — this has no
+dependency on the R server having outbound internet access, so it should
+not hit the earlier failure modes. One cosmetic, harmless console warning
+("GLOBAL is not defined") comes from the bundled `proj4`/`Proj4Leaflet`
+JS libraries that ship with the `leaflet` R package (a known quirk of
+that bundle, unrelated to anything in this app); it doesn't affect the
+map's functionality.
 `renderPlot`/`plotOutput` pair rather than a JS widget. It reads
 `Data/pakistan_admin1.geojson` directly, colours each region by % change,
 labels every region with its name and % change, and outlines whichever
@@ -75,6 +95,42 @@ their docs: https://docs.posit.co/connect-cloud/how-to/r/renv.html).
    versions automatically.
 
 ## 4. Design decisions / assumptions made while building this
+
+- **District-level data tab, overhauled**: Disease / As of week / Case
+  counts to display moved into one top banner (matching the Data
+  visualisation tab). A geographic-coverage note under the banner states
+  which provinces do/don't have district-level reporting (computed from
+  the data, not hardcoded, so it stays correct as more provinces get
+  district-level extraction). Above the table there's now an epi curve
+  (left) and a map (right):
+  - The **epi curve** mirrors the Data visualisation tab's chart, but only
+    offers 2025/2026 (per your request, rather than every year in the
+    data), has its own Province → District cascading dropdowns (an "All
+    districts" option shows the province's own total), and has no
+    reported/projected toggle of its own -- it follows the top banner's
+    "Case counts to display" instead.
+  - The **map** is a genuinely interactive `leaflet` map (zoomable,
+    scrollable, real CartoDB Positron basemap showing neighbouring
+    countries) -- unlike the Data visualisation tab's map (still a static
+    `ggplot2`/`sf` render, see below), a scrollable/zoomable map with a
+    real basemap was specifically requested here. It uses
+    `Data/pak_admin_boundaries/pak_admin2.geojson` for district polygons
+    (hover for province/district/case counts/SD), with a thin province
+    outline from `pak_admin1.geojson` on top. Provinces with no
+    district-level reporting at all are filled grey; a district within a
+    covered province that simply has no usable value for the current
+    selection gets a paler neutral fill (distinguishable from the grey).
+    Fill colour is a **continuous** version of the weekly table's 7-bin SD
+    colour scale -- same colours at the same breakpoints, smoothly
+    interpolated, rather than snapping between bins.
+  - District names in the CSV don't always spell/order identically to the
+    boundary file (independent sources) -- these are matched via a
+    normalisation function plus a small alias table for the handful of
+    known exceptions (see `resolve_dist_key()`'s comment in `app.R`). A
+    district that still doesn't match anything simply won't be found on
+    the map; it remains fully present in the table regardless.
+  - "Number of recent weeks to show" and the cell-shading legend moved to
+    a narrow column to the left of the table (previously in a sidebar).
 
 - **Data visualisation layout, polished**: Location/Disease now sit side
   by side in a centred shaded box above the chart and map. Both the chart
