@@ -936,6 +936,12 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
     ),
     div(
       style = "padding:10px 14px; background-color:#FFFFFF; border-top:1px solid #EEF1F4;",
+      tags$p(
+        style = "font-size:12px; color:#555; margin:0 0 8px 0;",
+        "Each week's cell is coloured using the CUSUM aberration method based on the 9-week baseline ",
+        strong("leading up to"),
+        " that week (with the two closest weeks dropped)."
+      ),
       sd_gradient_legend_ui(show_no_data = FALSE)
     )
   )
@@ -1408,10 +1414,10 @@ ui <- tagList(
                 class = "viz-panel-controls",
                 style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
                 sd_gradient_legend_ui(show_no_data = TRUE),
-                tags$p(
-                  style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
-                  "Same data and colour scale as the map above -- provinces are labelled directly on the map ",
-                  "rather than on hover. Uses the same district-level admin boundary source (see the ", strong("References"), " tab)."
+                radioButtons(
+                  "case_type_map_leaflet", "Case counts to colour the map by",
+                  choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                  selected = "reported", inline = TRUE
                 )
               )
             )
@@ -1847,14 +1853,16 @@ server <- function(input, output, session) {
   })
 
   # ---------------- Map ----------------
-  region_change_data <- reactive({
-    req(input$disease, input$asof_week_viz)
-    asof <- parse_asof(input$asof_week_viz)
+  # Shared, non-reactive computation behind both region_change_data() (static
+  # ggplot map, driven by the "case_type_map" control) and
+  # region_change_data_leaflet() (interactive leaflet map, driven by its own
+  # "case_type_map_leaflet" control below) -- the two maps show the same kind
+  # of data but can now be coloured by reported/projected cases independently
+  # of one another, since they live in separate panels.
+  compute_region_change_data <- function(dis, asof, metric) {
     locs <- location_choices[location_choices != "National"]
-    metric <- if (identical(input$case_type_map, "projected")) "Projected" else "Reported"
-
     region_list <- lapply(locs, function(loc) {
-      s <- get_trend_data(input$disease, loc)
+      s <- get_trend_data(dis, loc)
       if (nrow(s) == 0) return(data.frame(region = loc, z = NA_real_, status = "absent"))
       stats <- compute_cusum_stats_at(s, asof$year, asof$week, value_col = metric)
       data.frame(
@@ -1864,6 +1872,20 @@ server <- function(input, output, session) {
       )
     })
     bind_rows(region_list)
+  }
+
+  region_change_data <- reactive({
+    req(input$disease, input$asof_week_viz)
+    asof <- parse_asof(input$asof_week_viz)
+    metric <- if (identical(input$case_type_map, "projected")) "Projected" else "Reported"
+    compute_region_change_data(input$disease, asof, metric)
+  })
+
+  region_change_data_leaflet <- reactive({
+    req(input$disease, input$asof_week_viz)
+    asof <- parse_asof(input$asof_week_viz)
+    metric <- if (identical(input$case_type_map_leaflet, "projected")) "Projected" else "Reported"
+    compute_region_change_data(input$disease, asof, metric)
   })
 
   output$map_subtitle <- renderUI({
@@ -1941,7 +1963,7 @@ server <- function(input, output, session) {
   output$region_map_leaflet <- renderLeaflet({
     validate(need(!is.null(pak_district_admin1_sf), "Map unavailable: district boundary file could not be read."))
 
-    rc <- region_change_data()
+    rc <- region_change_data_leaflet()
     sf_map <- pak_district_admin1_sf %>% left_join(rc, by = c("province_code" = "region"))
 
     matched_ok <- !is.na(sf_map$status) & sf_map$status == "ok"
