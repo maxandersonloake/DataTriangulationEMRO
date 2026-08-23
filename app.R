@@ -2637,11 +2637,11 @@ server <- function(input, output, session) {
       style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
       "In some cases, the districts on the bulletin do not align with the mapped administrative boundaries. ",
       "For this map, the following adjustments have been made: ",
-      paste0(paste(items, collapse = ", "), "."),
-      tags$br(), tags$br(),
-      "For a merged district, the map's projected total and compliance-adjusted figures are calculated by ",
-      "summing the underlying reported case counts and projected totals of the districts combined into it, ",
-      "rather than by averaging their individual compliance percentages."
+      paste0(paste(items, collapse = ", "), ". "),
+      "Where counts have been combined between reported areas, the map's projected total and ",
+      "compliance-adjusted figures are calculated by summing the underlying reported case counts and ",
+      "projected totals of the districts combined into it, rather than by averaging their individual ",
+      "compliance percentages."
     )
   })
 
