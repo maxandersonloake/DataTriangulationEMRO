@@ -894,9 +894,9 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
   weeks_cal <- weeks_up_to(asof, n_weeks)
 
   header_cells <- c(
-    list(tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4; text-align:left;", "Region")),
+    list(tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; background-color:#FFFFFF; border-bottom:1px solid #DDE1E4; text-align:left;", "Region")),
     lapply(weeks_cal$week_lab, function(wl) {
-      tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4;", wl)
+      tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; background-color:#FFFFFF; border-bottom:1px solid #DDE1E4;", wl)
     })
   )
 
@@ -906,7 +906,7 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
     goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
 
     label_cell <- tags$td(
-      style = "padding:4px 8px; font-size:12.5px; white-space:nowrap; vertical-align:top; border-bottom:1px solid #F0F2F4;",
+      style = "padding:4px 8px; font-size:12.5px; white-space:nowrap; vertical-align:top; background-color:#FFFFFF; border-bottom:1px solid #F0F2F4;",
       div(strong(loc)),
       tags$a(
         href = "#",
@@ -921,10 +921,23 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
     tags$tr(c(list(label_cell), value_cells))
   })
 
-  tags$table(
-    style = "border-collapse:collapse; margin:6px 0;",
-    tags$thead(tags$tr(header_cells)),
-    tags$tbody(body_rows)
+  # Table and legend wrapped together in one white bordered card, so the
+  # colour-scale key reads as directly attached to the table it explains
+  # rather than a separate floating element.
+  tags$div(
+    style = "background-color:#FFFFFF; border:1px solid #E5E8EB; border-radius:5px; overflow:hidden;",
+    div(
+      style = "overflow-x:auto;",
+      tags$table(
+        style = "border-collapse:collapse; width:100%; background-color:#FFFFFF; margin:0;",
+        tags$thead(tags$tr(header_cells)),
+        tags$tbody(body_rows)
+      )
+    ),
+    div(
+      style = "padding:10px 14px; background-color:#FFFFFF; border-top:1px solid #EEF1F4;",
+      sd_gradient_legend_ui(show_no_data = FALSE)
+    )
   )
 }
 
@@ -1075,6 +1088,72 @@ if (!is.null(pak_district_admin2_sf)) {
 }
 if (!is.null(pak_district_admin1_sf)) {
   pak_district_admin1_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin1_sf$adm1_name])
+}
+
+# ---- Helper: standard Web Mercator lng/lat -> global pixel coordinates --
+# at a given zoom (the same slippy-map tile projection Leaflet itself
+# uses internally). Used by declutter_label_offsets() below to reason
+# about label spacing in genuine on-screen pixels.
+lonlat_to_pixel <- function(lng, lat, zoom) {
+  siny <- sin(lat * pi / 180)
+  siny <- pmin(pmax(siny, -0.9999), 0.9999)
+  x <- 256 * (0.5 + lng / 360) * 2^zoom
+  y <- 256 * (0.5 - log((1 + siny) / (1 - siny)) / (4 * pi)) * 2^zoom
+  cbind(x, y)
+}
+
+# ---- Helper: crude ggrepel-style label decluttering for leaflet markers -
+# Leaflet has no built-in label-collision avoidance (and ggrepel itself
+# only works with static ggplot2 output, not an interactive htmlwidget),
+# so this is a small hand-rolled stand-in for the province leaflet map's
+# permanent on-map labels: project each label's lng/lat anchor to screen
+# pixels at a reference zoom, estimate each label's rough on-screen box
+# from its text length, and run a few iterations of simple pairwise
+# repulsion -- any two overlapping boxes get pushed apart along whichever
+# axis has the smaller overlap (the standard cheap AABB-declutter
+# heuristic), same spirit as ggrepel's box-repulsion but computed by hand.
+# Returns one (dx, dy) PIXEL offset per point, meant for
+# labelOptions(offset = ...) -- a fixed screen-space shift from the
+# marker's true anchor, so it stays put across pan/zoom even though it
+# was only computed for one reference zoom.
+declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, iterations = 60) {
+  px <- lonlat_to_pixel(lng, lat, zoom)
+  n  <- nrow(px)
+  # Rough box half-extents in pixels, from text length -- a bold ~12px
+  # name line and a slightly smaller status line, both centred.
+  half_w <- pmax(nchar(name_lines), nchar(sub_lines)) * 3.4 + 6
+  half_h <- rep(16, n)
+
+  pos <- px
+  if (n > 1) {
+    for (iter in seq_len(iterations)) {
+      moved <- FALSE
+      for (i in seq_len(n - 1)) {
+        for (j in (i + 1):n) {
+          dx <- pos[j, 1] - pos[i, 1]
+          dy <- pos[j, 2] - pos[i, 2]
+          overlap_x <- (half_w[i] + half_w[j]) - abs(dx)
+          overlap_y <- (half_h[i] + half_h[j]) - abs(dy)
+          if (overlap_x > 0 && overlap_y > 0) {
+            moved <- TRUE
+            if (overlap_x < overlap_y) {
+              shift <- overlap_x / 2 + 0.5
+              s <- if (dx == 0) 1 else sign(dx)
+              pos[i, 1] <- pos[i, 1] - s * shift
+              pos[j, 1] <- pos[j, 1] + s * shift
+            } else {
+              shift <- overlap_y / 2 + 0.5
+              s <- if (dy == 0) 1 else sign(dy)
+              pos[i, 2] <- pos[i, 2] - s * shift
+              pos[j, 2] <- pos[j, 2] + s * shift
+            }
+          }
+        }
+      }
+      if (!moved) break
+    }
+  }
+  pos - px
 }
 
 # =================================================================
@@ -1318,11 +1397,11 @@ ui <- tagList(
         ),
         fluidRow(
           column(
-            width = 12,
+            width = 6,
             div(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
-              h4("Deviation from expected baseline (SD), by region -- interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
               uiOutput("map_subtitle"),
               leafletOutput("region_map_leaflet", height = "500px"),
               div(
@@ -1887,25 +1966,42 @@ server <- function(input, output, session) {
     label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
     coords <- sf::st_coordinates(label_pts)
 
-    leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+    # ggrepel only works on static ggplot2 output, not an interactive
+    # leaflet htmlwidget -- declutter_label_offsets() (defined near the
+    # top of this file) is a small hand-rolled stand-in that nudges any
+    # overlapping province labels apart in pixel space, applied per
+    # marker below via labelOptions(offset = ...).
+    offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$adm1_name, status_line, zoom = 5)
+
+    m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       addProviderTiles(providers$CartoDB.Positron) %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
-      ) %>%
-      addLabelOnlyMarkers(
-        lng = coords[, 1], lat = coords[, 2],
-        label = label_html,
+      )
+
+    # One addLabelOnlyMarkers() call per province rather than one
+    # vectorised call for all of them, since each needs its OWN
+    # declutter offset -- labelOptions() is a single shared options
+    # object per call, so a varying per-marker offset needs a separate
+    # call per marker (only 7 provinces, so this is cheap).
+    for (i in seq_len(nrow(sf_map))) {
+      m <- m %>% addLabelOnlyMarkers(
+        lng = coords[i, 1], lat = coords[i, 2],
+        label = label_html[[i]],
         labelOptions = labelOptions(
           noHide = TRUE, direction = "center", textOnly = TRUE,
+          offset = c(offsets[i, 1], offsets[i, 2]),
           style = list(
             "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
             "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
           )
         )
-      ) %>%
-      setView(lng = 69.5, lat = 30.3, zoom = 5)
+      )
+    }
+
+    m %>% setView(lng = 69.5, lat = 30.3, zoom = 5)
   })
 
   # ---------------- Regional contribution stacked bar chart --------------
@@ -2563,7 +2659,7 @@ server <- function(input, output, session) {
           ),
           tags$div(
             id = row_id,
-            style = "display:none; margin:8px 0 4px 20px; overflow-x:auto;",
+            style = "display:none; margin:8px 0 4px 20px;",
             build_alert_region_table(dis, as.character(d$Location), asof, value_col, n_weeks = 12)
           )
         )
