@@ -19,7 +19,12 @@
 #   Data/PAK_IDSR_Compliance_District.csv
 #   Data/pakistan_admin1.geojson             <- dissolved province boundaries (Data visualisation tab's map)
 #   Data/pak_admin_boundaries/pak_admin1.geojson  <- province boundaries (District-level data tab's map outline)
-#   Data/pak_admin_boundaries/pak_admin2.geojson  <- district boundaries (District-level data tab's map fill)
+#   Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson  <- district boundaries (District-level
+#     data tab's map fill). This is pak_admin2.geojson with its single "Jaffarabad" polygon split into two,
+#     built from the admin3 (tehsil) boundaries in Data/pak_admin_boundaries/pak_admin3.geojson: "Usta
+#     Muhammad" (union of the Gandakha + Usta Mohammad tehsils) and "Jaffarabad" (the remaining Jhat Pat
+#     tehsil). This lets IDSR district data reported separately for Jaffarabad and Usta Muhammad each match
+#     their own polygon, instead of both only ever being able to match the old single combined polygon.
 # ================================================================
 
 library(shiny)
@@ -44,7 +49,11 @@ REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
 # every individual district can be coloured and hovered on the map; adm1 is
 # used only to draw a thin province outline on top for visual clarity.
 DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
-DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2.geojson"
+# pak_admin2_jaffarabad_split.geojson is pak_admin2.geojson with the single "Jaffarabad" polygon replaced by
+# two polygons -- "Usta Muhammad" (Gandakha + Usta Mohammad tehsils) and "Jaffarabad" (the remaining Jhat Pat
+# tehsil) -- built from Data/pak_admin_boundaries/pak_admin3.geojson so that CSV rows for each district match
+# their own polygon. See the file-inventory comment near the top of this file for how it was derived.
+DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -323,7 +332,14 @@ DISTRICT_NAME_ALIASES <- c(
   karachikorangi     = "korangikarachi",
   karachicentral     = "centralkarachi",
   karachisouth       = "southkarachi",
-  karachiwest        = "westkarachi"
+  karachiwest        = "westkarachi",
+  # ---- Map-only concordances (aggregated onto a neighbouring polygon; the
+  # reporting table/elsewhere keeps these as their own separate districts) --
+  # the boundary file has no polygon of its own for either of these, so
+  # their disease counts are folded into the polygon of the district they
+  # sit within/adjoin, purely for the purposes of colouring the map.
+  hub                = "lasbela",             # Hub -> Lasbela
+  karachikeamari     = "southkarachi"         # Karachi Keamari -> South Karachi
 )
 
 resolve_dist_key <- function(x) {
@@ -331,6 +347,18 @@ resolve_dist_key <- function(x) {
   aliased <- unname(DISTRICT_NAME_ALIASES[k])
   ifelse(is.na(aliased), k, aliased)
 }
+
+# ---- Map-only concordances worth narrating on the District map's ----------
+# boundary-adjustment note (see district_map_boundary_note_reactive() in the
+# server below). Kept as its own small, explicit list rather than trying to
+# auto-detect "genuine merge into a different district" vs. "same district,
+# alternate spelling" from every entry in DISTRICT_NAME_ALIASES above (e.g.
+# "Battagram"/"Batagram" is still fundamentally the same district and isn't
+# the kind of adjustment worth calling out to the user here).
+DISTRICT_MAP_CONCORDANCES_TO_NARRATE <- list(
+  list(district = "Hub",              included_in = "Lasbela"),
+  list(district = "Karachi Keamari",  included_in = "South Karachi")
+)
 
 # ---- Province code <-> admin-boundary adm1_name ---------------------------
 PROVINCE_ADM1_NAME_MAP <- c(
@@ -1089,6 +1117,15 @@ pak_district_admin1_sf <- load_pak_boundary_file(DISTRICT_ADMIN1_GEOJSON)
 pak_district_admin2_sf <- load_pak_boundary_file(DISTRICT_ADMIN2_GEOJSON)
 
 if (!is.null(pak_district_admin2_sf)) {
+  # The boundary file's own polygon for this district is labelled with its
+  # FORMER administrative name, "Shaheed Sikandarabad" -- current bulletins
+  # report it as "Surab", so the polygon is relabelled here (map-wide,
+  # wherever adm2_name is displayed) before dist_key is derived from it,
+  # which also makes CSV "Surab" resolve to this polygon directly with no
+  # separate alias needed (see normalize_dist_name()/DISTRICT_NAME_ALIASES
+  # above).
+  pak_district_admin2_sf$adm2_name[pak_district_admin2_sf$adm2_name == "Shaheed Sikandarabad"] <- "Surab"
+
   pak_district_admin2_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin2_sf$adm1_name])
   pak_district_admin2_sf$dist_key      <- normalize_dist_name(pak_district_admin2_sf$adm2_name)
 }
@@ -1568,7 +1605,8 @@ ui <- tagList(
                   "SD shows how many standard deviations a week's case count is from its expected baseline, ",
                   "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). ",
                   "See the ", strong("Home"), " tab for full details."
-                )
+                ),
+                uiOutput("district_map_boundary_note")
               )
             )
           )
@@ -1593,6 +1631,13 @@ ui <- tagList(
               tags$p(
                 style = "font-size: 12px; color: #555; margin-top: 8px;",
                 "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+              ),
+              tags$p(
+                style = "font-size: 12px; color: #555; margin-top: 8px;",
+                strong(style = "color:inherit;", "NR"), " means NR is explicitly listed on the bulletin's data table for that week. ",
+                "A blank cell means the value is either missing from the bulletin's table, or could not be ",
+                "read reliably during extraction (e.g. the district's individual values didn't sum to the ",
+                "table's printed total, or the table was unusually formatted)."
               )
             ),
             column(
@@ -2536,6 +2581,68 @@ server <- function(input, output, session) {
     asof <- parse_asof(input$asof_week_district_tbl)
     div(class = "viz-subtitle",
         paste0("Disease: ", input$disease_district_tbl, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  # ---- Dynamic boundary-adjustment note, below the District map -----------
+  # Lists only the specific adjustments actually relevant to the disease/week
+  # currently on screen -- i.e. only a concordance (see
+  # DISTRICT_MAP_CONCORDANCES_TO_NARRATE above) or an unmatched district that
+  # genuinely has data somewhere in the displayed week or its 9-week CUSUM
+  # baseline, not the full static list of every adjustment that exists
+  # anywhere in the data regardless of whether it's relevant right now.
+  district_map_boundary_note_reactive <- reactive({
+    req(input$disease_district_tbl, input$asof_week_district_tbl)
+    if (is.null(pak_district_admin2_sf)) return(NULL)
+
+    asof      <- parse_asof(input$asof_week_district_tbl)
+    weeks_cal <- weeks_up_to(asof, 9)   # the displayed week + its 9-week CUSUM baseline
+
+    district_series <- get_district_disease_series(input$disease_district_tbl)
+    in_window <- district_series %>% semi_join(weeks_cal, by = c("Year", "Week"))
+    districts_with_data <- sort(unique(in_window$District))
+    if (length(districts_with_data) == 0) return(NULL)
+
+    boundary_keys <- pak_district_admin2_sf$dist_key
+
+    concordance_names <- vapply(DISTRICT_MAP_CONCORDANCES_TO_NARRATE, `[[`, character(1), "district")
+    concordance_items <- vapply(DISTRICT_MAP_CONCORDANCES_TO_NARRATE, function(cc) {
+      if (cc$district %in% districts_with_data) {
+        sprintf("disease counts for %s have been included in the %s District", cc$district, cc$included_in)
+      } else NA_character_
+    }, character(1))
+    concordance_items <- concordance_items[!is.na(concordance_items)]
+
+    # Any OTHER district with data in this window that has no boundary
+    # polygon at all -- excluding the ones already named above via the
+    # explicit concordance list, so the same district is never listed twice
+    # under two different phrasings.
+    other_districts    <- setdiff(districts_with_data, concordance_names)
+    unmatched_districts <- other_districts[!(resolve_dist_key(other_districts) %in% boundary_keys)]
+    unmatched_items <- if (length(unmatched_districts) > 0) {
+      sprintf("no district match found for %s", paste(unmatched_districts, collapse = ", "))
+    } else character(0)
+
+    items <- c(concordance_items, unmatched_items)
+    if (length(items) == 0) return(NULL)
+    # First item capitalised (it starts the sentence); the rest already
+    # lower-case as written above, joined into one flowing sentence.
+    items[1] <- paste0(toupper(substr(items[1], 1, 1)), substr(items[1], 2, nchar(items[1])))
+    items
+  })
+
+  output$district_map_boundary_note <- renderUI({
+    items <- district_map_boundary_note_reactive()
+    if (is.null(items)) return(NULL)
+    tags$p(
+      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+      "In some cases, the districts on the bulletin do not align with the mapped administrative boundaries. ",
+      "For this map, the following adjustments have been made: ",
+      paste0(paste(items, collapse = ", "), "."),
+      tags$br(), tags$br(),
+      "For a merged district, the map's projected total and compliance-adjusted figures are calculated by ",
+      "summing the underlying reported case counts and projected totals of the districts combined into it, ",
+      "rather than by averaging their individual compliance percentages."
+    )
   })
 
   output$district_map <- renderLeaflet({

@@ -49,6 +49,54 @@ library(tidyr)
 library(readr)
 library(fs)
 
+# ==========================================================================
+# ---- MANUAL PER-BULLETIN TYPO CORRECTIONS -------------------------------
+# ==========================================================================
+# A place to hand-fix a plain TYPO in a district's row-label that's specific
+# to ONE bulletin -- as opposed to a genuine alternate spelling/abbreviation
+# recurring across many bulletins, which belongs in district_region_lookup's
+# variant lists further down instead.
+#
+# Example: Week 52, 2024's district compliance table prints "SWA" where every
+# surrounding week uses "SWU" for the same district (South Waziristan
+# Upper) -- almost certainly a one-off typo in that week's source document,
+# not the genuinely ambiguous "SWA" (South Waziristan Agency) abbreviation
+# seen elsewhere, which is deliberately kept as its own separate district
+# (see the "SWA" entry in district_region_lookup's KP section) since it
+# can't safely be assumed to mean either Lower or Upper. Because "SWA" is
+# otherwise a real, valid raw label, a correction like this can only be
+# applied safely when scoped to the exact week/year it's known to be wrong
+# for -- applying it globally would silently break every OTHER bulletin's
+# genuine "SWA" rows.
+#
+# Add one row per correction as it's discovered. `raw` is matched
+# case-insensitively (and trimmed) against the district label as it appears
+# in the source PDF, BEFORE the normal fuzzy district-name matching runs;
+# `correct` replaces it with a raw label that the normal matching then
+# resolves as usual (so `correct` just needs to be SOME string that
+# unambiguously matches the intended district -- typically its canonical
+# name or one of its known variants from district_region_lookup below, not
+# necessarily a novel spelling of its own).
+MANUAL_DISTRICT_TYPO_CORRECTIONS <- tibble::tribble(
+  ~year, ~week, ~raw,  ~correct,
+  # e.g., 2024,  52,    "SWA", "SWU",
+)
+
+# Looks up `x` (a raw district label, as extracted from one specific week's
+# PDF) against MANUAL_DISTRICT_TYPO_CORRECTIONS for that (year, week) --
+# returns the corrected label if a match is found, otherwise `x` unchanged.
+# Safe to call on every row of every table; it's a no-op unless this exact
+# week/year/label combination was explicitly listed above.
+apply_manual_district_typo_corrections <- function(x, year, week){
+  if(is.na(x) || nrow(MANUAL_DISTRICT_TYPO_CORRECTIONS) == 0) return(x)
+  hit <- MANUAL_DISTRICT_TYPO_CORRECTIONS[
+    MANUAL_DISTRICT_TYPO_CORRECTIONS$year == year &
+    MANUAL_DISTRICT_TYPO_CORRECTIONS$week == week &
+    tolower(trimws(MANUAL_DISTRICT_TYPO_CORRECTIONS$raw)) == tolower(trimws(x)),
+  ]
+  if(nrow(hit) >= 1) hit$correct[1] else x
+}
+
 # ---- Lookups ----------------------------------------------------------
 
 # Some PDF fonts drop the "ti" ligature glyph entirely during text
@@ -553,7 +601,56 @@ resolve_blank_column <- function(ln, col_end_offsets, row_name = NULL, col_names
   out
 }
 
+# ---- Repair: an "NR" marker rendered as two separate PHYSICAL lines ------
+# in the source PDF, rather than one. Observed pattern: an orphan line
+# containing NOTHING but a bare "N", immediately followed by a data line
+# whose row is otherwise fully numeric except for one bare "R" standing in
+# for what should be that cell's "NR" (seen: Table 4, KP, Week 04 2026 --
+# Battagram's CL cell). Left alone, the bare "N" reads as pure name text and
+# gets glued onto whichever row is nearby by the floater-run resolution in
+# Pass 2 below -- observed corrupting the PRECEDING row's district name
+# ("Bannu" + stray "N" -> "Bannu N", which then fails to resolve back to
+# "Bannu" and is kept as its own bogus unmatched "district"). Separately,
+# the bare "R" left on the data line fails is_numeric_tok() and gets pulled
+# out as more stray name text, corrupting that row's OWN name and leaving it
+# one data value short too.
+#
+# Spliced back into a single "NR" token on the data line, and the orphan "N"
+# line dropped, before any of the row-building logic below ever sees either
+# fragment. This only fires on the exact narrow pattern -- an orphan line
+# that is NOTHING but "N", directly followed by a line with exactly one bare
+# "R" coarse token -- so it can't misfire on a genuine district/column name
+# that happens to wrap across two lines (which never leaves an isolated
+# single letter on its own line).
+repair_split_nr_lines <- function(lines){
+  if(length(lines) < 2) return(lines)
+  out <- character(0)
+  i <- 1
+  while(i <= length(lines)){
+    ln <- lines[i]
+    is_lone_n <- identical(str_trim(ln), "N")
+    if(is_lone_n && i < length(lines)){
+      nxt <- lines[i + 1]
+      nxt_toks <- str_split(str_trim(nxt), "\\s{2,}")[[1]]
+      nxt_toks <- nxt_toks[nzchar(nxt_toks)]
+      r_idx <- which(nxt_toks == "R")
+      if(length(r_idx) == 1){
+        nxt_toks[r_idx] <- "NR"
+        out <- c(out, paste(nxt_toks, collapse = "   "))
+        i <- i + 2
+        next
+      }
+    }
+    out <- c(out, ln)
+    i <- i + 1
+  }
+  out
+}
+
 merge_wrapped_lines <- function(lines, n_cols, variant_map = disease_variant_map, column_names = NULL){
+
+  lines <- repair_split_nr_lines(lines)
+
 
   # column_names, when supplied, is the full matched_cols vector for this
   # table (row-label column first, then data columns in the same
@@ -2558,8 +2655,8 @@ extract_district_case_tables <- function(pdf_text){
   results
 }
 
-convert_district_cases_table <- function(extracted){
-  
+convert_district_cases_table <- function(extracted, year = NA_integer_, week = NA_integer_){
+
   rows         <- extracted$rows
   matched_cols <- extracted$columns
   
@@ -2626,9 +2723,19 @@ convert_district_cases_table <- function(extracted){
   data <- data |>
     mutate(
       District_raw = District,
-      District     = vapply(District, match_district_name, character(1)),
+      # A one-off typo specific to THIS week/year (see
+      # MANUAL_DISTRICT_TYPO_CORRECTIONS at the top of the file) is applied
+      # before matching, so it resolves as if the source PDF had printed the
+      # corrected label -- District_raw itself is left untouched so any
+      # unmatched-district warning below still shows exactly what the
+      # bulletin actually printed.
+      District_corrected = if(!is.na(year) && !is.na(week)){
+        vapply(District, apply_manual_district_typo_corrections, character(1), year = year, week = week)
+      } else District,
+      District     = vapply(District_corrected, match_district_name, character(1)),
       District     = coalesce(District, District_raw)
-    )
+    ) |>
+    select(-District_corrected)
 
   # Drop rows that look like a table row but aren't a real geographic
   # district (see DISTRICT_NON_LOCATION_LABELS above), plus a defensive
@@ -2700,28 +2807,46 @@ convert_district_cases_table <- function(extracted){
     ) |>
     select(Province, Region, District, Disease, Cases, Status)
 
-  # ---- Best-effort sanity check: printed Total vs. summed district rows --
-  # Now that the printed Total is taken as authoritative, this comparison
-  # is purely diagnostic -- it flags (but no longer excludes) a Total that
-  # doesn't match summing this table's own district rows, since that
-  # mismatch usually means EITHER a district row failed to extract
-  # correctly, or the Total itself has a text-extraction glitch (e.g. a
-  # value whose digits got split across two different positions in the
-  # PDF) -- either way worth a human glancing at the source bulletin. Only
-  # checked for diseases with no "NR"/"Missing" rows in this table, since
-  # an exact reconciliation isn't possible to know either way once any
-  # district's true count is unknown.
+  # ---- Sanity check: printed Total vs. summed KNOWN district rows -- must --
+  # match EXACTLY, or NEITHER side is trusted. Compares the printed Total
+  # against the sum of whichever district rows for that disease have an
+  # actual reported number (excluding genuine NR/Missing rows, which
+  # contribute nothing known to compare with) -- this still fires even when
+  # some districts are NR/Missing, since the source bulletin's own printed
+  # Total is expected to already reflect an NR district as contributing 0,
+  # the same way this pipeline treats it.
+  #
+  # A mismatch means either a district row extracted wrong or the Total
+  # itself has a text-extraction glitch (e.g. a value whose digits got split
+  # across two different positions in the PDF, as seen with Table 4, KP,
+  # Week 04 2026's CL column, where the printed Total of 1 didn't match the
+  # 241 summed across its own known -- i.e. non-NR -- district rows) --
+  # since there's no way to tell which side is at fault, per "if the data
+  # can't be read properly ... that data shouldn't be read", the KNOWN
+  # district values for that disease AND its printed Total are all recorded
+  # as Missing rather than kept. Rows already NR are left as NR -- that
+  # status is independently known and unaffected by this check.
   if(nrow(total_row) == 1){
     for(disease_col in matched_cols[-1]){
-      col_rows <- cases_table |> filter(Disease == disease_col, District != "Total")
-      if(nrow(col_rows) == 0 || any(col_rows$Status %in% c("NR", "Missing"))) next
-      reported_sum   <- sum(col_rows$Cases, na.rm = TRUE)
-      printed_total  <- suppressWarnings(as.numeric(total_row[[disease_col]]))
-      if(!is.na(printed_total) && printed_total != reported_sum){
+      col_idx <- which(cases_table$Disease == disease_col & cases_table$District != "Total")
+      if(length(col_idx) == 0) next
+
+      total_idx <- which(cases_table$Disease == disease_col & cases_table$District == "Total")
+      if(length(total_idx) != 1) next
+
+      known_idx     <- col_idx[!(cases_table$Status[col_idx] %in% c("NR", "Missing"))]
+      known_sum     <- sum(cases_table$Cases[known_idx], na.rm = TRUE)
+      printed_total <- cases_table$Cases[total_idx]
+
+      if(!is.na(printed_total) && known_sum != printed_total){
         warning(sprintf(
-          'District table "%s": printed "Total" for %s is %s but summing this table\'s own district rows gives %s -- kept the printed total as authoritative (worth checking the source bulletin, since one of the two extracted wrong).',
-          extracted$title, disease_col, printed_total, reported_sum
+          'District table "%s": printed "Total" for %s is %s but summing this table\'s own known (non-NR) district rows gives %s -- neither can be trusted, so both were recorded as Missing rather than kept.',
+          extracted$title, disease_col, printed_total, known_sum
         ))
+        cases_table$Cases[known_idx]  <- NA_real_
+        cases_table$Status[known_idx] <- "Missing"
+        cases_table$Cases[total_idx]  <- NA_real_
+        cases_table$Status[total_idx] <- "Missing"
       }
     }
   }
@@ -2811,8 +2936,8 @@ extract_district_compliance_tables <- function(pdf_text){
 # before that run is the row's name column(s) -- usually just the district,
 # occasionally the region label glued onto the same line as the first
 # district of its block (e.g. "Islamabad Capital    ICT   24   24   100%").
-convert_district_compliance_table <- function(extracted){
-  
+convert_district_compliance_table <- function(extracted, year = NA_integer_, week = NA_integer_){
+
   lines <- extracted$lines
   
   is_value_tok <- function(tok) grepl("^([0-9,]+%?|-|NR)$", tok)
@@ -2868,7 +2993,14 @@ convert_district_compliance_table <- function(extracted){
   
   out <- out |>
     mutate(
-      District = vapply(District_raw, match_district_name, character(1)),
+      # One-off week/year-specific typo correction (see
+      # MANUAL_DISTRICT_TYPO_CORRECTIONS at the top of the file), e.g. Week
+      # 52 2024's "SWA" that should read "SWU" -- applied before matching;
+      # District_raw itself is left untouched.
+      District_corrected = if(!is.na(year) && !is.na(week)){
+        vapply(District_raw, apply_manual_district_typo_corrections, character(1), year = year, week = week)
+      } else District_raw,
+      District = vapply(District_corrected, match_district_name, character(1)),
       District = coalesce(District, District_raw),
       Region   = region_of_district(District),
       # Fall back to fuzzy-matching whatever region-label text happened to be
@@ -3018,7 +3150,7 @@ process_one_bulletin <- function(week, year, link, title,
         log_failure('No district case tables found in this bulletin')
       } else {
         for(block in district_case_blocks){
-          district_cases_table <- tryCatch(convert_district_cases_table(block), error = function(e) e)
+          district_cases_table <- tryCatch(convert_district_cases_table(block, year = year, week = week), error = function(e) e)
           if(inherits(district_cases_table, "error") || is.null(district_cases_table)){
             log_failure(paste0('Cannot convert district case table "', block$title, '": ',
                                if(inherits(district_cases_table, "error")) conditionMessage(district_cases_table) else "no rows extracted"))
@@ -3040,7 +3172,7 @@ process_one_bulletin <- function(week, year, link, title,
         log_failure('No district compliance tables found in this bulletin')
       } else {
         for(block in district_compliance_blocks){
-          district_compliance_table <- tryCatch(convert_district_compliance_table(block), error = function(e) e)
+          district_compliance_table <- tryCatch(convert_district_compliance_table(block, year = year, week = week), error = function(e) e)
           if(inherits(district_compliance_table, "error") || is.null(district_compliance_table)){
             log_failure(paste0('Cannot convert district compliance table "', block$title, '": ',
                                if(inherits(district_compliance_table, "error")) conditionMessage(district_compliance_table) else "no rows extracted"))
