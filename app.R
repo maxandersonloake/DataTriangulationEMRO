@@ -939,7 +939,7 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
       tags$p(
         style = "font-size:12px; color:#555; margin:0 0 8px 0;",
         "Each week's cell is coloured using the CUSUM aberration method based on the 9-week baseline ",
-        strong("leading up to"),
+        strong(style = "color:inherit;", "leading up to"),
         " that week (with the two closest weeks dropped)."
       ),
       sd_gradient_legend_ui(show_no_data = FALSE)
