@@ -788,31 +788,6 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week) {
   list(alerts = alerts, missing = missing, reported_counts = reported_counts)
 }
 
-# ---- Helper: which weeks in a candidate set a series was "alerting" ------
-# (CUSUM level > 0), most-recent-first. Used by the Alerts tab's per-alert
-# dropdown to show a short history (last 10 weeks / this year) alongside
-# the current week's alert. `weeks_df` is any data frame with Year/Week
-# columns -- e.g. weeks_up_to()'s output, or a year-to-date slice of
-# week_calendar.
-alert_weeks_in <- function(series, weeks_df, value_col) {
-  hits <- lapply(seq_len(nrow(weeks_df)), function(i) {
-    yy <- weeks_df$Year[i]; ww <- weeks_df$Week[i]
-    stats <- compute_cusum_stats_at(series, yy, ww, value_col = value_col)
-    if (stats$status == "ok" && stats$level > 0L) data.frame(Year = yy, Week = ww) else NULL
-  })
-  hits <- bind_rows(hits)
-  if (is.null(hits) || nrow(hits) == 0) return(data.frame(Year = integer(), Week = integer()))
-  hits[order(hits$Year, hits$Week, decreasing = TRUE), , drop = FALSE]
-}
-
-# "Week 31, 2026, Week 30, 2026, ..." -- most-recent-first, matching
-# alert_weeks_in()'s ordering. "none" when the set is empty (still reads
-# fine inline: "0 alerts in the last 10 weeks: none").
-format_week_list <- function(weeks_df) {
-  if (nrow(weeks_df) == 0) return("none")
-  paste(paste0("Week ", weeks_df$Week, ", ", weeks_df$Year), collapse = ", ")
-}
-
 # ---- Shared continuous diverging colour scale for SD-from-baseline -------
 # Same CUSUM/C2 method as the Alerts tab (rolling 9-week window, 2-week
 # guard band, 7-week baseline). This is the SAME scale used by the Data
@@ -863,16 +838,16 @@ sd_continuous_font_colour <- function(z) {
   out
 }
 
-# ---- Helper: a small, static (non-DT) week-by-week row for one series ----
-# Used by the Alerts tab's per-alert dropdown -- a single disease/location
-# already fixed by the alert itself, so a plain styled HTML table is
-# simpler than standing up a dynamic DT output per alert. Shaded with the
-# exact same continuous SD scale as the Weekly summary table / District-
-# level data table (sd_continuous_colour()/sd_continuous_font_colour()
-# above are the R-side twins of that table's client-side JS versions).
-build_alert_week_row <- function(series, asof, value_col, n_weeks = 10) {
-  weeks_cal <- weeks_up_to(asof, n_weeks)
-
+# ---- Helper: a small, static (non-DT) week-by-week table for the Alerts -
+# tab's per-disease dropdown -- a plain styled HTML table (rather than
+# standing up a dynamic DT output per disease) shaded with the exact same
+# continuous SD scale as the Weekly summary table / District-level data
+# table (sd_continuous_colour()/sd_continuous_font_colour() above are the
+# R-side twins of that table's client-side JS versions).
+#
+# One series' week-by-week <td> cells (values + SD shading), shared by
+# every row of build_alert_region_table() below.
+build_alert_week_cells <- function(series, weeks_cal, value_col) {
   cell_at <- function(i) {
     r <- series[series$Year == weeks_cal$Year[i] & series$Week == weeks_cal$Week[i], ]
     list(
@@ -885,10 +860,7 @@ build_alert_week_row <- function(series, asof, value_col, n_weeks = 10) {
   bgs   <- sd_continuous_colour(zs)
   fts   <- sd_continuous_font_colour(zs)
 
-  header_cells <- lapply(weeks_cal$week_lab, function(wl) {
-    tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4;", wl)
-  })
-  value_cells <- lapply(seq_along(cells), function(i) {
+  lapply(seq_along(cells), function(i) {
     c_ <- cells[[i]]
     txt <- if (c_$is_nr) {
       tags$span(style = "color:#888; font-style:italic;", "NR")
@@ -901,17 +873,58 @@ build_alert_week_row <- function(series, asof, value_col, n_weeks = 10) {
     cell_ft <- if (is.na(fts[i])) "#111111" else fts[i]
     tags$td(
       style = sprintf(
-        "padding:4px 8px; font-size:12.5px; text-align:center; background-color:%s; color:%s;",
+        "padding:4px 8px; font-size:12.5px; text-align:center; background-color:%s; color:%s; border-bottom:1px solid #F0F2F4;",
         cell_bg, cell_ft
       ),
       txt
     )
   })
+}
+
+# ---- Helper: one disease's alert dropdown -- a single table with one ----
+# row per alerted region. Used by the Alerts tab: each disease box has ONE
+# dropdown (not one per region), and expanding it shows every alerted
+# region's week-by-week case counts side by side, shaded with the same
+# continuous SD scale used elsewhere. Each region's own label cell also
+# carries the "Data Visualisation" link (posts {disease, location} via
+# Shiny.setInputValue(), picked up by the alerts_goto observer in
+# server()) so the two are visually tied to that specific region rather
+# than living in a separate row/element.
+build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
+  weeks_cal <- weeks_up_to(asof, n_weeks)
+
+  header_cells <- c(
+    list(tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4; text-align:left;", "Region")),
+    lapply(weeks_cal$week_lab, function(wl) {
+      tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; border-bottom:1px solid #DDE1E4;", wl)
+    })
+  )
+
+  body_rows <- lapply(locs, function(loc) {
+    series <- get_all_disease_series(loc) %>% filter(Disease == dis)
+    value_cells <- build_alert_week_cells(series, weeks_cal, value_col)
+    goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
+
+    label_cell <- tags$td(
+      style = "padding:4px 8px; font-size:12.5px; white-space:nowrap; vertical-align:top; border-bottom:1px solid #F0F2F4;",
+      div(strong(loc)),
+      tags$a(
+        href = "#",
+        style = "font-size:11px; color:var(--who-blue); font-weight:600; text-decoration:none;",
+        onclick = sprintf(
+          "Shiny.setInputValue('alerts_goto', %s, {priority:'event'}); return false;",
+          goto_payload
+        ),
+        "Data Visualisation →"
+      )
+    )
+    tags$tr(c(list(label_cell), value_cells))
+  })
 
   tags$table(
     style = "border-collapse:collapse; margin:6px 0;",
     tags$thead(tags$tr(header_cells)),
-    tags$tbody(tags$tr(value_cells))
+    tags$tbody(body_rows)
   )
 }
 
@@ -1298,6 +1311,28 @@ ui <- tagList(
                   "case_type_stack", "Case counts to show",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
                   selected = "reported", inline = TRUE
+                )
+              )
+            )
+          )
+        ),
+        fluidRow(
+          column(
+            width = 12,
+            div(
+              class = "viz-panel",
+              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
+              h4("Deviation from expected baseline (SD), by region -- interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              uiOutput("map_subtitle"),
+              leafletOutput("region_map_leaflet", height = "500px"),
+              div(
+                class = "viz-panel-controls",
+                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                sd_gradient_legend_ui(show_no_data = TRUE),
+                tags$p(
+                  style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+                  "Same data and colour scale as the map above -- provinces are labelled directly on the map ",
+                  "rather than on hover. Uses the same district-level admin boundary source (see the ", strong("References"), " tab)."
                 )
               )
             )
@@ -1816,6 +1851,62 @@ server <- function(input, output, session) {
 
     p
   }, res = 96)
+
+  # ---- Same province-level SD-from-baseline data as region_map above, --
+  # but rendered on an interactive leaflet map (province admin1
+  # boundaries, same source as the District-level data map -- see the
+  # References tab) instead of the static ggplot one. Province names are
+  # shown as permanent on-map labels via addLabelOnlyMarkers(noHide =
+  # TRUE) rather than a hover tooltip, so the SD reading for every
+  # province is visible at once without having to mouse over each one.
+  output$region_map_leaflet <- renderLeaflet({
+    validate(need(!is.null(pak_district_admin1_sf), "Map unavailable: district boundary file could not be read."))
+
+    rc <- region_change_data()
+    sf_map <- pak_district_admin1_sf %>% left_join(rc, by = c("province_code" = "region"))
+
+    matched_ok <- !is.na(sf_map$status) & sf_map$status == "ok"
+    fill_col <- rep(DISTRICT_NO_DATA_COLOUR, nrow(sf_map))
+    fill_col[matched_ok] <- sd_continuous_colour(sf_map$z[matched_ok])
+
+    status_line <- ifelse(
+      is.na(sf_map$status), "No data available",
+      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "no_report", "No report this week",
+      ifelse(sf_map$status == "absent", "Not in this week's bulletin",
+             "Insufficient baseline data")))
+    )
+    label_html <- lapply(
+      paste0("<strong>", sf_map$adm1_name, "</strong><br>", status_line),
+      htmltools::HTML
+    )
+
+    # Label points guaranteed to sit inside each polygon (unlike a plain
+    # centroid, which can fall outside oddly-shaped or multi-part
+    # regions) -- same technique as region_map's ggrepel labels above.
+    label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
+    coords <- sf::st_coordinates(label_pts)
+
+    leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        fillColor = fill_col, fillOpacity = 0.85,
+        color = "#6B7280", weight = 0.8, opacity = 0.8,
+        highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
+      ) %>%
+      addLabelOnlyMarkers(
+        lng = coords[, 1], lat = coords[, 2],
+        label = label_html,
+        labelOptions = labelOptions(
+          noHide = TRUE, direction = "center", textOnly = TRUE,
+          style = list(
+            "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
+            "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
+          )
+        )
+      ) %>%
+      setView(lng = 69.5, lat = 30.3, zoom = 5)
+  })
 
   # ---------------- Regional contribution stacked bar chart --------------
   output$stack_subtitle <- renderUI({
@@ -2443,70 +2534,39 @@ server <- function(input, output, session) {
           filter(Disease == dis) %>%
           arrange(desc(Location == "National"), desc(Level), desc(Z))
         max_lvl <- max(d$Level)
+        loc_text <- paste0(as.character(d$Location), " (", round(d$Z, 1), "SD)")
 
-        # One expandable row per (disease, location) alert -- clicking it
-        # reveals its recent-alert history, the week-by-week table for
-        # that region, and a link over to the Data visualisation tab
-        # already filtered to this disease/region. Purely client-side
-        # (a plain div visibility toggle) since the detail content is
-        # already fully rendered server-side; only the "Data
-        # visualisation" link needs a round-trip to the server (it has to
-        # change other tabs' inputs).
-        rows <- lapply(seq_len(nrow(d)), function(i) {
-          loc <- as.character(d$Location[i])
-          z   <- d$Z[i]
-          row_id <- paste0("alert_detail_", gsub("[^A-Za-z0-9]+", "_", paste(dis, loc, i)))
+        # Single row per disease (as before), but now with one dropdown
+        # for the whole disease -- expanding it reveals a single table
+        # with one row per alerted region, each showing that region's
+        # week-by-week case counts (shaded with the same SD colour scale
+        # used elsewhere) and, in that region's own label cell, a link
+        # over to the Data visualisation tab already filtered to this
+        # disease/region. Purely client-side to expand/collapse (a plain
+        # div visibility toggle, since the detail content is already
+        # fully rendered server-side); only the "Data visualisation"
+        # link needs a round-trip to the server (it has to change other
+        # tabs' inputs).
+        row_id <- paste0("alert_detail_", gsub("[^A-Za-z0-9]+", "_", dis))
 
-          series <- get_all_disease_series(loc) %>% filter(Disease == dis)
-
-          weeks_last10 <- weeks_up_to(asof, 10)
-          alert_hist_10 <- alert_weeks_in(series, weeks_last10, value_col)
-
-          weeks_ytd <- week_calendar %>%
-            filter(Year == asof$year, Week <= asof$week) %>%
-            select(Year, Week)
-          alert_hist_ytd <- alert_weeks_in(series, weeks_ytd, value_col)
-
-          goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
-
-          tagList(
-            tags$div(
-              class = "alert-row-header",
-              style = "cursor:pointer; display:flex; align-items:center; gap:6px; padding:3px 0;",
-              onclick = sprintf(
-                "var el=document.getElementById('%s'); el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';",
-                row_id
-              ),
-              icon("caret-down", style = "font-size:11px; color:#888;"),
-              span(paste0(loc, " (", round(z, 1), "SD)"))
+        div(
+          class = paste("qv-box", level_class[as.character(max_lvl)]),
+          tags$div(
+            class = "alert-row-header",
+            style = "cursor:pointer; display:flex; align-items:center; gap:6px;",
+            onclick = sprintf(
+              "var el=document.getElementById('%s'); el.style.display=(el.style.display==='none'||el.style.display==='')?'block':'none';",
+              row_id
             ),
-            tags$div(
-              id = row_id,
-              style = "display:none; margin:2px 0 10px 20px; padding:10px 14px; background-color:#FAFBFC; border:1px solid #E5E8EB; border-radius:5px;",
-              tags$p(
-                style = "font-size:12.5px; margin:0;",
-                sprintf("%d alert%s in the last 10 weeks: %s", nrow(alert_hist_10), ifelse(nrow(alert_hist_10) == 1, "", "s"), format_week_list(alert_hist_10))
-              ),
-              tags$p(
-                style = "font-size:12.5px; margin:2px 0 0 0;",
-                sprintf("%d alert%s this year: %s", nrow(alert_hist_ytd), ifelse(nrow(alert_hist_ytd) == 1, "", "s"), format_week_list(alert_hist_ytd))
-              ),
-              div(style = "overflow-x:auto;", build_alert_week_row(series, asof, value_col, n_weeks = 10)),
-              tags$a(
-                href = "#",
-                style = "font-size:12.5px; color:var(--who-blue); font-weight:600; text-decoration:none;",
-                onclick = sprintf(
-                  "Shiny.setInputValue('alerts_goto', %s, {priority:'event'}); return false;",
-                  goto_payload
-                ),
-                "Data Visualisation →"
-              )
-            )
+            icon("caret-down", style = "font-size:11px; color:#888;"),
+            span(strong(dis), ": ", paste(loc_text, collapse = ", "))
+          ),
+          tags$div(
+            id = row_id,
+            style = "display:none; margin:8px 0 4px 20px; overflow-x:auto;",
+            build_alert_region_table(dis, as.character(d$Location), asof, value_col, n_weeks = 12)
           )
-        })
-
-        div(class = paste("qv-box", level_class[as.character(max_lvl)]),
-            strong(dis), rows)
+        )
       })
       tagList(lines)
     }
