@@ -2105,3 +2105,6 @@ Diagnostics:
   - page 3: no Region/Expected/Received/Compliance keywords found
   - page 4: no Region/Expected/Received/Compliance keywords found
   - page 5: no Region/Expected/Received/Compliance keywords found
+[2026-08-26 05:41:21] Week 32, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-32-2026-NG (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-26 05:41:21] Week 32, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-32-2026-NG (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[2026-08-26 05:41:21] Week 32, 2026 — https://www.nih.org.pk/wp-content/uploads/2026/08/IDSRS Weekly Report-32-2026-NG (1).pdf: [MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
