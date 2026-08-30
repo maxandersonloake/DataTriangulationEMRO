@@ -434,6 +434,23 @@ cusum_window_weeks <- function(asof) {
   week_calendar[week_calendar$week_idx %in% idxs, c("Year", "Week")]
 }
 
+# The full contiguous span cusum_window_weeks() above is carved out of --
+# i.e. including the 2 guard-band weeks it skips (target_idx - 9 through
+# target_idx, with no gap). A province only ever gets OFFERED for exclusion
+# based on cusum_window_weeks() (the guard-band weeks genuinely don't affect
+# the alert), but if that same province was ALSO non-reported during the
+# guard-band weeks, showing e.g. "Weeks 23-29 and 32" reads like weeks 30-31
+# were fine, when really they just weren't looked at. This wider window is
+# used purely to fill in that display text -- see provinces_nr_summary()'s
+# display_weeks_df parameter.
+cusum_full_window_weeks <- function(asof) {
+  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+  idxs <- (target_idx - CUSUM_LOOKBACK):target_idx
+  idxs <- idxs[idxs >= 1]
+  week_calendar[week_calendar$week_idx %in% idxs, c("Year", "Week")]
+}
+
 # Small null-coalesce helper (base R has no built-in %||%)
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -601,18 +618,28 @@ format_week_ranges <- function(weeks) {
 # Weeks ... in YYYY[ and Weeks ... in YYYY]" line for each one. Returns
 # list(provinces = character(), summary = character()), both empty if no
 # province was NR anywhere in the window.
-provinces_nr_summary <- function(disease = NULL, weeks_df) {
+#
+# `display_weeks_df` (defaults to `weeks_df`) is a separate, wider window
+# used ONLY to fill in the printed week ranges, for views like Alerts whose
+# CUSUM guard-band weeks aren't part of `weeks_df` (so a province is never
+# newly offered for exclusion just because of a guard-band NR) but where the
+# printed text should still read as one continuous span, not skip over a
+# guard-band week that was ALSO non-reported. Must be a superset of
+# `weeks_df` for every province `weeks_df` alone would already qualify.
+provinces_nr_summary <- function(disease = NULL, weeks_df, display_weeks_df = weeks_df) {
   d <- raw_data %>% filter(Province %in% setdiff(location_choices, "National"), Status == "NR")
   if (!is.null(disease)) d <- d %>% filter(Disease == disease)
   # NULL disease (the Alerts tab, which evaluates every disease at once) --
   # a province/week counts as non-reporting here if ANY disease was NR that
   # week, so de-duplicate before building each province's week list (a
   # week shouldn't appear twice just because two diseases were both NR).
-  d <- d %>% distinct(Province, Year, Week) %>% semi_join(weeks_df, by = c("Year", "Week"))
-  if (nrow(d) == 0) return(list(provinces = character(0), summary = character(0)))
+  d <- d %>% distinct(Province, Year, Week)
+  d_qualifying <- d %>% semi_join(weeks_df, by = c("Year", "Week"))
+  if (nrow(d_qualifying) == 0) return(list(provinces = character(0), summary = character(0)))
 
-  by_prov <- split(d, d$Province)
-  provinces <- sort(names(by_prov))
+  provinces <- sort(unique(d_qualifying$Province))
+  d_display <- d %>% filter(Province %in% provinces) %>% semi_join(display_weeks_df, by = c("Year", "Week"))
+  by_prov <- split(d_display, d_display$Province)
   summary <- vapply(provinces, function(p) {
     wk <- by_prov[[p]]
     yrs <- sort(unique(wk$Year))
@@ -1496,7 +1523,8 @@ ui <- tagList(
             "default) allows the province to contribute to total case counts during its reported weeks, while ",
             "contributing 0 when there is non-reporting. ", strong("Remove province entirely"), " instead drops ",
             "that province from the calculation for every week being shown, therefore enabling a like-to-like ",
-            "comparison. By default, provinces with any non-reported weeks over the visualised window are removed. ",
+            "comparison. Under this setting, by default, provinces with any non-reported weeks over the visualised ",
+            "window are removed. ",
             "These removed provinces are listed as tick boxes (ticked = removed), so any of them can be added back ",
             "in by hand. In that mode, projected total cases are recalculated as the sum of each remaining ",
             "province's own projection (its own reported cases divided by its own compliance), rather than using a ",
@@ -1726,9 +1754,16 @@ ui <- tagList(
             strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
             "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
             "a projected total case estimate of 40. This does not account for completely non-reported provinces ",
-            "(i.e., 0% compliance); these are omitted from total case counts during non-reporting weeks. This ",
-            "can be addressed using the ", strong("handling non-reported provinces"), " settings. See the ",
-            strong("Home"), " tab for full details."
+            "(i.e., 0% compliance); these are omitted from total case counts during non-reporting weeks."
+          ),
+          conditionalPanel(
+            condition = "input.location_tbl == 'National'",
+            tags$p(
+              style = "font-size: 12px; color: #555;",
+              "When exploring national data, this can be addressed using the ",
+              strong("handling non-reported provinces"), " settings. See the ",
+              strong("Home"), " tab for full details."
+            )
           ),
           tags$hr(),
           uiOutput("tbl_nr_control"),
@@ -3045,7 +3080,8 @@ server <- function(input, output, session) {
   alerts_nr_info <- reactive({
     req(input$asof_week_alerts)
     asof <- parse_asof(input$asof_week_alerts)
-    provinces_nr_summary(disease = NULL, cusum_window_weeks(asof))
+    provinces_nr_summary(disease = NULL, cusum_window_weeks(asof),
+                          display_weeks_df = cusum_full_window_weeks(asof))
   })
 
   output$alerts_nr_control <- renderUI({
