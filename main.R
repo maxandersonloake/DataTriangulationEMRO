@@ -22,10 +22,3 @@ rsconnect::writeManifest()
 
 source("R/1.1_DownloadData_PAK.R")
 
-
-
-packageVersion("terra")
-
-available.packages(
-  repos = "https://packagemanager.posit.co/cran/latest"
-)["terra", ]

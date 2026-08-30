@@ -418,6 +418,22 @@ weeks_up_to <- function(asof, n_weeks) {
   wc
 }
 
+# The exact set of weeks compute_cusum_stats_at() below actually reads for
+# a given "as of" week: its 7 baseline weeks (the 9 calendar weeks before
+# it, minus the 2-week guard band) plus the evaluated week itself -- 8
+# weeks in total, skipping the 2 guard-band weeks in between. Used to
+# define the "weeks shown in this view" window for the "Handling province
+# non-reporting" control on every CUSUM-driven view (the SD-by-region maps
+# and Alerts), so a province is only flagged there if it actually has an
+# NR among the weeks that view's own statistic depends on.
+cusum_window_weeks <- function(asof) {
+  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+  idxs <- unique(c((target_idx - CUSUM_LOOKBACK):(target_idx - CUSUM_GUARD_BAND - 1), target_idx))
+  idxs <- idxs[idxs >= 1]
+  week_calendar[week_calendar$week_idx %in% idxs, c("Year", "Week")]
+}
+
 # Small null-coalesce helper (base R has no built-in %||%)
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
@@ -544,6 +560,122 @@ get_province_disease_series <- function(district_series, disease) {
     # exist in the first place.
     mutate(IsNR = ifelse(is.na(IsNR), FALSE, IsNR)) %>%
     select(Province, Year, Week, Reported, Projected, IsNR)
+}
+
+# ---- Helper: "Handling non-reported provinces" -----------------------------
+# Several NATIONAL-level views (the weekly case trend, the regional
+# contribution chart, Alerts, and the Weekly summary table) offer a choice
+# between two ways of dealing with a province that was
+# explicitly NR for one or more weeks within the window that view is showing:
+#   "Keep province for reported weeks" (the default, and the dashboard's
+#     existing behaviour everywhere) -- an NR week just contributes nothing
+#     to that week's figures, same as always.
+#   "Remove province entirely" -- any province with an explicit NR anywhere
+#     in the window is left out of the calculation altogether, for EVERY
+#     week in that window (not just its NR weeks), so a province popping in
+#     and out doesn't distort the comparison across the window. The
+#     provinces this actually affects are shown as tick boxes (checked =
+#     removed) so any of them can be re-included by hand.
+# These two helpers are shared by every one of those views.
+
+# Collapses a numeric vector of week numbers into a compact "1-5, 7, and
+# 18-25" style string: consecutive runs become ranges, singletons stay as a
+# single number, and the pieces are joined with commas (Oxford "and" before
+# the last one).
+format_week_ranges <- function(weeks) {
+  weeks <- sort(unique(weeks))
+  if (length(weeks) == 0) return("")
+  run_id <- cumsum(c(1L, diff(weeks) != 1L))
+  parts <- vapply(split(weeks, run_id), function(g) {
+    if (length(g) == 1) as.character(g) else paste0(min(g), "-", max(g))
+  }, character(1))
+  n <- length(parts)
+  if (n == 1) parts
+  else if (n == 2) paste(parts, collapse = " and ")
+  else paste0(paste(parts[1:(n - 1)], collapse = ", "), ", and ", parts[n])
+}
+
+# Which real provinces (never "National" itself) were explicitly marked NR
+# for `disease` in any week within `weeks_df` (a data.frame(Year, Week), e.g.
+# from weeks_up_to()) -- and a ready-to-display "Province: non-reporting in
+# Weeks ... in YYYY[ and Weeks ... in YYYY]" line for each one. Returns
+# list(provinces = character(), summary = character()), both empty if no
+# province was NR anywhere in the window.
+provinces_nr_summary <- function(disease = NULL, weeks_df) {
+  d <- raw_data %>% filter(Province %in% setdiff(location_choices, "National"), Status == "NR")
+  if (!is.null(disease)) d <- d %>% filter(Disease == disease)
+  # NULL disease (the Alerts tab, which evaluates every disease at once) --
+  # a province/week counts as non-reporting here if ANY disease was NR that
+  # week, so de-duplicate before building each province's week list (a
+  # week shouldn't appear twice just because two diseases were both NR).
+  d <- d %>% distinct(Province, Year, Week) %>% semi_join(weeks_df, by = c("Year", "Week"))
+  if (nrow(d) == 0) return(list(provinces = character(0), summary = character(0)))
+
+  by_prov <- split(d, d$Province)
+  provinces <- sort(names(by_prov))
+  summary <- vapply(provinces, function(p) {
+    wk <- by_prov[[p]]
+    yrs <- sort(unique(wk$Year))
+    per_year <- vapply(yrs, function(y) {
+      paste0("Weeks ", format_week_ranges(wk$Week[wk$Year == y]), " in ", y)
+    }, character(1))
+    paste0(p, ": non-reporting in ", paste(per_year, collapse = " and "))
+  }, character(1))
+  list(provinces = provinces, summary = unname(summary))
+}
+
+# Recomputes the NATIONAL weekly series for every disease by summing the
+# individual province rows in raw_data, leaving out whichever provinces are
+# named in `excluded` -- instead of using the bulletin's own printed
+# National "Total" row (see get_all_disease_series() above). Same shape and
+# NA-handling convention as get_all_disease_series("National"): Reported is
+# NA only when every included province is NA that week, and IsNR means every
+# included province with a row that week was itself explicitly NR.
+# Projected is the SUM of each kept province's own compliance-adjusted
+# projection (get_all_disease_series(province)$Projected) rather than being
+# derived from a single national compliance percentage, since a blended
+# compliance % across an arbitrary subset of provinces has no clean
+# definition -- Compliance is left NA here (tooltips simply omit it).
+get_national_series_excluding <- function(excluded = character(0)) {
+  keep_provs <- setdiff(location_choices, c("National", excluded))
+  empty <- data.frame(Disease = character(), Year = integer(), Week = integer(),
+                       Reported = numeric(), Projected = numeric(),
+                       Compliance = numeric(), IsNR = logical(), stringsAsFactors = FALSE)
+  if (length(keep_provs) == 0) return(empty)
+
+  reported <- raw_data %>%
+    filter(Province %in% keep_provs) %>%
+    group_by(Disease, Year, Week) %>%
+    summarise(
+      Reported = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
+      IsNR     = is.na(Reported) && all(Status == "NR"),
+      .groups = "drop"
+    )
+
+  projected <- bind_rows(lapply(keep_provs, function(p) {
+    get_all_disease_series(p) %>% select(Disease, Year, Week, Projected)
+  })) %>%
+    group_by(Disease, Year, Week) %>%
+    summarise(
+      Projected = if (all(is.na(Projected))) NA_real_ else sum(Projected, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  if (nrow(reported) == 0) return(empty)
+
+  full_join(reported, projected, by = c("Disease", "Year", "Week")) %>%
+    mutate(IsNR = ifelse(is.na(IsNR), FALSE, IsNR), Compliance = NA_real_) %>%
+    select(Disease, Year, Week, Reported, Projected, Compliance, IsNR)
+}
+
+# Single-disease convenience wrapper, shaped like get_trend_data() (Year,
+# Week, Reported, Projected, Compliance) so it can drop straight into any
+# code that currently calls get_trend_data(disease, "National").
+get_national_trend_excluding <- function(disease, excluded = character(0)) {
+  get_national_series_excluding(excluded) %>%
+    filter(Disease == disease) %>%
+    select(Year, Week, Reported, Projected, Compliance) %>%
+    arrange(Year, Week)
 }
 
 # ---- Helper: district series aggregated onto MAP POLYGONS -----------------
@@ -740,13 +872,26 @@ cusum_z_at <- function(series, year, week, value_col = "Reported") {
 #               every disease it's normally evaluated for, so that can be
 #               collapsed to a single "No reporting (all diseases)" flag
 #               rather than a long per-disease list.
-compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week) {
+#   `national_series_override` -- when supplied (shaped like
+#               get_all_disease_series()'s output -- see
+#               get_national_series_excluding() above), used in place of
+#               get_all_disease_series("National") for the National
+#               iteration only. Every other location is still computed the
+#               usual way -- this is how the Alerts tab's "Handling
+#               province non-reporting" control (National-only) is wired
+#               in, without touching how any individual location's own
+#               alerts are evaluated.
+compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, national_series_override = NULL) {
   alert_rows      <- list()
   missing_rows    <- list()
   reported_counts <- list()
 
   for (loc in location_choices) {
-    series <- get_all_disease_series(loc)
+    series <- if (identical(loc, "National") && !is.null(national_series_override)) {
+      national_series_override
+    } else {
+      get_all_disease_series(loc)
+    }
     if (nrow(series) == 0) next
     diseases_here <- sort(unique(series$Disease))
     reported_count <- 0L
@@ -1052,6 +1197,71 @@ sd_gradient_legend_ui <- function(show_no_data = FALSE) {
   )
 }
 
+# ---- UI helper: "Handling non-reported provinces" radio + tick-boxes -----
+# Shared by every national-level view that offers this choice (see the
+# get_national_series_excluding()/provinces_nr_summary() comment above for
+# the underlying logic). `mode_id`/`excl_id` are that view's own input IDs
+# (each view gets its own independent control, same as e.g. case_type_map
+# vs. case_type_map_leaflet elsewhere in this file); `provinces`/`summaries`
+# come from that view's own provinces_nr_summary() call, using whatever
+# "weeks shown in this view" window applies there. The tick-box list is
+# only shown once "Remove province entirely" is selected -- always rendered
+# (just hidden via conditionalPanel) so its value survives the toggle.
+# `inline` controls whether the two radio options sit side by side --
+# TRUE reads best where there's room (the Data visualisation tab's panels);
+# in a narrow sidebar (Alerts, Weekly summary table) the second option just
+# wraps onto its own line but keeps the inline-radio's left margin, reading
+# as an odd indent -- so those callers pass inline = FALSE instead, which
+# stacks both options flush-left.
+nonreporting_control_ui <- function(mode_id, excl_id, provinces, summaries, inline = TRUE) {
+  tagList(
+    radioButtons(
+      mode_id, "Handling non-reported provinces",
+      choices = c("Keep province for reported weeks" = "keep", "Remove province entirely" = "remove"),
+      selected = "keep", inline = inline
+    ),
+    if (length(provinces) > 0) {
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'remove'", mode_id),
+        # Each summary line (e.g. "Punjab: non-reporting in Weeks 11-13,
+        # 15-47, and 49-52 in 2025 and Weeks 1-31 in 2026") can be long --
+        # kept to one line (white-space: nowrap) with the list itself
+        # allowed to scroll horizontally, rather than letting it wrap
+        # across two lines within the panel's width.
+        div(
+          style = "max-width: 100%; overflow-x: auto;",
+          checkboxGroupInput(
+            excl_id, "Remove data for:",
+            choiceNames  = lapply(summaries, function(s) span(style = "font-size:12.5px; white-space:nowrap;", s)),
+            choiceValues = provinces,
+            selected     = provinces
+          )
+        )
+      )
+    } else {
+      # No province was NR anywhere in this view's window -- nothing to
+      # tick, but still say so once "Remove" is selected, so the control
+      # doesn't look broken/empty.
+      conditionalPanel(
+        condition = sprintf("input['%s'] == 'remove'", mode_id),
+        div(style = "font-size:12.5px; color:#555; margin-top:4px;",
+            "No province was non-reporting in this window.")
+      )
+    }
+  )
+}
+
+# Resolves a view's actual excluded-province set from its mode + checkbox
+# inputs: "keep" (or the checkboxes not yet rendered) excludes nothing;
+# "remove" excludes whichever provinces are still ticked, falling back to
+# ALL of that view's NR provinces if the checkbox input hasn't reached the
+# server yet (same not-yet-rendered fallback pattern as `years_selected`
+# elsewhere in this file).
+resolve_nonreporting_excluded <- function(mode, excl_input, all_nr_provinces) {
+  if (!identical(mode, "remove")) return(character(0))
+  if (is.null(excl_input)) all_nr_provinces else excl_input
+}
+
 # Fill colour for districts/provinces with no usable value on the map --
 # one shared grey for BOTH "a whole province with no subnational reporting
 # at all" and "a district within a covered province with no report / no
@@ -1267,8 +1477,7 @@ ui <- tagList(
                     "Punjab, Sindh, and Azad Jammu & Kashmir (AJK)."),
             tags$li(strong("Missing data: "), "Some regions don't report for a given week -- these are marked NR ",
                     "(Not Reported) in the bulletin. Some diseases are also missing from the table entirely for a ",
-                    "given week, most likely because there were no cases to report. In this case, we also treat the values ",
-                    "as missing rather than assuming they are zero.")
+                    "given week. In this case, we also treat the values as missing rather than assuming they are zero.")
           ),
           h4("Methodology", style = "margin-top: 20px;"),
           h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
@@ -1277,7 +1486,21 @@ ui <- tagList(
             "100). For example, 20 reported cases with 50% compliance gives a projected total of ",
             "20 \u00f7 0.5 = 40 cases. This assumes non-reporting sites have a similar case rate to reporting ",
             "sites, which may not hold -- particularly during active outbreaks or access constraints -- so treat ",
-            "projected figures as a rough estimate, not a precise count."),
+            "projected figures as a rough estimate, not a precise count. This approach cannot be applied to ",
+            "completely non-reported provinces since the compliance is 0%. Inconsistently reported provinces ",
+            "therefore result in comparisons between national case counts not being like-for-like, which can be ",
+            "addressed by removing these provinces entirely from comparisons."),
+          h5("Handling non-reported provinces", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+          p("When exploring National data, inconsistent non-reporting in some provinces results in inconsistent ",
+            "data comparison between total case counts. ", strong("Keep province for reported weeks"), " (the ",
+            "default) allows the province to contribute to total case counts during its reported weeks, while ",
+            "contributing 0 when there is non-reporting. ", strong("Remove province entirely"), " instead drops ",
+            "that province from the calculation for every week being shown, therefore enabling a like-to-like ",
+            "comparison. By default, provinces with any non-reported weeks over the visualised window are removed. ",
+            "These removed provinces are listed as tick boxes (ticked = removed), so any of them can be added back ",
+            "in by hand. In that mode, projected total cases are recalculated as the sum of each remaining ",
+            "province's own projection (its own reported cases divided by its own compliance), rather than using a ",
+            "single national compliance percentage."),
           h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
           p("Alerts are generated using a CUSUM/C2 aberration detection method. For a given disease and location, ",
             "we look at the 9 weeks immediately before the week being evaluated. We drop the 2 most recent of ",
@@ -1328,12 +1551,22 @@ ui <- tagList(
               choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
               selected = "reported"
             ),
-            tags$hr(),
             tags$p(
               style = "font-size: 12px; color: #555;",
               strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
               "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
-              "a projected total case estimate of 40. See the ", strong("Home"), " tab for full details."
+              "a projected total case estimate of 40. This does not account for completely non-reported provinces ",
+              "(i.e., 0% compliance); these are omitted from total case counts during non-reporting weeks. This ",
+              "can be addressed using the ", strong("handling non-reported provinces"), " settings. See the ",
+              strong("Home"), " tab for full details."
+            ),
+            tags$hr(),
+            uiOutput("alerts_nr_control"),
+            tags$p(
+              style = "font-size: 12px; color: #555;",
+              "When exploring National data, inconsistent non-reporting in some provinces results in inconsistent ",
+              "data comparison between total case counts. Removing these provinces entirely enables like-to-like ",
+              "comparison between weeks. See the ", strong("Home"), " tab for full details."
             )
           ),
           mainPanel(
@@ -1364,12 +1597,19 @@ ui <- tagList(
             p(style = "margin-bottom: 6px;",
               strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
               "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
-              "a projected total case estimate of 40."),
-            
+              "a projected total case estimate of 40. This does not account for completely non-reported provinces ",
+              "(i.e., 0% compliance); these are omitted from total case counts during non-reporting weeks. This ",
+              "can be addressed using the ", strong("handling non-reported provinces"), " settings."),
+
+            p(style = "margin-bottom: 6px;",
+              strong("Handling non-reported provinces:"), " choose whether a province that is non-reported for ",
+              "some visualised weeks just contributes 0 for those weeks, or is also excluded from every other ",
+              "week to enable a like-to-like comparison."),
+
             p(style = "margin-bottom: 6px;",
               strong("SD"), " shows how many standard deviations a week's case count is from its expected baseline, ",
               "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped)."),
-            
+
             p(style = "margin-bottom: 0;",
               "See the ", strong("Home"), " tab for full details.")
           )
@@ -1393,7 +1633,8 @@ ui <- tagList(
                               "Projected total cases" = "projected",
                               "Both" = "both"),
                   selected = "reported", inline = TRUE
-                )
+                ),
+                uiOutput("trend_nr_control")
               )
             )
           ),
@@ -1433,7 +1674,8 @@ ui <- tagList(
                   "case_type_stack", "Case counts to show",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
                   selected = "reported", inline = TRUE
-                )
+                ),
+                uiOutput("stack_nr_control")
               )
             )
           )
@@ -1483,7 +1725,21 @@ ui <- tagList(
             style = "font-size: 12px; color: #555;",
             strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
             "cases by the compliance percentage. For example, 20 reported cases and a compliance of 50% gives ",
-            "a projected total case estimate of 40."
+            "a projected total case estimate of 40. This does not account for completely non-reported provinces ",
+            "(i.e., 0% compliance); these are omitted from total case counts during non-reporting weeks. This ",
+            "can be addressed using the ", strong("handling non-reported provinces"), " settings. See the ",
+            strong("Home"), " tab for full details."
+          ),
+          tags$hr(),
+          uiOutput("tbl_nr_control"),
+          conditionalPanel(
+            condition = "input.location_tbl == 'National'",
+            tags$p(
+              style = "font-size: 12px; color: #555;",
+              "When exploring National data, inconsistent non-reporting in some provinces results in inconsistent ",
+              "data comparison between total case counts. Removing these provinces entirely enables like-to-like ",
+              "comparison between weeks. See the ", strong("Home"), " tab for full details."
+            )
           ),
           tags$hr(),
           div(
@@ -1755,9 +2011,48 @@ server <- function(input, output, session) {
   # ---------------- Trends tab ----------------
 
   # Full (unfiltered-by-year) trend data for the current disease/location
-  trend_data_all <- reactive({
+  # Always the UNADJUSTED trend for the selected disease/location -- used to
+  # populate the "Years to show" checkbox list and to define the province
+  # non-reporting window below, so that window is stable regardless of
+  # which provinces the user has (un)ticked in the control it feeds.
+  trend_data_base <- reactive({
     req(input$disease, input$location)
     get_trend_data(input$disease, input$location)
+  })
+
+  # The exact window of weeks the trend plot is currently showing: whichever
+  # years are ticked in "Years to show", each cut off at the "as of" week --
+  # the same filter trend_plot itself applies below.
+  trend_window <- reactive({
+    req(input$disease, input$asof_week_viz)
+    d <- trend_data_base()
+    years_selected <- if (is.null(input$years_selected)) unique(d$Year) else as.integer(input$years_selected)
+    asof <- parse_asof(input$asof_week_viz)
+    d %>%
+      filter(Year %in% years_selected, Year < asof$year | (Year == asof$year & Week <= asof$week)) %>%
+      select(Year, Week)
+  })
+
+  trend_nr_info <- reactive({
+    req(input$disease)
+    provinces_nr_summary(input$disease, trend_window())
+  })
+
+  output$trend_nr_control <- renderUI({
+    if (!identical(input$location, "National")) return(NULL)
+    info <- trend_nr_info()
+    nonreporting_control_ui("nr_mode_trend", "nr_excl_trend", info$provinces, info$summary)
+  })
+
+  trend_data_all <- reactive({
+    req(input$disease, input$location)
+    if (identical(input$location, "National") && identical(input$nr_mode_trend, "remove")) {
+      info     <- trend_nr_info()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_trend, input$nr_excl_trend, info$provinces)
+      get_national_trend_excluding(input$disease, excluded)
+    } else {
+      get_trend_data(input$disease, input$location)
+    }
   })
 
   output$trend_subtitle <- renderUI({
@@ -1767,7 +2062,7 @@ server <- function(input, output, session) {
   })
 
   output$year_selector <- renderUI({
-    d <- trend_data_all()
+    d <- trend_data_base()
     yrs <- sort(unique(d$Year), decreasing = TRUE)
     default_selected <- head(yrs, 2)
     checkboxGroupInput("years_selected", "Years to show", choices = yrs, selected = default_selected, inline = TRUE)
@@ -2079,11 +2374,32 @@ server <- function(input, output, session) {
         paste0("Disease: ", input$disease, ", Year: ", asof$year, " (up to Week ", asof$week, ")"))
   })
 
+  # This chart is always a breakdown of the NATIONAL total by region -- so,
+  # unlike the trend plot, its non-reporting control doesn't need to be
+  # gated on a Location selector. Window = weeks 1..asof$week within the
+  # selected year, matching the chart's own filter below exactly.
+  stack_nr_info <- reactive({
+    req(input$disease, input$asof_week_viz)
+    asof <- parse_asof(input$asof_week_viz)
+    provinces_nr_summary(input$disease, data.frame(Year = asof$year, Week = seq_len(asof$week)))
+  })
+
+  output$stack_nr_control <- renderUI({
+    info <- stack_nr_info()
+    nonreporting_control_ui("nr_mode_stack", "nr_excl_stack", info$provinces, info$summary)
+  })
+
   output$region_stack_plot <- renderPlotly({
     req(input$disease, input$asof_week_viz)
     asof <- parse_asof(input$asof_week_viz)
     metric <- if (identical(input$case_type_stack, "projected")) "Projected" else "Reported"
     locs <- location_choices[location_choices != "National"]
+
+    if (identical(input$nr_mode_stack, "remove")) {
+      info <- stack_nr_info()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_stack, input$nr_excl_stack, info$provinces)
+      locs <- setdiff(locs, excluded)
+    }
 
     region_list <- lapply(locs, function(loc) {
       s <- get_trend_data(input$disease, loc) %>% filter(Year == asof$year, Week <= asof$week)
@@ -2132,9 +2448,31 @@ server <- function(input, output, session) {
 
   # ---------------- Weekly table tab ----------------
 
+  # This table shows every disease at once (no disease selector on this
+  # tab), so disease = NULL here too, same as the Alerts tab -- and the
+  # window matches the table's own displayed weeks exactly.
+  tbl_nr_info <- reactive({
+    req(input$asof_week_tbl, input$n_weeks)
+    asof <- parse_asof(input$asof_week_tbl)
+    provinces_nr_summary(disease = NULL, weeks_up_to(asof, input$n_weeks))
+  })
+
+  output$tbl_nr_control <- renderUI({
+    if (!identical(input$location_tbl, "National")) return(NULL)
+    info <- tbl_nr_info()
+    nonreporting_control_ui("nr_mode_tbl", "nr_excl_tbl", info$provinces, info$summary, inline = FALSE)
+  })
+
   weekly_table_reactive <- reactive({
     req(input$location_tbl, input$n_weeks, input$asof_week_tbl)
-    series <- get_all_disease_series(input$location_tbl)
+
+    if (identical(input$location_tbl, "National") && identical(input$nr_mode_tbl, "remove")) {
+      info     <- tbl_nr_info()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_tbl, input$nr_excl_tbl, info$provinces)
+      series   <- get_national_series_excluding(excluded)
+    } else {
+      series <- get_all_disease_series(input$location_tbl)
+    }
     validate(need(nrow(series) > 0, "No data available for this selection."))
 
     asof      <- parse_asof(input$asof_week_tbl)
@@ -2701,11 +3039,34 @@ server <- function(input, output, session) {
   })
 
   # ---------------- Alerts tab (single list, grouped by disease) ---------
+  # NULL disease -- Alerts evaluates every disease at once, so a province
+  # is offered for exclusion if it was NR for ANY disease anywhere in the
+  # window (see provinces_nr_summary()'s comment above).
+  alerts_nr_info <- reactive({
+    req(input$asof_week_alerts)
+    asof <- parse_asof(input$asof_week_alerts)
+    provinces_nr_summary(disease = NULL, cusum_window_weeks(asof))
+  })
+
+  output$alerts_nr_control <- renderUI({
+    info <- alerts_nr_info()
+    nonreporting_control_ui("nr_mode_alerts", "nr_excl_alerts", info$provinces, info$summary, inline = FALSE)
+  })
+
   alerts_reactive <- reactive({
     req(input$asof_week_alerts)
     value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
     asof <- parse_asof(input$asof_week_alerts)
-    compute_alerts_long(value_col = value_col, sel_year = asof$year, sel_week = asof$week)
+
+    national_override <- NULL
+    if (identical(input$nr_mode_alerts, "remove")) {
+      info     <- alerts_nr_info()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_alerts, input$nr_excl_alerts, info$provinces)
+      national_override <- get_national_series_excluding(excluded)
+    }
+
+    compute_alerts_long(value_col = value_col, sel_year = asof$year, sel_week = asof$week,
+                         national_series_override = national_override)
   })
 
   # Fired by an alert's "Data Visualisation" link (see output$alerts_output
