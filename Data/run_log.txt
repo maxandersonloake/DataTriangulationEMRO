@@ -1,4 +1,4 @@
-PAK IDSR data pipeline run -- 2026-09-05 08:54:56 UTC
+PAK IDSR data pipeline run -- 2026-09-06 09:15:13 UTC
 Mode: province-level + district-level
 
 New weeks processed: 0
