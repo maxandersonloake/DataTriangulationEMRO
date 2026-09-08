@@ -1,15 +1,11 @@
-PAK IDSR data pipeline run -- 2026-09-07 10:03:46 UTC
+PAK IDSR data pipeline run -- 2026-09-08 09:30:04 UTC
 Mode: province-level + district-level
 
-New weeks processed: 1
+New weeks processed: 0
 Changed weeks reprocessed: 0
 
-=== WARNINGS (5) -- review recommended ===
+=== WARNINGS (1) -- review recommended ===
 (fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
 
-[MESSAGE] 1 new week(s) and 0 changed week(s) to (re-)extract.
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[WARNING] District table "Table 3: District wise distribution of most frequently reported suspected cases during Week 33, Balochistan.": printed "Total" for B. Diarrhea is 941 but summing this table's own known (non-NR) district rows gives 911 -- neither can be trusted, so both were recorded as Missing rather than kept.
+[MESSAGE] No new or changed bulletins — dataset is already up to date.
 
