@@ -1673,23 +1673,22 @@ if (!is.null(som_district_sf) && somalia_data_available) {
 }
 
 # ---- Helper: the light, label-light basemap used under every choropleth --
-# leaflet map (Pakistan's and Somalia's alike). Deliberately NOT
-# addProviderTiles(providers$CartoDB.Positron): the leaflet R package's
-# bundled provider registry currently points CartoDB.Positron at Carto's
-# GL-style tile endpoint, which now requires a Carto account/API key and
-# shows a plain "API key required" tile image instead of the basemap once
-# Carto's free anonymous quota for it is used up -- inconsistently, since
-# it depends on how many tiles a given map view has already requested, not
-# on anything in this app's own code (this is why it could appear on one
-# map and not another, even though every map here used the exact same
-# addProviderTiles() call). This calls the older, still-fully-free raster
-# "light_all" endpoint directly instead, which renders the identical
-# Positron look with no key and no such quota wall.
-add_positron_basemap <- function(map) {
+# leaflet map (Pakistan's and Somalia's alike). NOT any CartoDB/Carto tile
+# endpoint -- as of late 2026, Carto requires an API key/account for ALL of
+# its basemap tiles, including the older "light_all" raster endpoint this
+# app used previously (that endpoint was still free when it was first
+# switched to here, but Carto has since closed that off too -- this is a
+# Carto-side policy change affecting every anonymous caller, not something
+# specific to this app or to a per-map quota, which is why it started
+# showing up on the Pakistan map as well, not just Somalia's). This instead
+# uses Esri's World Light Gray Canvas tile service, which remains free and
+# keyless and renders a very similar pale, label-light look. Note Esri's
+# tile REST API paths are {z}/{y}/{x} (y before x), NOT the usual {z}/{x}/{y}.
+add_basemap <- function(map) {
   leaflet::addTiles(
     map,
-    urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-    attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution = 'Esri, DeLorme, NAVTEQ'
   )
 }
 
@@ -2705,9 +2704,6 @@ ui <- tagList(
               div(style = "flex: 1 1 0;",
                   selectInput("asof_week_district_tbl_som", "As of week", choices = WEEK_CHOICES_SOM,
                               selected = LATEST_WEEK_CHOICE_SOM, width = "100%")),
-              div(style = "flex: 1 1 0;",
-                  selectInput("state_district_tbl_som", "State", choices = provinces_with_district_data_som,
-                              selected = provinces_with_district_data_som[1], width = "100%")),
               if (somalia_has_compliance) {
                 div(style = "flex: 1 1 0;",
                     radioButtons("case_type_district_tbl_som", "Case counts to display",
@@ -2717,11 +2713,11 @@ ui <- tagList(
             ),
 
             # ---- Weekly case trend (left) + map (right) -----------------------
-            # No separate Province/District selector row on the left the way
-            # Pakistan's tab has -- Somalia's whole tab is already scoped to one
-            # State at a time via state_district_tbl_som above, shared by the
-            # trend panel, map, and table alike, so only a District dropdown is
-            # needed here.
+            # Mirrors Pakistan's own district tab exactly: a State + District
+            # selector row on the trend panel (State plain, District cascading
+            # off it), and no state selector anywhere else -- the map always
+            # shows every state/district at once, and the table below lists
+            # every state with its districts nested underneath, expandable.
             fluidRow(
               style = "display:flex; flex-wrap:wrap;",
               column(
@@ -2731,8 +2727,12 @@ ui <- tagList(
                   h4("Weekly case trend"),
                   uiOutput("district_trend_subtitle_som"),
                   div(
-                    style = "margin-bottom:10px;",
-                    uiOutput("district_curve_district_ui_som")
+                    style = "display:flex; gap:16px; margin-bottom:10px;",
+                    div(style = "flex:1;",
+                        selectInput("district_curve_state_som", "State",
+                                    choices = provinces_with_district_data_som,
+                                    selected = provinces_with_district_data_som[1], width = "100%")),
+                    div(style = "flex:1;", uiOutput("district_curve_district_ui_som"))
                   ),
                   plotlyOutput("district_trend_plot_som", height = "360px"),
                   div(
@@ -2787,8 +2787,10 @@ ui <- tagList(
                 ),
                 column(
                   width = 9,
-                  p(style = "font-size: 13px; color:#555;",
-                    icon("circle-info"), " Districts within the selected State, most recent weeks first."),
+                  p(
+                    style = "font-size: 13px; color:#555;",
+                    icon("circle-info"), " Click the arrow on a state row to expand district-level case counts within it."
+                  ),
                   DTOutput("district_table_som")
                 )
               )
@@ -3209,7 +3211,7 @@ server <- function(input, output, session) {
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$adm1_name, status_line, zoom = 5)
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      add_positron_basemap() %>%
+      add_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
@@ -3918,7 +3920,7 @@ server <- function(input, output, session) {
     )
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      add_positron_basemap() %>%
+      add_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.5, opacity = 0.8,
@@ -4361,7 +4363,7 @@ server <- function(input, output, session) {
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$State, status_line, zoom = 5)
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      add_positron_basemap() %>%
+      add_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
@@ -4519,17 +4521,14 @@ server <- function(input, output, session) {
   })
 
   # ---------------- Somalia: District-level data tab -----------------------
-  # Full functionality mirroring Pakistan's own district tab: an expandable
-  # State/District table (below), a weekly case-trend epi curve with a
-  # cascading District dropdown, and an interactive district map coloured by
-  # the same CUSUM SD statistic -- using the boundary file/crosswalk/dissolve
-  # built near the top of this file (som_district_sf, som_regions_sf,
-  # resolve_dist_key(), SOM_DISTRICT_NAME_ALIASES). One difference from
-  # Pakistan's layout: the table stays scoped to a single selected State at
-  # a time (via state_district_tbl_som, shared with the epi curve/map below)
-  # rather than showing every state's districts at once, since Somalia's 8
-  # states x many districts would otherwise make for a very long single
-  # table -- unlike Pakistan's table, which shows every province at once.
+  # Full functionality mirroring Pakistan's own district tab exactly: an
+  # expandable State/District table showing every state at once (below), a
+  # weekly case-trend epi curve with its own State + cascading District
+  # dropdown pair (State + District, on the trend panel itself -- not a
+  # tab-wide selector), and an interactive district map coloured by the same
+  # CUSUM SD statistic -- using the boundary file/crosswalk/dissolve built
+  # near the top of this file (som_district_sf, som_regions_sf,
+  # resolve_dist_key(), SOM_DISTRICT_NAME_ALIASES).
   get_district_disease_series_som <- function(disease) {
     raw_district_data_som %>%
       filter(Disease == disease) %>%
@@ -4596,15 +4595,13 @@ server <- function(input, output, session) {
   }
 
   # ---------------- Somalia: District-level data tab: epi curve -----------
-  # Cascading District dropdown, scoped to the State already selected via
-  # state_district_tbl_som (the tab's own top-banner selector, shared with
-  # the table below) -- unlike Pakistan, which has a second, separate
-  # Province selector just for this panel, Somalia's tab is already
-  # State-scoped everywhere, so reusing that one selector avoids a
-  # redundant second dropdown.
+  # Cascading State -> District dropdowns, exactly mirroring Pakistan's own
+  # district_curve_province/district_curve_district_ui pair above: State is
+  # a plain selectInput in the UI (static choices), District is a renderUI
+  # here since its choices depend on which State is selected.
   output$district_curve_district_ui_som <- renderUI({
-    req(input$state_district_tbl_som)
-    dists <- sort(unique(raw_district_data_som$District[raw_district_data_som$Province == input$state_district_tbl_som]))
+    req(input$district_curve_state_som)
+    dists <- sort(unique(raw_district_data_som$District[raw_district_data_som$Province == input$district_curve_state_som]))
     choices <- c("All districts (state total)" = "__ALL__", setNames(dists, dists))
     selectInput("district_curve_district_som", "District", choices = choices, selected = "__ALL__", width = "100%")
   })
@@ -4615,14 +4612,14 @@ server <- function(input, output, session) {
   })
 
   district_curve_data_all_som <- reactive({
-    req(input$disease_district_tbl_som, input$state_district_tbl_som)
+    req(input$disease_district_tbl_som, input$district_curve_state_som)
     ds <- get_district_disease_series_som(input$disease_district_tbl_som) %>%
-      filter(Province == input$state_district_tbl_som)
+      filter(Province == input$district_curve_state_som)
     sel_dist <- input$district_curve_district_som %||% "__ALL__"
     if (identical(sel_dist, "__ALL__")) {
       # State total -- the same raw_data_som State-grain rollup used by
       # district_table_reactive_som's own state row above (keeps IsNR).
-      get_all_disease_series(input$state_district_tbl_som, data = raw_data_som, compliance = compliance_data_som) %>%
+      get_all_disease_series(input$district_curve_state_som, data = raw_data_som, compliance = compliance_data_som) %>%
         filter(Disease == input$disease_district_tbl_som) %>%
         mutate(Compliance = NA_real_) %>%
         select(Year, Week, Reported, Projected, Compliance)
@@ -4634,12 +4631,12 @@ server <- function(input, output, session) {
   })
 
   output$district_trend_subtitle_som <- renderUI({
-    req(input$disease_district_tbl_som, input$state_district_tbl_som)
+    req(input$disease_district_tbl_som, input$district_curve_state_som)
     sel_dist <- input$district_curve_district_som %||% "__ALL__"
     loc_label <- if (identical(sel_dist, "__ALL__")) {
-      paste0(input$state_district_tbl_som, " (state total)")
+      paste0(input$district_curve_state_som, " (state total)")
     } else {
-      paste0(sel_dist, ", ", input$state_district_tbl_som)
+      paste0(sel_dist, ", ", input$district_curve_state_som)
     }
     div(class = "viz-subtitle", paste0("Disease: ", input$disease_district_tbl_som, ", Location: ", loc_label))
   })
@@ -4773,7 +4770,7 @@ server <- function(input, output, session) {
     )
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      add_positron_basemap() %>%
+      add_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.5, opacity = 0.8,
@@ -4790,22 +4787,10 @@ server <- function(input, output, session) {
   })
 
   district_table_reactive_som <- reactive({
-    req(input$disease_district_tbl_som, input$n_weeks_district_som, input$asof_week_district_tbl_som,
-        input$state_district_tbl_som)
+    req(input$disease_district_tbl_som, input$n_weeks_district_som, input$asof_week_district_tbl_som)
 
-    district_series <- get_district_disease_series_som(input$disease_district_tbl_som) %>%
-      filter(Province == input$state_district_tbl_som)
-    validate(need(nrow(district_series) > 0, "No district-level data available for this disease/state."))
-
-    # The State's own row, from raw_data_som's State-grain rollup (via
-    # get_all_disease_series(), which keeps IsNR) -- rather than summing
-    # district_series itself, so a state that's explicitly NR (every one of
-    # its districts NR that week -- see 2_1_ProcessData_SOM.R's rollup rule)
-    # still displays as "NR" here, exactly like a Pakistan province row.
-    state_series <- get_all_disease_series(input$state_district_tbl_som, data = raw_data_som,
-                                            compliance = compliance_data_som) %>%
-      filter(Disease == input$disease_district_tbl_som) %>%
-      select(Year, Week, Reported, Projected, Compliance, IsNR)
+    district_series <- get_district_disease_series_som(input$disease_district_tbl_som)
+    validate(need(nrow(district_series) > 0, "No district-level data available for this disease."))
 
     asof      <- parse_asof(input$asof_week_district_tbl_som)
     weeks_cal <- weeks_up_to(asof, input$n_weeks_district_som, calendar = week_calendar_som)
@@ -4836,18 +4821,33 @@ server <- function(input, output, session) {
       ), stringsAsFactors = FALSE, check.names = FALSE)
     }
 
-    state_row <- row_for_series(state_series, input$state_district_tbl_som)
-    state_row$RowType <- "province"
-    state_row$Group   <- input$state_district_tbl_som
+    states_here <- sort(unique(district_series$Province))
 
-    rows <- list(state_row)
-    districts_here <- sort(unique(district_series$District))
-    for (dis_name in districts_here) {
-      s_dist <- district_series %>% filter(District == dis_name) %>% arrange(Year, Week)
-      dist_row <- row_for_series(s_dist, dis_name)
-      dist_row$RowType <- "district"
-      dist_row$Group   <- input$state_district_tbl_som
-      rows[[length(rows) + 1]] <- dist_row
+    rows <- list()
+    for (st in states_here) {
+      # The State's own row, from raw_data_som's State-grain rollup (via
+      # get_all_disease_series(), which keeps IsNR) -- rather than summing
+      # district_series itself, so a state that's explicitly NR (every one of
+      # its districts NR that week -- see 2_1_ProcessData_SOM.R's rollup
+      # rule) still displays as "NR" here, exactly like a Pakistan province
+      # row.
+      state_series <- get_all_disease_series(st, data = raw_data_som, compliance = compliance_data_som) %>%
+        filter(Disease == input$disease_district_tbl_som) %>%
+        select(Year, Week, Reported, Projected, Compliance, IsNR)
+
+      state_row <- row_for_series(state_series, st)
+      state_row$RowType <- "province"
+      state_row$Group   <- st
+      rows[[length(rows) + 1]] <- state_row
+
+      districts_here <- sort(unique(district_series$District[district_series$Province == st]))
+      for (dis_name in districts_here) {
+        s_dist <- district_series %>% filter(Province == st, District == dis_name) %>% arrange(Year, Week)
+        dist_row <- row_for_series(s_dist, dis_name)
+        dist_row$RowType <- "district"
+        dist_row$Group   <- st
+        rows[[length(rows) + 1]] <- dist_row
+      }
     }
 
     display_df <- bind_rows(rows)
@@ -4859,8 +4859,7 @@ server <- function(input, output, session) {
       nr_cols = nr_cols,
       year = asof$year, week = asof$week, n_wk = n_wk,
       value_col = value_col,
-      disease = input$disease_district_tbl_som,
-      state = input$state_district_tbl_som
+      disease = input$disease_district_tbl_som
     )
   })
 
@@ -4948,9 +4947,9 @@ server <- function(input, output, session) {
         "});"
       ),
       caption = paste0(
-        "District-level weekly ", label, " cases of ", tbl$disease, " in ", tbl$state, ", ",
+        "District-level weekly ", label, " cases of ", tbl$disease, " by state, ",
         tbl$n_wk, " week(s) up to and including Week ", tbl$week, ", ", tbl$year,
-        ". Click the arrow on the state row to expand its districts."
+        ". Click the arrow on a state row to expand its districts."
       )
     )
 
