@@ -57,12 +57,22 @@ DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
 # their own polygon. See the file-inventory comment near the top of this file for how it was derived.
 DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson"
 
-# Somalia's boundary file: a single district-level (adm2-equivalent) layer
-# with no separate state-level file the way Pakistan has one -- so the
-# state-level shape used by the Data visualisation tab's map is dissolved
-# from this same file at startup (see som_regions_sf below), rather than
-# being a second, separately-shipped file.
-SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/somalia_districts.geojson"
+# Somalia's boundary files: geoBoundaries' standard ADM2 (118 districts) and
+# ADM1 (18 official regions) layers for Somalia. ADM2 is the primary layer
+# used throughout (district map, and dissolved into a state-level shape for
+# the Data visualisation tab's map -- see som_regions_sf below, since there's
+# no separate state-level file the way Pakistan has one). ADM1 is used only
+# as a descriptive fallback (which of Somalia's 18 official regions a
+# district sits in) for the handful of districts the workbook never assigns
+# to one of its own 8 states -- it does NOT drive the state-level dissolve
+# itself, since those 18 regions don't correspond to the workbook's 8
+# states. An earlier, sparser 74-district boundary file was replaced with
+# these because geoBoundaries' 118 districts match the workbook's own
+# district names far more often (142/177 vs 96/177 after crosswalking), and
+# critically includes Mogadishu's own 17 sub-districts individually, so
+# Banadir no longer needs to be rolled up onto one polygon.
+SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/geoBoundaries-SOM-ADM2.geojson"
+SOMALIA_REGION_GEOJSON   <- "Data/som_admin_boundaries/geoBoundaries-SOM-ADM1.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -416,110 +426,75 @@ resolve_dist_key <- function(x, table = DISTRICT_NAME_ALIASES) {
 }
 
 # ---- Somalia's own district-name crosswalk ---------------------------------
-# Somalia's boundary file (Data/som_admin_boundaries/somalia_districts.geojson,
-# 74 districts) uses standard Somali-language spellings ("Dhuusamarreeb",
-# "Ceerigaabo", "Laas Caanood"); the IDSR workbook's District column uses
-# much less consistent transliterations of the same places ("Dusamreb",
-# "Erigavo", "Laasaanod"/"Las Anod"). Unlike Pakistan's alias table above
-# (mostly spacing/case differences that normalize_dist_name() alone doesn't
-# quite catch), most of these are genuinely different spellings of the same
-# name, so they need an explicit crosswalk the same way. Built by matching
-# each of the ~150 non-exact-matching workbook district names against the
-# boundary file's 74 (region-scoped fuzzy string matching, then manually
-# verified) -- entries below are ones matched with reasonable confidence;
-# anything not confidently identifiable was deliberately left out, so it
-# resolves to no boundary match (shown grey on the map) rather than risk
-# mis-locating it. A workbook district with NO row here, and no exact
-# (normalized) match either, simply won't be found on the district map --
-# it remains fully present in the District-level table regardless, which is
-# the authoritative view. Mogadishu/Banadir is handled separately (see
-# som_dist_key_for() below), not through this table, since EVERY Banadir
-# sub-district (Hodan, Shangani, Yaqshid, ...) rolls up onto the single
-# "Mogadishu" polygon regardless of its own name.
+# Somalia's boundary file (Data/som_admin_boundaries/geoBoundaries-SOM-ADM2.geojson,
+# 118 districts, geoBoundaries' standard ADM2 layer) uses its own spellings
+# ("BUHODLE", "GARDO", "DINSOOR"); the IDSR workbook's District column uses
+# much less consistent transliterations of the same places ("Buuhoodle",
+# "Qardho", "Diinsor"/"Dinsor"). Unlike Pakistan's alias table above (mostly
+# spacing/case differences that normalize_dist_name() alone doesn't quite
+# catch), most of these are genuinely different spellings of the same name,
+# so they need an explicit crosswalk the same way. Built by matching each
+# non-exact-matching workbook district name against the boundary file's 118
+# (fuzzy string matching, then manually verified against real-world
+# knowledge of Somali administrative geography) -- entries below are ones
+# matched with reasonable confidence; anything not confidently identifiable
+# was deliberately left out, so it resolves to no boundary match (shown grey
+# on the map) rather than risk mis-locating it. A workbook district with NO
+# row here, and no exact (normalized) match either, simply won't be found on
+# the district map -- it remains fully present in the District-level table
+# regardless, which is the authoritative view. This ADM2 layer's 118
+# districts include Mogadishu's own 17 sub-districts individually (unlike
+# the smaller 74-district file previously used here), so -- unlike an
+# earlier version of this crosswalk -- Banadir/Mogadishu districts are NOT
+# special-cased or rolled up onto a single polygon any more: Hodan,
+# Shangani, Yaqshid, and the rest each resolve to their own real polygon
+# through this same table, exactly like every other district.
 SOM_DISTRICT_NAME_ALIASES <- c(
-  abudwak             = "cabudwaaq",
-  abudwaq             = "cabudwaaq",
-  adado               = "cadaado",
-  adale               = "cadale",
-  adenyabal           = "adanyabaal",
-  afgoi               = "afgooye",
-  ainabo              = "caynabo",
-  alula               = "caluula",
-  aynabo              = "caynabo",
-  badhadhe            = "badhaadhe",
-  baidoba             = "baidoa",
-  balad               = "balcad",
-  barawe              = "baraawe",
-  bardera             = "baardheere",
-  beledhawo           = "beletxaawo",
-  belethawa           = "beletxaawo",
-  benderbayla         = "bandarbayla",
-  brava               = "baraawe",
-  buhodle             = "buuhoodle",
-  buloburte           = "buloburti",
-  burhakaba           = "buurhakaba",
-  buroa               = "burco",
-  ceelwaaq            = "elwaq",
-  dhuusamarreb        = "dhuusamarreeb",
-  diinsor             = "diinsoor",
-  dinsor              = "diinsoor",
-  dolo                = "doolow",
-  dolow               = "doolow",
-  dusamreb            = "dhuusamarreeb",
-  elafweyn            = "ceelafweyn",
-  elbarde             = "ceelbarde",
-  elbur               = "ceelbuur",
-  eldheer             = "ceeldheer",
-  eldhere             = "ceeldheer",
-  elwak               = "elwaq",
-  erigavo             = "ceerigaabo",
-  galkacyo            = "galkaacyo",
-  galkaio             = "galkaacyo",
-  galkayunorth        = "galkaacyo",
-  galkayusouth        = "galkaacyo",
-  garbaharey          = "garbahaarey",
-  gardo               = "qardho",
-  goldogob            = "galdogob",
-  haradhere           = "xarardheere",
-  harardheere         = "xarardheere",
-  hargeisa            = "hargeysa",
-  hudun               = "xudun",
-  hudur               = "xudur",
-  jamame              = "jamaame",
-  jariban             = "jariiban",
-  kurtunwarey         = "kurtunwaarey",
-  laasaanod           = "laascaanood",
-  lasanod             = "laascaanood",
-  lasqoray            = "laasqoray",
-  lasqoreh            = "laasqoray",
-  lughaya             = "lughaye",
-  odwayne             = "owdweyne",
-  odweine             = "owdweyne",
-  qansahdhere         = "qansaxdheere",
-  qansaxdhere         = "qansaxdheere",
-  qoryoley            = "qoryooley",
-  qoryoolay           = "qoryooley",
-  rabdhure            = "rabdhuure",
-  rabdure             = "rabdhuure",
-  taleeh              = "taleex",
-  taleh               = "taleex",
-  tiyeglo             = "tayeeglow",
-  tiyeglow            = "tayeeglow",
-  wajid               = "waajid",
-  wanlaweyn           = "wanleweyne",
-  zeila               = "zeylac"
+  abudwak       = "abudwaq",
+  afgooye       = "afgoi",
+  ainabo        = "aynabo",
+  awdhegle      = "awdheegle",
+  baidoba       = "baidoa",
+  barawe        = "brava",
+  bardale       = "berdale",
+  beledhawo     = "belethawa",
+  berdalle      = "berdale",
+  bondheere     = "bondere",
+  buloburte     = "buloburti",
+  burco         = "burao",
+  buroa         = "burao",
+  buuhoodle     = "buhodle",
+  buurdhubo     = "burdubo",
+  ceelwaaq      = "elwak",
+  celgaras      = "elgaras",
+  deynile       = "danyile",
+  dharkeynley   = "dharkenly",
+  dhuusamarreb  = "dusamreb",
+  diinsor       = "dinsoor",
+  dinsor        = "dinsoor",
+  dolow         = "dolo",
+  eldheer       = "eldhere",
+  galcad        = "galad",
+  galinsor      = "galinsoor",
+  hamarwayne    = "hamarweyn",
+  harardheere   = "haradhere",
+  heliwaa       = "heliwa",
+  jariiban      = "jariban",
+  kurtunwarey   = "kurtunwaarey",
+  laasaanod     = "lasanod",
+  odweine       = "odwayne",
+  qansahdhere   = "qansahdheere",
+  qansaxdhere   = "qansahdheere",
+  qardho        = "gardo",
+  qoryoolay     = "qoryoley",
+  raagacelle    = "ragaelle",
+  rabdhure      = "rabdure",
+  taleeh        = "taleh",
+  tiyeglow      = "tiyeglo",
+  ufain         = "ufeyn",
+  waaciya       = "waciya",
+  wanlaweyn     = "wanleweyne"
 )
-
-# Somalia's own dist_key resolver: EVERY Banadir-state district (Hodan,
-# Shangani, Yaqshid, and every other Mogadishu sub-district reported in the
-# workbook) rolls up onto the boundary file's single "Mogadishu" polygon,
-# regardless of its own name -- checked first, ahead of the name-based
-# crosswalk, so this never depends on whether a given sub-district's name
-# happens to also appear in SOM_DISTRICT_NAME_ALIASES. Everything else goes
-# through the normal normalize/alias path, exactly like resolve_dist_key().
-som_dist_key_for <- function(province, district) {
-  ifelse(province == "BANADIR", "mogadishu", resolve_dist_key(district, table = SOM_DISTRICT_NAME_ALIASES))
-}
 
 # ---- Map-only concordances worth narrating on the District map's ----------
 # boundary-adjustment note (see district_map_boundary_note_reactive() in the
@@ -1570,28 +1545,52 @@ if (!is.null(pak_district_admin1_sf)) {
 }
 
 # ---- Somalia boundary file: district-level layer, plus a dissolved -------
-# state-level layer built from it at startup. Somalia ships only ONE
-# boundary file (74 districts, no separate state-level file the way
-# Pakistan has pakistan_admin1.geojson) -- so instead of a second shipped
-# file, the state-level shape used by the Data visualisation tab's map is
-# dissolved from this same district file once, here, at app startup (not
-# on every page load).
+# state-level layer built from it at startup. Somalia's primary layer here
+# is geoBoundaries' standard ADM2 (118 districts) -- there's no separate
+# state-level file matching the workbook's own 8-state scheme (the way
+# Pakistan has pakistan_admin1.geojson), so the state-level shape used by
+# the Data visualisation tab's map is dissolved from this same district
+# file once, here, at app startup (not on every page load).
 som_district_sf <- load_pak_boundary_file(SOMALIA_DISTRICT_GEOJSON)
 som_regions_sf  <- NULL
 
 if (!is.null(som_district_sf) && somalia_data_available) {
-  som_district_sf$dist_key <- resolve_dist_key(som_district_sf$DISTRICT, table = SOM_DISTRICT_NAME_ALIASES)
+  som_district_sf$dist_key <- resolve_dist_key(som_district_sf$shapeName, table = SOM_DISTRICT_NAME_ALIASES)
+  # Title-cased for display (ADM2's shapeName is ALL CAPS, e.g. "BADHAN").
+  som_district_sf$District <- tools::toTitleCase(tolower(som_district_sf$shapeName))
+
+  # Which of Somalia's 18 OFFICIAL regions (ADM1) each district sits in --
+  # purely descriptive; used only as a tooltip fallback below for the
+  # handful of districts the workbook never assigns to one of its own 8
+  # states (see State, next). Matched by point-on-surface rather than the
+  # workbook, since ADM1's regions don't correspond to the workbook's States.
+  som_adm1_sf <- load_pak_boundary_file(SOMALIA_REGION_GEOJSON)
+  if (!is.null(som_adm1_sf)) {
+    # Renamed to "Region" (rather than joining on ADM1's own "shapeName")
+    # because ADM2 (som_district_sf) already has its OWN "shapeName" column
+    # -- joining two same-named columns would silently produce
+    # "shapeName.x"/"shapeName.y" instead of erroring, so the plain
+    # $shapeName lookup below would return NULL (and silently no-op the
+    # column assignment) rather than the region name.
+    som_adm1_sf_region <- som_adm1_sf %>% dplyr::select(Region = shapeName)
+    som_region_match <- suppressWarnings(
+      sf::st_join(sf::st_point_on_surface(som_district_sf), som_adm1_sf_region)
+    )
+    som_district_sf$Region <- sf::st_drop_geometry(som_region_match)$Region
+  } else {
+    som_district_sf$Region <- NA_character_
+  }
 
   # Which Somalia STATE each boundary district belongs to -- the boundary
-  # file itself has no State field (only REGION/DISTRICT), so this is
-  # derived from the workbook: for each dist_key, whichever State reported
-  # the most rows under it. Unambiguous for almost every district; the
-  # exception is a handful of contested districts (e.g. Buuhoodle) reported
-  # by more than one administration in the workbook -- the modal State wins
-  # for map-COLOURING purposes only. The District-level table itself still
+  # file itself has no State field, so this is derived from the workbook:
+  # for each dist_key, whichever State reported the most rows under it.
+  # Unambiguous for almost every district; the exception is a handful of
+  # contested districts (e.g. Buuhoodle) reported by more than one
+  # administration in the workbook -- the modal State wins for
+  # map-COLOURING purposes only. The District-level table itself still
   # keeps every State's own rows fully separate regardless.
   som_dist_state_votes <- raw_district_data_som %>%
-    mutate(dist_key = som_dist_key_for(Province, District)) %>%
+    mutate(dist_key = resolve_dist_key(District, table = SOM_DISTRICT_NAME_ALIASES)) %>%
     filter(nzchar(dist_key)) %>%
     count(dist_key, Province, name = "n_rows") %>%
     group_by(dist_key) %>%
@@ -4422,7 +4421,7 @@ server <- function(input, output, session) {
   # cascading District dropdown, and an interactive district map coloured by
   # the same CUSUM SD statistic -- using the boundary file/crosswalk/dissolve
   # built near the top of this file (som_district_sf, som_regions_sf,
-  # som_dist_key_for(), SOM_DISTRICT_NAME_ALIASES). One difference from
+  # resolve_dist_key(), SOM_DISTRICT_NAME_ALIASES). One difference from
   # Pakistan's layout: the table stays scoped to a single selected State at
   # a time (via state_district_tbl_som, shared with the epi curve/map below)
   # rather than showing every state's districts at once, since Somalia's 8
@@ -4444,15 +4443,16 @@ server <- function(input, output, session) {
   }
 
   # ---- Helper: district series aggregated onto MAP POLYGONS (Somalia) -----
-  # Mirrors get_district_polygon_series() above, using som_dist_key_for()
-  # (Banadir-aware) in place of resolve_dist_key(). Because a handful of
-  # contested districts (e.g. Buuhoodle) are reported under more than one
-  # State in the workbook, grouping includes Province -- see
+  # Mirrors get_district_polygon_series() above, using
+  # resolve_dist_key(District, table = SOM_DISTRICT_NAME_ALIASES) -- the
+  # same crosswalk used to build som_district_sf$dist_key itself. Because a
+  # handful of contested districts (e.g. Buuhoodle) are reported under more
+  # than one State in the workbook, grouping includes Province -- see
   # get_district_map_data_som()'s join below for how the right one is
   # picked for a given polygon.
   get_district_polygon_series_som <- function(district_series) {
     district_series %>%
-      mutate(dist_key = som_dist_key_for(Province, District)) %>%
+      mutate(dist_key = resolve_dist_key(District, table = SOM_DISTRICT_NAME_ALIASES)) %>%
       group_by(Province, dist_key, Year, Week) %>%
       summarise(
         Reported  = if (all(is.na(Reported)))  NA_real_ else sum(Reported,  na.rm = TRUE),
@@ -4574,13 +4574,14 @@ server <- function(input, output, session) {
   })
 
   # ---- Dynamic boundary-adjustment note, below the Somalia District map ---
-  # Mirrors district_map_boundary_note_reactive() above, adapted for
-  # Somalia's two kinds of adjustment: (1) Banadir/Mogadishu, always noted
-  # when it has data in the displayed window, since EVERY Mogadishu
-  # sub-district rolls onto that one polygon (not a short fixed list like
-  # Pakistan's Hub/Karachi Keamari concordances); (2) any other district
-  # with data in the window that has no boundary match at all (no exact
-  # name match and nothing in SOM_DISTRICT_NAME_ALIASES).
+  # Mirrors district_map_boundary_note_reactive() above: lists any district
+  # with data in the displayed window (its own week, or its 9-week CUSUM
+  # baseline) that has no boundary match at all -- no exact name match and
+  # nothing in SOM_DISTRICT_NAME_ALIASES. Unlike an earlier version of this
+  # note, Banadir/Mogadishu is no longer called out as a blanket adjustment
+  # -- the current boundary file has each Mogadishu sub-district as its own
+  # polygon, so those districts are only listed here if THEY specifically
+  # have no match (same as any other district).
   district_map_boundary_note_reactive_som <- reactive({
     req(input$disease_district_tbl_som, input$asof_week_district_tbl_som)
     if (is.null(som_district_sf)) return(NULL)
@@ -4592,22 +4593,12 @@ server <- function(input, output, session) {
     in_window <- district_series %>% semi_join(weeks_cal, by = c("Year", "Week"))
     if (nrow(in_window) == 0) return(NULL)
 
-    banadir_has_data <- any(in_window$Province == "BANADIR")
-    banadir_item <- if (banadir_has_data) {
-      "disease counts for every Mogadishu sub-district (Hodan, Shangani, Yaqshid, and others) have been combined into the single Banadir/Mogadishu polygon"
-    } else NA_character_
-
-    other <- in_window %>% filter(Province != "BANADIR")
-    districts_with_data <- sort(unique(other$District))
+    districts_with_data <- sort(unique(in_window$District))
     boundary_keys <- som_district_sf$dist_key
     unmatched_districts <- districts_with_data[!(resolve_dist_key(districts_with_data, table = SOM_DISTRICT_NAME_ALIASES) %in% boundary_keys)]
-    unmatched_items <- if (length(unmatched_districts) > 0) {
-      sprintf("no district match found for %s", paste(unmatched_districts, collapse = ", "))
-    } else character(0)
+    if (length(unmatched_districts) == 0) return(NULL)
 
-    items <- c(banadir_item, unmatched_items)
-    items <- items[!is.na(items)]
-    if (length(items) == 0) return(NULL)
+    items <- sprintf("no district match found for %s", paste(unmatched_districts, collapse = ", "))
     items[1] <- paste0(toupper(substr(items[1], 1, 1)), substr(items[1], 2, nchar(items[1])))
     items
   })
@@ -4667,7 +4658,7 @@ server <- function(input, output, session) {
     )
 
     tooltip <- paste0(
-      "<strong>", sf_map$DISTRICT, "</strong> (", ifelse(is.na(sf_map$State), sf_map$REGION, sf_map$State), ")",
+      "<strong>", sf_map$District, "</strong> (", ifelse(is.na(sf_map$State), sf_map$Region, sf_map$State), ")",
       cases_txt, "<br>", status_txt
     )
 

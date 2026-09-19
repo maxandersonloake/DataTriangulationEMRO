@@ -55,27 +55,57 @@ if (!nzchar(passphrase)) {
 cat("Reading", SOM_RAW_XLSX, "...\n")
 raw <- readxl::read_excel(SOM_RAW_XLSX, sheet = SOM_SHEET)
 
+# Title-Case helper for District/Region -- the raw workbook mixes ALL CAPS
+# and Title Case for what's very often the exact same place (e.g. "BADHAN"
+# and "Badhan" both appear as separate rows). Normalising casing at
+# ingestion, before ANY grouping happens below, means every downstream
+# group_by() (duplicate-row collapse, district reporting span, District x
+# Disease x Week grid, State rollup) automatically treats these as the same
+# district instead of silently fragmenting one real district's case counts
+# across two "different" ones. This only fixes case/whitespace variants --
+# genuine alternate SPELLINGS of the same place (e.g. "Galkayu North" vs
+# "Galkaio", both meaning Galkacyo) are a separate, larger transliteration
+# clean-up and are left as distinct rows here; they're instead reconciled
+# for MAP colouring purposes only via SOM_DISTRICT_NAME_ALIASES in app.R.
+.title_case <- function(x) {
+  x <- tolower(trimws(x))
+  gsub("(?:^|(?<=[\\s'-]))([a-z])", "\\U\\1", x, perl = TRUE)
+}
+
 raw <- raw %>%
   mutate(
-    State    = trimws(as.character(State)),
-    Region   = trimws(as.character(Region)),
-    District = trimws(as.character(District)),
+    # State was previously left as-is (only trimws()'d) -- the workbook has
+    # it ALL CAPS for 7 of the 8 states ("JUBALAND", "PUNTLAND", ...) but
+    # already Title Case for the 8th ("North East"), so State needed the
+    # same .title_case() treatment as Region/District to read consistently
+    # and to group correctly (a mismatched-case State would otherwise be
+    # treated as a distinct state from its own Title-Case self, if it were
+    # ever entered inconsistently within one week the way District already
+    # was).
+    State    = .title_case(as.character(State)),
+    Region   = .title_case(as.character(Region)),
+    District = .title_case(as.character(District)),
     Week     = as.integer(Week),
     Year     = as.integer(Year)
   ) %>%
   filter(!is.na(State), !is.na(District), !is.na(Week), !is.na(Year))
 
-# ---- Identify the disease case columns -------------------------------
+# ---- Identify the disease case AND death columns ------------------------
 # The workbook pairs each disease with its own "<Disease> case"/"<Disease>
 # death" columns (with two exceptions -- "Neonatal Tetanus" and
-# "Dengue Fever " have no " case" suffix/have trailing whitespace). This
-# dashboard only tracks case counts (matching Pakistan's own schema, which
-# has no separate death series) -- so every column NOT ending in "death"
-# (after trimming) is treated as a case-count column.
+# "Dengue Fever " have no " case" suffix/have trailing whitespace). Deaths
+# are exposed to the dashboard as their own selectable pseudo-disease --
+# "<Disease> (Deaths)" -- alongside the case-count "<Disease>" entry,
+# rather than as a separate value type next to Reported/Projected. This
+# means every existing chart/table/map, which all key off a generic
+# Disease + Cases pair, works for deaths with no further changes: picking
+# "Malaria (Deaths)" in any disease dropdown just flows the death counts
+# through exactly the same Cases column and codepath as any other disease.
 all_cols     <- names(raw)
 meta_cols    <- c("State", "Region", "District", "Week", "Month", "Year")
 disease_cols <- setdiff(all_cols, meta_cols)
 case_cols    <- disease_cols[!grepl("death\\s*$", disease_cols, ignore.case = TRUE)]
+death_cols   <- disease_cols[grepl("death\\s*$", disease_cols, ignore.case = TRUE)]
 
 .clean_disease_name <- function(col) {
   nm <- trimws(col)
@@ -86,14 +116,48 @@ case_cols    <- disease_cols[!grepl("death\\s*$", disease_cols, ignore.case = TR
   paste0(toupper(substr(nm, 1, 1)), substr(nm, 2, nchar(nm)))
 }
 disease_name_map <- setNames(vapply(case_cols, .clean_disease_name, character(1)), case_cols)
-cat("Diseases tracked (cases only; death columns dropped):\n  ",
-    paste(unname(disease_name_map), collapse = ", "), "\n")
+
+# Pair each death column up with its own case column by a shared "base"
+# key (both sides' " case"/" death" suffix stripped, lower-cased) rather
+# than cleaning each death column's name independently -- the raw
+# workbook's death columns don't always match their case column's casing
+# exactly (e.g. "Neonatal Tetanus" vs "Neonatal tetanus death"), so pairing
+# by key and labelling from the CASE side keeps "<Disease> (Deaths)"
+# consistently capitalised with its own "<Disease>" case entry. A death
+# column with no matching case column (or vice versa) is left out, with a
+# console note, rather than guessed at.
+.base_key <- function(col) {
+  nm <- trimws(col)
+  nm <- sub("\\s*[Cc]ase\\s*$", "", nm)
+  nm <- sub("\\s*[Dd]eath\\s*$", "", nm)
+  tolower(trimws(nm))
+}
+case_base_keys  <- setNames(vapply(case_cols, .base_key, character(1)), case_cols)
+death_base_keys <- setNames(vapply(death_cols, .base_key, character(1)), death_cols)
+
+death_name_map <- character(0)
+for (dcol in death_cols) {
+  matched_case_col <- names(case_base_keys)[case_base_keys == death_base_keys[[dcol]]]
+  if (length(matched_case_col) == 1) {
+    death_name_map[dcol] <- paste0(disease_name_map[[matched_case_col]], " (Deaths)")
+  } else {
+    cat("Note: death column '", dcol, "' has no matching case column -- left out.\n", sep = "")
+  }
+}
+unmatched_death_cols <- setdiff(death_cols, names(death_name_map))
+if (length(unmatched_death_cols) > 0) death_cols <- setdiff(death_cols, unmatched_death_cols)
+
+all_value_cols   <- c(case_cols, death_cols)
+all_name_map     <- c(disease_name_map, death_name_map)
+
+cat("Diseases tracked (cases):\n  ", paste(unname(disease_name_map), collapse = ", "), "\n")
+cat("Diseases tracked (deaths):\n  ", paste(unname(death_name_map), collapse = ", "), "\n")
 
 # ---- Long format at DISTRICT/WEEK/DISEASE grain ------------------------
 long_raw <- raw %>%
-  select(State, Region, District, Year, Week, all_of(case_cols)) %>%
-  pivot_longer(cols = all_of(case_cols), names_to = "SrcCol", values_to = "Cases") %>%
-  mutate(Disease = disease_name_map[SrcCol], Cases = suppressWarnings(as.numeric(Cases))) %>%
+  select(State, Region, District, Year, Week, all_of(all_value_cols)) %>%
+  pivot_longer(cols = all_of(all_value_cols), names_to = "SrcCol", values_to = "Cases") %>%
+  mutate(Disease = all_name_map[SrcCol], Cases = suppressWarnings(as.numeric(Cases))) %>%
   select(State, Region, District, Disease, Year, Week, Cases)
 
 # ---- Collapse duplicate District/Week submissions -----------------------
@@ -150,7 +214,7 @@ cat("...of which actually submitted:", nrow(submitted_weeks), "\n")
 cat("...i.e. implied non-reporting gaps:", nrow(district_full_grid) - nrow(submitted_weeks), "\n")
 
 # ---- Build the full District x Disease x Week grid, with Status --------
-diseases <- unname(disease_name_map)
+diseases <- unname(all_name_map)
 district_disease_grid <- district_full_grid %>%
   tidyr::crossing(Disease = diseases)
 
