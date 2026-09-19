@@ -2807,10 +2807,7 @@ ui <- tagList(
               div(
                 style = "padding-top: 18px;",
                 h4("Primary data source"),
-                p("Weekly IDSR case-count workbook for Somalia. Unlike the Pakistan dashboard's public NIH ",
-                  "bulletins, this data is not publicly redistributed: the underlying file is encrypted before ",
-                  "being committed to this project's (public) GitHub repository, and is only decrypted in memory ",
-                  "by the deployed dashboard itself -- there is no download link for it anywhere in this app."),
+                p("Weekly IDSR case counts for Somalia."),
                 h4("District-level admin boundaries", style = "margin-top: 20px;"),
                 p("The state and district outlines used on Somalia's maps come from the ",
                   "UN OCHA Common Operational Datasets (COD) for Somalia administrative boundaries:"),
