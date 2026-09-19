@@ -57,22 +57,22 @@ DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
 # their own polygon. See the file-inventory comment near the top of this file for how it was derived.
 DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson"
 
-# Somalia's boundary files: geoBoundaries' standard ADM2 (118 districts) and
-# ADM1 (18 official regions) layers for Somalia. ADM2 is the primary layer
-# used throughout (district map, and dissolved into a state-level shape for
-# the Data visualisation tab's map -- see som_regions_sf below, since there's
-# no separate state-level file the way Pakistan has one). ADM1 is used only
-# as a descriptive fallback (which of Somalia's 18 official regions a
-# district sits in) for the handful of districts the workbook never assigns
-# to one of its own 8 states -- it does NOT drive the state-level dissolve
-# itself, since those 18 regions don't correspond to the workbook's 8
-# states. An earlier, sparser 74-district boundary file was replaced with
-# these because geoBoundaries' 118 districts match the workbook's own
-# district names far more often (142/177 vs 96/177 after crosswalking), and
-# critically includes Mogadishu's own 17 sub-districts individually, so
-# Banadir no longer needs to be rolled up onto one polygon.
-SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/geoBoundaries-SOM-ADM2.geojson"
-SOMALIA_REGION_GEOJSON   <- "Data/som_admin_boundaries/geoBoundaries-SOM-ADM1.geojson"
+# Somalia's boundary file: the official UN OCHA / HDX Common Operational
+# Dataset for Administrative Boundaries (COD-AB) Somalia ADM2 layer (91
+# districts -- see the References tab for the dataset link), dissolved into
+# a state-level shape for the Data visualisation tab's map (see
+# som_regions_sf below), since there's no separate state-level file
+# matching the workbook's own 8-state scheme. Each ADM2 feature already
+# carries its own parent adm1_name (one of Somalia's 18 official regions)
+# and pcodes for both levels, so unlike the geoBoundaries file this
+# replaced, no separate ADM1 file or spatial join is needed just to know
+# which region a district sits in. This is a smaller, more conservative
+# district set than geoBoundaries' 118 (91 vs 118 -- a few real places,
+# like Dangoroyo or Ufeyn, aren't separately delineated here), but it's the
+# authoritative, currently-maintained official source, which was the point
+# of switching to it -- match rate against the workbook is 122/177 after
+# crosswalking.
+SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/som_admin2.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -338,6 +338,15 @@ if (somalia_data_available) {
   provinces_without_district_data_som <- setdiff(location_choices_som[location_choices_som != "National"],
                                                   provinces_with_district_data_som)
 
+  # Whether there's any real compliance/completeness data to divide by at
+  # all -- both compliance_data_som and district_compliance_data_som are
+  # currently ALWAYS shipped empty (see 2_1_ProcessData_SOM.R's own
+  # comment), so every "Reported vs Projected total cases" control for
+  # Somalia is hidden below rather than offered with nothing behind it.
+  # This flips on its own, with no further app.R changes, the moment a
+  # real compliance file is added to the pipeline.
+  somalia_has_compliance <- nrow(compliance_data_som) > 0
+
   # Somalia's own week calendar, mirroring Pakistan's week_calendar/
   # WEEK_CHOICES/LATEST_WEEK_CHOICE below -- kept entirely separate since the
   # two datasets' week/year coverage don't necessarily line up.
@@ -363,6 +372,7 @@ if (somalia_data_available) {
   week_calendar_som <- data.frame(Year = integer(), Week = integer(), week_idx = integer())
   WEEK_CHOICES_SOM <- character(0)
   LATEST_WEEK_CHOICE_SOM <- NA_character_
+  somalia_has_compliance <- FALSE
 }
 
 # ---- Matching CSV district names onto admin-boundary polygons ------------
@@ -426,74 +436,122 @@ resolve_dist_key <- function(x, table = DISTRICT_NAME_ALIASES) {
 }
 
 # ---- Somalia's own district-name crosswalk ---------------------------------
-# Somalia's boundary file (Data/som_admin_boundaries/geoBoundaries-SOM-ADM2.geojson,
-# 118 districts, geoBoundaries' standard ADM2 layer) uses its own spellings
-# ("BUHODLE", "GARDO", "DINSOOR"); the IDSR workbook's District column uses
-# much less consistent transliterations of the same places ("Buuhoodle",
-# "Qardho", "Diinsor"/"Dinsor"). Unlike Pakistan's alias table above (mostly
-# spacing/case differences that normalize_dist_name() alone doesn't quite
-# catch), most of these are genuinely different spellings of the same name,
-# so they need an explicit crosswalk the same way. Built by matching each
-# non-exact-matching workbook district name against the boundary file's 118
-# (fuzzy string matching, then manually verified against real-world
-# knowledge of Somali administrative geography) -- entries below are ones
-# matched with reasonable confidence; anything not confidently identifiable
-# was deliberately left out, so it resolves to no boundary match (shown grey
-# on the map) rather than risk mis-locating it. A workbook district with NO
-# row here, and no exact (normalized) match either, simply won't be found on
-# the district map -- it remains fully present in the District-level table
-# regardless, which is the authoritative view. This ADM2 layer's 118
-# districts include Mogadishu's own 17 sub-districts individually (unlike
-# the smaller 74-district file previously used here), so -- unlike an
-# earlier version of this crosswalk -- Banadir/Mogadishu districts are NOT
-# special-cased or rolled up onto a single polygon any more: Hodan,
-# Shangani, Yaqshid, and the rest each resolve to their own real polygon
-# through this same table, exactly like every other district.
+# Somalia's boundary file (Data/som_admin_boundaries/som_admin2.geojson --
+# the official UN OCHA/HDX COD-AB Somalia ADM2 layer, 91 districts, see the
+# References tab) uses standard Somali-language spellings ("Cabudwaaq",
+# "Buuhoodle", "Diinsoor"); the IDSR workbook's District column uses much
+# less consistent transliterations of the same places ("Abudwak"/"Abudwaq",
+# "Buhodle", "Diinsor"/"Dinsor"). Most of these are genuinely different
+# spellings of the same name (not just spacing/case, which
+# normalize_dist_name() alone already handles), so they need an explicit
+# crosswalk. Built by matching each non-exact-matching workbook district
+# name against the boundary file's 91 (fuzzy string matching, then manually
+# verified against real-world knowledge of Somali administrative
+# geography) -- entries below are ones matched with reasonable confidence;
+# anything not confidently identifiable was deliberately left out, so it
+# resolves to no boundary match (shown grey on the map) rather than risk
+# mis-locating it. A workbook district with NO row here, and no exact
+# (normalized) match either, simply won't be found on the district map --
+# it remains fully present in the District-level table regardless, which is
+# the authoritative view. This layer includes Mogadishu's own sub-districts
+# individually (Hodan, Shangaani, Yaaqshid, and the rest, each its own
+# polygon), so Banadir/Mogadishu districts are NOT special-cased or rolled
+# up onto a single polygon -- they resolve through this same table exactly
+# like every other district. One Banadir quirk worth noting: the official
+# "Wadajir" district is shipped as "Wadajir (Medina)" -- its Mogadishu-only
+# colloquial name -- so the workbook's "Madina" is aliased straight to it.
 SOM_DISTRICT_NAME_ALIASES <- c(
-  abudwak       = "abudwaq",
-  afgooye       = "afgoi",
-  ainabo        = "aynabo",
-  awdhegle      = "awdheegle",
-  baidoba       = "baidoa",
-  barawe        = "brava",
-  bardale       = "berdale",
-  beledhawo     = "belethawa",
-  berdalle      = "berdale",
-  bondheere     = "bondere",
-  buloburte     = "buloburti",
-  burco         = "burao",
-  buroa         = "burao",
-  buuhoodle     = "buhodle",
-  buurdhubo     = "burdubo",
-  ceelwaaq      = "elwak",
-  celgaras      = "elgaras",
-  deynile       = "danyile",
-  dharkeynley   = "dharkenly",
-  dhuusamarreb  = "dusamreb",
-  diinsor       = "dinsoor",
-  dinsor        = "dinsoor",
-  dolow         = "dolo",
-  eldheer       = "eldhere",
-  galcad        = "galad",
-  galinsor      = "galinsoor",
-  hamarwayne    = "hamarweyn",
-  harardheere   = "haradhere",
+  abdulaziz     = "cabdulasis",
+  abudwak       = "cabudwaaq",
+  abudwaq       = "cabudwaaq",
+  adado         = "cadaado",
+  adale         = "cadale",
+  adenyabal     = "adanyabaal",
+  afgoi         = "afgooye",
+  ainabo        = "caynabo",
+  alula         = "caluula",
+  aynabo        = "caynabo",
+  badhadhe      = "badhaadhe",
+  baidoa        = "baydhaba",
+  baidoba       = "baydhaba",
+  balad         = "balcad",
+  bardera       = "baardheere",
+  beledhawo     = "beletxaawo",
+  belethawa     = "beletxaawo",
+  benderbayla   = "bandarbeyla",
+  bonderbayla   = "bandarbeyla",
+  bondere       = "bondhere",
+  bondheere     = "bondhere",
+  brava         = "baraawe",
+  barawe        = "baraawe",
+  buhodle       = "buuhoodle",
+  buloburti     = "buloburto",
+  buloburte     = "buloburto",
+  burhakaba     = "buurhakaba",
+  buroa         = "burco",
+  danyile       = "daynile",
+  deynile       = "daynile",
+  dharkenly     = "dharkenley",
+  dharkeynley   = "dharkenley",
+  dhuusamarreb  = "dhuusamarreeb",
+  diinsor       = "diinsoor",
+  dinsor        = "diinsoor",
+  dolo          = "doolow",
+  dolow         = "doolow",
+  dusamreb      = "dhuusamarreeb",
+  elafweyn      = "ceelafweyn",
+  elbarde       = "ceelbarde",
+  elbur         = "ceelbuur",
+  eldhere       = "ceeldheer",
+  elwak         = "ceelwaaq",
+  erigavo       = "ceerigaabo",
+  gabiley       = "gebiley",
+  galkacyo      = "gaalkacyo",
+  galkaio       = "gaalkacyo",
+  galkayunorth  = "gaalkacyo",
+  galkayusouth  = "gaalkacyo",
+  garbaharey    = "garbahaarey",
+  gardo         = "qardho",
+  garowe        = "garoowe",
+  goldogob      = "galdogob",
+  hamarwayne    = "hamarweyne",
+  hamarweyn     = "hamarweyne",
+  haradhere     = "xarardheere",
+  harardheere   = "xarardheere",
+  hargeisa      = "hargeysa",
+  hawalwadag    = "hawlwadaag",
   heliwaa       = "heliwa",
-  jariiban      = "jariban",
+  hudun         = "xudun",
+  hudur         = "xudur",
+  jamame        = "jamaame",
+  jariban       = "jariiban",
+  karan         = "karaan",
+  kismayo       = "kismaayo",
   kurtunwarey   = "kurtunwaarey",
-  laasaanod     = "lasanod",
-  odweine       = "odwayne",
-  qansahdhere   = "qansahdheere",
-  qansaxdhere   = "qansahdheere",
-  qardho        = "gardo",
-  qoryoolay     = "qoryoley",
-  raagacelle    = "ragaelle",
-  rabdhure      = "rabdure",
-  taleeh        = "taleh",
-  tiyeglow      = "tiyeglo",
-  ufain         = "ufeyn",
-  waaciya       = "waciya",
-  wanlaweyn     = "wanleweyne"
+  laasaanod     = "laascaanood",
+  lasanod       = "laascaanood",
+  lasqoray      = "laasqoray",
+  lasqoreh      = "laasqoray",
+  lughaya       = "lughaye",
+  madina        = "wadajir",
+  odwayne       = "owdweyne",
+  odweine       = "owdweyne",
+  qansahdhere   = "qansaxdheere",
+  qansaxdhere   = "qansaxdheere",
+  qoryoley      = "qoryooley",
+  qoryoolay     = "qoryooley",
+  rabdhure      = "rabdhuure",
+  rabdure       = "rabdhuure",
+  shangani      = "shangaani",
+  taleeh        = "taleex",
+  taleh         = "taleex",
+  tiyeglo       = "tayeeglow",
+  tiyeglow      = "tayeeglow",
+  waberi        = "waaberi",
+  wajid         = "waajid",
+  wardegly      = "wardhigley",
+  yaqshid       = "yaaqshid",
+  zeila         = "zeylac"
 )
 
 # ---- Map-only concordances worth narrating on the District map's ----------
@@ -1452,24 +1510,41 @@ resolve_nonreporting_excluded <- function(mode, excl_input, all_nr_provinces) {
 DISTRICT_NO_DATA_COLOUR              <- "#E8ECEF"
 DISTRICT_PROVINCE_NOT_COVERED_COLOUR <- DISTRICT_NO_DATA_COLOUR
 
+# ---- Helper: extend a fixed categorical colour sequence to at least `n` ---
+# colours without ever repeating one. The fixed WHO-brand sequences below
+# are used as-is up to their own length (so existing colour assignments for
+# the countries currently using them don't shift); if a country ever has
+# MORE categories than the fixed sequence has colours (as Somalia's 8
+# states did against the old 7-colour REGION_COLOR_SEQUENCE -- the 8th
+# state silently reused the 1st state's navy on the regional-contribution
+# stacked bar chart), additional well-separated hues are generated (evenly
+# spaced around the colour wheel via scales::hue_pal()) rather than
+# silently cycling back to repeat an earlier colour.
+extend_colour_sequence <- function(seq, n) {
+  if (n <= length(seq)) return(seq[seq_len(n)])
+  c(seq, scales::hue_pal()(n - length(seq)))
+}
+
 # ---- Fixed year -> colour map ----------------------------------------------
 # Assigned once from every year present in the data (most recent = WHO Navy,
 # then green, pale blue, orange, ...), so a year's colour never shifts
 # depending on which other years happen to be checked in "Years to show".
 who_pale_blue <- "#6FB3E0"
-YEAR_COLOR_SEQUENCE <- c(who_navy, who_green, who_pale_blue, who_orange, who_magenta, who_yellow, who_purple)
+YEAR_COLOR_SEQUENCE <- c(who_navy, who_green, who_pale_blue, who_orange, who_magenta, who_yellow, who_purple,
+                          who_blue, who_red, who_red_dark)
 
 ALL_YEARS_DESC <- sort(unique(raw_data$Year), decreasing = TRUE)
 YEAR_COLOR_MAP <- setNames(
-  rep(YEAR_COLOR_SEQUENCE, length.out = length(ALL_YEARS_DESC)),
+  extend_colour_sequence(YEAR_COLOR_SEQUENCE, length(ALL_YEARS_DESC)),
   as.character(ALL_YEARS_DESC)
 )
 
 # ---- Fixed region -> colour map (for the regional-contribution bar chart) -
-REGION_COLOR_SEQUENCE <- c(who_navy, who_blue, who_green, who_orange, who_yellow, who_purple, who_magenta)
+REGION_COLOR_SEQUENCE <- c(who_navy, who_blue, who_green, who_orange, who_yellow, who_purple, who_magenta,
+                            who_pale_blue, who_red, who_red_dark)
 REGION_NAMES <- location_choices[location_choices != "National"]
 REGION_COLOR_MAP <- setNames(
-  rep(REGION_COLOR_SEQUENCE, length.out = length(REGION_NAMES)),
+  extend_colour_sequence(REGION_COLOR_SEQUENCE, length(REGION_NAMES)),
   REGION_NAMES
 )
 
@@ -1479,12 +1554,12 @@ REGION_COLOR_MAP <- setNames(
 if (somalia_data_available) {
   ALL_YEARS_DESC_SOM <- sort(unique(raw_data_som$Year), decreasing = TRUE)
   YEAR_COLOR_MAP_SOM <- setNames(
-    rep(YEAR_COLOR_SEQUENCE, length.out = length(ALL_YEARS_DESC_SOM)),
+    extend_colour_sequence(YEAR_COLOR_SEQUENCE, length(ALL_YEARS_DESC_SOM)),
     as.character(ALL_YEARS_DESC_SOM)
   )
   REGION_NAMES_SOM <- location_choices_som[location_choices_som != "National"]
   REGION_COLOR_MAP_SOM <- setNames(
-    rep(REGION_COLOR_SEQUENCE, length.out = length(REGION_NAMES_SOM)),
+    extend_colour_sequence(REGION_COLOR_SEQUENCE, length(REGION_NAMES_SOM)),
     REGION_NAMES_SOM
   )
 } else {
@@ -1546,40 +1621,25 @@ if (!is.null(pak_district_admin1_sf)) {
 
 # ---- Somalia boundary file: district-level layer, plus a dissolved -------
 # state-level layer built from it at startup. Somalia's primary layer here
-# is geoBoundaries' standard ADM2 (118 districts) -- there's no separate
-# state-level file matching the workbook's own 8-state scheme (the way
-# Pakistan has pakistan_admin1.geojson), so the state-level shape used by
-# the Data visualisation tab's map is dissolved from this same district
-# file once, here, at app startup (not on every page load).
+# is the official UN OCHA/HDX COD-AB ADM2 layer (91 districts, see the
+# References tab) -- there's no separate state-level file matching the
+# workbook's own 8-state scheme (the way Pakistan has
+# pakistan_admin1.geojson), so the state-level shape used by the Data
+# visualisation tab's map is dissolved from this same district file once,
+# here, at app startup (not on every page load).
 som_district_sf <- load_pak_boundary_file(SOMALIA_DISTRICT_GEOJSON)
 som_regions_sf  <- NULL
 
 if (!is.null(som_district_sf) && somalia_data_available) {
-  som_district_sf$dist_key <- resolve_dist_key(som_district_sf$shapeName, table = SOM_DISTRICT_NAME_ALIASES)
-  # Title-cased for display (ADM2's shapeName is ALL CAPS, e.g. "BADHAN").
-  som_district_sf$District <- tools::toTitleCase(tolower(som_district_sf$shapeName))
-
-  # Which of Somalia's 18 OFFICIAL regions (ADM1) each district sits in --
-  # purely descriptive; used only as a tooltip fallback below for the
-  # handful of districts the workbook never assigns to one of its own 8
-  # states (see State, next). Matched by point-on-surface rather than the
-  # workbook, since ADM1's regions don't correspond to the workbook's States.
-  som_adm1_sf <- load_pak_boundary_file(SOMALIA_REGION_GEOJSON)
-  if (!is.null(som_adm1_sf)) {
-    # Renamed to "Region" (rather than joining on ADM1's own "shapeName")
-    # because ADM2 (som_district_sf) already has its OWN "shapeName" column
-    # -- joining two same-named columns would silently produce
-    # "shapeName.x"/"shapeName.y" instead of erroring, so the plain
-    # $shapeName lookup below would return NULL (and silently no-op the
-    # column assignment) rather than the region name.
-    som_adm1_sf_region <- som_adm1_sf %>% dplyr::select(Region = shapeName)
-    som_region_match <- suppressWarnings(
-      sf::st_join(sf::st_point_on_surface(som_district_sf), som_adm1_sf_region)
-    )
-    som_district_sf$Region <- sf::st_drop_geometry(som_region_match)$Region
-  } else {
-    som_district_sf$Region <- NA_character_
-  }
+  som_district_sf$dist_key <- resolve_dist_key(som_district_sf$adm2_name, table = SOM_DISTRICT_NAME_ALIASES)
+  som_district_sf$District <- som_district_sf$adm2_name
+  # Which of Somalia's 18 OFFICIAL regions each district sits in -- purely
+  # descriptive; used only as a tooltip fallback below for the handful of
+  # districts the workbook never assigns to one of its own 8 states (see
+  # State, next). Unlike the geoBoundaries file this replaced, each ADM2
+  # feature already carries its own parent adm1_name directly, so no
+  # separate spatial join against the ADM1 layer is needed to get it.
+  som_district_sf$Region <- som_district_sf$adm1_name
 
   # Which Somalia STATE each boundary district belongs to -- the boundary
   # file itself has no State field, so this is derived from the workbook:
@@ -1610,6 +1670,27 @@ if (!is.null(som_district_sf) && somalia_data_available) {
     message("Could not dissolve Somalia state boundaries: ", conditionMessage(e))
     NULL
   })
+}
+
+# ---- Helper: the light, label-light basemap used under every choropleth --
+# leaflet map (Pakistan's and Somalia's alike). Deliberately NOT
+# addProviderTiles(providers$CartoDB.Positron): the leaflet R package's
+# bundled provider registry currently points CartoDB.Positron at Carto's
+# GL-style tile endpoint, which now requires a Carto account/API key and
+# shows a plain "API key required" tile image instead of the basemap once
+# Carto's free anonymous quota for it is used up -- inconsistently, since
+# it depends on how many tiles a given map view has already requested, not
+# on anything in this app's own code (this is why it could appear on one
+# map and not another, even though every map here used the exact same
+# addProviderTiles() call). This calls the older, still-fully-free raster
+# "light_all" endpoint directly instead, which renders the identical
+# Positron look with no key and no such quota wall.
+add_positron_basemap <- function(map) {
+  leaflet::addTiles(
+    map,
+    urlTemplate = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  )
 }
 
 # ---- Helper: standard Web Mercator lng/lat -> global pixel coordinates --
@@ -2395,15 +2476,18 @@ ui <- tagList(
               sidebarPanel(
                 width = 3,
                 selectInput("asof_week_alerts_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
-                radioButtons("case_type_alerts_som", "Case counts to evaluate",
-                             choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                             selected = "reported"),
-                tags$p(
-                  style = "font-size: 12px; color: #555;",
-                  strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
-                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
-                  "option currently has nothing to show. See the ", strong("Home"), " tab for full details."
-                ),
+                if (somalia_has_compliance) {
+                  tagList(
+                    radioButtons("case_type_alerts_som", "Case counts to evaluate",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported"),
+                    tags$p(
+                      style = "font-size: 12px; color: #555;",
+                      strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
+                      "cases by the compliance percentage. See the ", strong("Home"), " tab for full details."
+                    )
+                  )
+                },
                 tags$hr(),
                 uiOutput("alerts_nr_control_som"),
                 tags$p(
@@ -2433,10 +2517,11 @@ ui <- tagList(
               div(
                 style = "font-size: 12.5px; color: #555;",
                 p(style = "margin-bottom: 6px;", strong("Calculations:")),
-                p(style = "margin-bottom: 6px;",
-                  strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
-                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
-                  "option currently has nothing to show."),
+                if (somalia_has_compliance) {
+                  p(style = "margin-bottom: 6px;",
+                    strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                    "cases by the compliance percentage.")
+                },
                 p(style = "margin-bottom: 6px;",
                   strong("Handling non-reported provinces:"), " choose whether a region that is non-reported for ",
                   "some visualised weeks just contributes 0 for those weeks, or is also excluded from every other ",
@@ -2461,11 +2546,13 @@ ui <- tagList(
                     class = "viz-panel-controls",
                     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
                     uiOutput("year_selector_som"),
-                    radioButtons("case_type_som", "Case counts to show",
-                                 choices = c("Reported cases only" = "reported",
-                                             "Projected total cases" = "projected",
-                                             "Both" = "both"),
-                                 selected = "reported", inline = TRUE),
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_som", "Case counts to show",
+                                   choices = c("Reported cases only" = "reported",
+                                               "Projected total cases" = "projected",
+                                               "Both" = "both"),
+                                   selected = "reported", inline = TRUE)
+                    },
                     uiOutput("trend_nr_control_som")
                   )
                 )
@@ -2481,9 +2568,11 @@ ui <- tagList(
                   div(
                     class = "viz-panel-controls",
                     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
-                    radioButtons("case_type_map_som", "Case counts to colour the map by",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported", inline = TRUE)
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_map_som", "Case counts to colour the map by",
+                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                   selected = "reported", inline = TRUE)
+                    }
                   )
                 )
               )
@@ -2500,9 +2589,11 @@ ui <- tagList(
                   div(
                     class = "viz-panel-controls",
                     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
-                    radioButtons("case_type_stack_som", "Case counts to show",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported", inline = TRUE),
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_stack_som", "Case counts to show",
+                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                   selected = "reported", inline = TRUE)
+                    },
                     uiOutput("stack_nr_control_som")
                   )
                 )
@@ -2521,9 +2612,11 @@ ui <- tagList(
                     class = "viz-panel-controls",
                     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
                     sd_gradient_legend_ui(show_no_data = TRUE),
-                    radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported", inline = TRUE)
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
+                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                   selected = "reported", inline = TRUE)
+                    }
                   )
                 )
               )
@@ -2541,15 +2634,18 @@ ui <- tagList(
                 selectInput("location_tbl_som", "Location", choices = location_choices_som, selected = "National"),
                 selectInput("asof_week_tbl_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
                 numericInput("n_weeks_tbl_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
-                radioButtons("case_type_tbl_som", "Case counts to display",
-                             choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                             selected = "reported"),
-                tags$p(
-                  style = "font-size: 12px; color: #555;",
-                  strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
-                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
-                  "option currently has nothing to show."
-                ),
+                if (somalia_has_compliance) {
+                  tagList(
+                    radioButtons("case_type_tbl_som", "Case counts to display",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported"),
+                    tags$p(
+                      style = "font-size: 12px; color: #555;",
+                      strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                      "cases by the compliance percentage."
+                    )
+                  )
+                },
                 conditionalPanel(
                   condition = "input.location_tbl_som == 'National'",
                   tags$p(
@@ -2612,10 +2708,12 @@ ui <- tagList(
               div(style = "flex: 1 1 0;",
                   selectInput("state_district_tbl_som", "State", choices = provinces_with_district_data_som,
                               selected = provinces_with_district_data_som[1], width = "100%")),
-              div(style = "flex: 1 1 0;",
-                  radioButtons("case_type_district_tbl_som", "Case counts to display",
-                               choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                               selected = "reported", inline = TRUE))
+              if (somalia_has_compliance) {
+                div(style = "flex: 1 1 0;",
+                    radioButtons("case_type_district_tbl_som", "Case counts to display",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported", inline = TRUE))
+              }
             ),
 
             # ---- Weekly case trend (left) + map (right) -----------------------
@@ -2711,6 +2809,11 @@ ui <- tagList(
                   "bulletins, this data is not publicly redistributed: the underlying file is encrypted before ",
                   "being committed to this project's (public) GitHub repository, and is only decrypted in memory ",
                   "by the deployed dashboard itself -- there is no download link for it anywhere in this app."),
+                h4("District-level admin boundaries", style = "margin-top: 20px;"),
+                p("The state and district outlines used on Somalia's maps come from the ",
+                  "UN OCHA Common Operational Datasets (COD) for Somalia administrative boundaries:"),
+                tags$a(href = "https://data.humdata.org/dataset/cod-ab-som#data-and-resources", target = "_blank",
+                       "https://data.humdata.org/dataset/cod-ab-som#data-and-resources"),
                 h4("Alert detection methodology", style = "margin-top: 20px;"),
                 p("The Alerts tab and the SD-based shading on the weekly summary table use the same modified ",
                   "CUSUM/C2 aberration detection method as the Pakistan dashboard (rolling 9-week baseline, most ",
@@ -3106,7 +3209,7 @@ server <- function(input, output, session) {
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$adm1_name, status_line, zoom = 5)
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
+      add_positron_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
@@ -3815,7 +3918,7 @@ server <- function(input, output, session) {
     )
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
+      add_positron_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.5, opacity = 0.8,
@@ -4258,7 +4361,7 @@ server <- function(input, output, session) {
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$State, status_line, zoom = 5)
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
+      add_positron_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
@@ -4560,7 +4663,14 @@ server <- function(input, output, session) {
 
   # ---------------- Somalia: District-level data tab: map ------------------
   district_map_data_som <- reactive({
-    req(input$disease_district_tbl_som, input$asof_week_district_tbl_som, input$case_type_district_tbl_som)
+    # case_type_district_tbl_som is intentionally NOT req()'d here -- its
+    # radioButtons control is only rendered when somalia_has_compliance is
+    # TRUE (see UI), so the input is NULL whenever there's no compliance
+    # data to toggle. The identical() check below already degrades safely
+    # to "Reported" in that case; req()'ing it would silently block this
+    # reactive (and the whole district map) forever once the control is
+    # hidden.
+    req(input$disease_district_tbl_som, input$asof_week_district_tbl_som)
     asof <- parse_asof(input$asof_week_district_tbl_som)
     value_col <- if (identical(input$case_type_district_tbl_som, "projected")) "Projected" else "Reported"
     get_district_map_data_som(input$disease_district_tbl_som, asof, value_col)
@@ -4663,7 +4773,7 @@ server <- function(input, output, session) {
     )
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
-      addProviderTiles(providers$CartoDB.Positron) %>%
+      add_positron_basemap() %>%
       addPolygons(
         fillColor = fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.5, opacity = 0.8,
