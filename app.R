@@ -40,6 +40,8 @@ library(sf)
 library(ggrepel)
 library(leaflet)
 
+source("encryption_utils.R")
+
 REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
 
 # Admin boundary files used by the District-level data tab's map -- distinct
@@ -54,6 +56,13 @@ DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
 # tehsil) -- built from Data/pak_admin_boundaries/pak_admin3.geojson so that CSV rows for each district match
 # their own polygon. See the file-inventory comment near the top of this file for how it was derived.
 DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson"
+
+# Somalia's boundary file: a single district-level (adm2-equivalent) layer
+# with no separate state-level file the way Pakistan has one -- so the
+# state-level shape used by the Data visualisation tab's map is dissolved
+# from this same file at startup (see som_regions_sf below), rather than
+# being a second, separately-shipped file.
+SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/somalia_districts.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -288,6 +297,64 @@ district_disease_choices <- sort(unique(raw_district_data$Disease))
 provinces_with_district_data    <- sort(unique(raw_district_data$Province))
 provinces_without_district_data <- setdiff(location_choices[location_choices != "National"], provinces_with_district_data)
 
+# ================================================================
+# SOMALIA -- data loading
+# ----------------------------------------------------------------
+# Unlike Pakistan's data (public NIH bulletins, so the CSVs above are
+# committed to the repo in plain readable form), the Somalia workbook isn't
+# public -- so only an ENCRYPTED bundle (Data/SOM_IDSR_Data.enc, built by
+# 2_1_ProcessData_SOM.R) is committed. It's decrypted here at app start-up
+# using the SOMALIA_DATA_KEY secret environment variable (set on Posit
+# Connect Cloud's "Environment variables" panel for this app -- never
+# committed to git). If that variable is unset/wrong, or the file is
+# missing, `somalia_data_available` is FALSE and every Somalia UI element
+# shows a "not available" message instead of erroring -- the Pakistan tab
+# is entirely unaffected either way.
+SOMALIA_DATA_PATH <- "Data/SOM_IDSR_Data.enc"
+somalia_bundle <- decrypt_object_from_file(SOMALIA_DATA_PATH, Sys.getenv("SOMALIA_DATA_KEY"))
+somalia_data_available <- !is.null(somalia_bundle)
+
+if (somalia_data_available) {
+  raw_data_som                 <- somalia_bundle$raw_data
+  compliance_data_som          <- somalia_bundle$compliance_data
+  raw_district_data_som        <- somalia_bundle$raw_district_data
+  district_compliance_data_som <- somalia_bundle$district_compliance_data
+
+  disease_choices_som  <- sort(unique(raw_data_som$Disease))
+  location_choices_som <- c("National", sort(unique(raw_data_som$Province[raw_data_som$Province != "Total"])))
+  district_disease_choices_som <- sort(unique(raw_district_data_som$Disease))
+
+  provinces_with_district_data_som    <- sort(unique(raw_district_data_som$Province))
+  provinces_without_district_data_som <- setdiff(location_choices_som[location_choices_som != "National"],
+                                                  provinces_with_district_data_som)
+
+  # Somalia's own week calendar, mirroring Pakistan's week_calendar/
+  # WEEK_CHOICES/LATEST_WEEK_CHOICE below -- kept entirely separate since the
+  # two datasets' week/year coverage don't necessarily line up.
+  week_calendar_som <- raw_data_som %>%
+    distinct(Year, Week) %>%
+    arrange(Year, Week) %>%
+    mutate(week_idx = row_number())
+
+  latest_year_som <- max(raw_data_som$Year, na.rm = TRUE)
+  latest_week_som <- max(raw_data_som$Week[raw_data_som$Year == latest_year_som], na.rm = TRUE)
+
+  week_choice_values_som <- paste0(week_calendar_som$Year, "-", sprintf("%02d", week_calendar_som$Week))
+  week_choice_labels_som <- paste0("Week ", week_calendar_som$Week, ", ", week_calendar_som$Year)
+  WEEK_CHOICES_SOM       <- setNames(rev(week_choice_values_som), rev(week_choice_labels_som))
+  LATEST_WEEK_CHOICE_SOM <- paste0(latest_year_som, "-", sprintf("%02d", latest_week_som))
+  # YEAR_COLOR_MAP_SOM/REGION_COLOR_MAP_SOM are built further down, right
+  # after Pakistan's own YEAR_COLOR_MAP/REGION_COLOR_MAP -- they reuse those
+  # same colour SEQUENCES (defined there), so they can't be built this early.
+} else {
+  raw_data_som <- compliance_data_som <- raw_district_data_som <- district_compliance_data_som <- NULL
+  disease_choices_som <- location_choices_som <- district_disease_choices_som <- character(0)
+  provinces_with_district_data_som <- provinces_without_district_data_som <- character(0)
+  week_calendar_som <- data.frame(Year = integer(), Week = integer(), week_idx = integer())
+  WEEK_CHOICES_SOM <- character(0)
+  LATEST_WEEK_CHOICE_SOM <- NA_character_
+}
+
 # ---- Matching CSV district names onto admin-boundary polygons ------------
 # Data/pak_admin_boundaries/pak_admin2.geojson is an independently-sourced
 # boundary file, so a district's name there doesn't always spell/order
@@ -342,10 +409,116 @@ DISTRICT_NAME_ALIASES <- c(
   karachikeamari     = "southkarachi"         # Karachi Keamari -> South Karachi
 )
 
-resolve_dist_key <- function(x) {
+resolve_dist_key <- function(x, table = DISTRICT_NAME_ALIASES) {
   k <- normalize_dist_name(x)
-  aliased <- unname(DISTRICT_NAME_ALIASES[k])
+  aliased <- unname(table[k])
   ifelse(is.na(aliased), k, aliased)
+}
+
+# ---- Somalia's own district-name crosswalk ---------------------------------
+# Somalia's boundary file (Data/som_admin_boundaries/somalia_districts.geojson,
+# 74 districts) uses standard Somali-language spellings ("Dhuusamarreeb",
+# "Ceerigaabo", "Laas Caanood"); the IDSR workbook's District column uses
+# much less consistent transliterations of the same places ("Dusamreb",
+# "Erigavo", "Laasaanod"/"Las Anod"). Unlike Pakistan's alias table above
+# (mostly spacing/case differences that normalize_dist_name() alone doesn't
+# quite catch), most of these are genuinely different spellings of the same
+# name, so they need an explicit crosswalk the same way. Built by matching
+# each of the ~150 non-exact-matching workbook district names against the
+# boundary file's 74 (region-scoped fuzzy string matching, then manually
+# verified) -- entries below are ones matched with reasonable confidence;
+# anything not confidently identifiable was deliberately left out, so it
+# resolves to no boundary match (shown grey on the map) rather than risk
+# mis-locating it. A workbook district with NO row here, and no exact
+# (normalized) match either, simply won't be found on the district map --
+# it remains fully present in the District-level table regardless, which is
+# the authoritative view. Mogadishu/Banadir is handled separately (see
+# som_dist_key_for() below), not through this table, since EVERY Banadir
+# sub-district (Hodan, Shangani, Yaqshid, ...) rolls up onto the single
+# "Mogadishu" polygon regardless of its own name.
+SOM_DISTRICT_NAME_ALIASES <- c(
+  abudwak             = "cabudwaaq",
+  abudwaq             = "cabudwaaq",
+  adado               = "cadaado",
+  adale               = "cadale",
+  adenyabal           = "adanyabaal",
+  afgoi               = "afgooye",
+  ainabo              = "caynabo",
+  alula               = "caluula",
+  aynabo              = "caynabo",
+  badhadhe            = "badhaadhe",
+  baidoba             = "baidoa",
+  balad               = "balcad",
+  barawe              = "baraawe",
+  bardera             = "baardheere",
+  beledhawo           = "beletxaawo",
+  belethawa           = "beletxaawo",
+  benderbayla         = "bandarbayla",
+  brava               = "baraawe",
+  buhodle             = "buuhoodle",
+  buloburte           = "buloburti",
+  burhakaba           = "buurhakaba",
+  buroa               = "burco",
+  ceelwaaq            = "elwaq",
+  dhuusamarreb        = "dhuusamarreeb",
+  diinsor             = "diinsoor",
+  dinsor              = "diinsoor",
+  dolo                = "doolow",
+  dolow               = "doolow",
+  dusamreb            = "dhuusamarreeb",
+  elafweyn            = "ceelafweyn",
+  elbarde             = "ceelbarde",
+  elbur               = "ceelbuur",
+  eldheer             = "ceeldheer",
+  eldhere             = "ceeldheer",
+  elwak               = "elwaq",
+  erigavo             = "ceerigaabo",
+  galkacyo            = "galkaacyo",
+  galkaio             = "galkaacyo",
+  galkayunorth        = "galkaacyo",
+  galkayusouth        = "galkaacyo",
+  garbaharey          = "garbahaarey",
+  gardo               = "qardho",
+  goldogob            = "galdogob",
+  haradhere           = "xarardheere",
+  harardheere         = "xarardheere",
+  hargeisa            = "hargeysa",
+  hudun               = "xudun",
+  hudur               = "xudur",
+  jamame              = "jamaame",
+  jariban             = "jariiban",
+  kurtunwarey         = "kurtunwaarey",
+  laasaanod           = "laascaanood",
+  lasanod             = "laascaanood",
+  lasqoray            = "laasqoray",
+  lasqoreh            = "laasqoray",
+  lughaya             = "lughaye",
+  odwayne             = "owdweyne",
+  odweine             = "owdweyne",
+  qansahdhere         = "qansaxdheere",
+  qansaxdhere         = "qansaxdheere",
+  qoryoley            = "qoryooley",
+  qoryoolay           = "qoryooley",
+  rabdhure            = "rabdhuure",
+  rabdure             = "rabdhuure",
+  taleeh              = "taleex",
+  taleh               = "taleex",
+  tiyeglo             = "tayeeglow",
+  tiyeglow            = "tayeeglow",
+  wajid               = "waajid",
+  wanlaweyn           = "wanleweyne",
+  zeila               = "zeylac"
+)
+
+# Somalia's own dist_key resolver: EVERY Banadir-state district (Hodan,
+# Shangani, Yaqshid, and every other Mogadishu sub-district reported in the
+# workbook) rolls up onto the boundary file's single "Mogadishu" polygon,
+# regardless of its own name -- checked first, ahead of the name-based
+# crosswalk, so this never depends on whether a given sub-district's name
+# happens to also appear in SOM_DISTRICT_NAME_ALIASES. Everything else goes
+# through the normal normalize/alias path, exactly like resolve_dist_key().
+som_dist_key_for <- function(province, district) {
+  ifelse(province == "BANADIR", "mogadishu", resolve_dist_key(district, table = SOM_DISTRICT_NAME_ALIASES))
 }
 
 # ---- Map-only concordances worth narrating on the District map's ----------
@@ -405,12 +578,12 @@ parse_asof <- function(x) {
 # Returns a data frame with one row per week, in chronological order:
 # Year, Week, and week_lab (the display label -- "Wk N", or "Wk N 'YY" when
 # the window spans more than one year, so columns stay unambiguous).
-weeks_up_to <- function(asof, n_weeks) {
-  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
-  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+weeks_up_to <- function(asof, n_weeks, calendar = week_calendar) {
+  target_idx_v <- calendar$week_idx[calendar$Year == asof$year & calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(calendar$week_idx)
   start_idx  <- max(1, target_idx - n_weeks + 1)
 
-  wc <- week_calendar[week_calendar$week_idx >= start_idx & week_calendar$week_idx <= target_idx, c("Year", "Week")]
+  wc <- calendar[calendar$week_idx >= start_idx & calendar$week_idx <= target_idx, c("Year", "Week")]
   wc <- wc[order(wc$Year, wc$Week), ]
 
   multi_year <- length(unique(wc$Year)) > 1
@@ -426,12 +599,12 @@ weeks_up_to <- function(asof, n_weeks) {
 # non-reporting" control on every CUSUM-driven view (the SD-by-region maps
 # and Alerts), so a province is only flagged there if it actually has an
 # NR among the weeks that view's own statistic depends on.
-cusum_window_weeks <- function(asof) {
-  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
-  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+cusum_window_weeks <- function(asof, calendar = week_calendar) {
+  target_idx_v <- calendar$week_idx[calendar$Year == asof$year & calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(calendar$week_idx)
   idxs <- unique(c((target_idx - CUSUM_LOOKBACK):(target_idx - CUSUM_GUARD_BAND - 1), target_idx))
   idxs <- idxs[idxs >= 1]
-  week_calendar[week_calendar$week_idx %in% idxs, c("Year", "Week")]
+  calendar[calendar$week_idx %in% idxs, c("Year", "Week")]
 }
 
 # The full contiguous span cusum_window_weeks() above is carved out of --
@@ -443,12 +616,12 @@ cusum_window_weeks <- function(asof) {
 # were fine, when really they just weren't looked at. This wider window is
 # used purely to fill in that display text -- see provinces_nr_summary()'s
 # display_weeks_df parameter.
-cusum_full_window_weeks <- function(asof) {
-  target_idx_v <- week_calendar$week_idx[week_calendar$Year == asof$year & week_calendar$Week == asof$week]
-  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(week_calendar$week_idx)
+cusum_full_window_weeks <- function(asof, calendar = week_calendar) {
+  target_idx_v <- calendar$week_idx[calendar$Year == asof$year & calendar$Week == asof$week]
+  target_idx <- if (length(target_idx_v) > 0) target_idx_v[1] else max(calendar$week_idx)
   idxs <- (target_idx - CUSUM_LOOKBACK):target_idx
   idxs <- idxs[idxs >= 1]
-  week_calendar[week_calendar$week_idx %in% idxs, c("Year", "Week")]
+  calendar[calendar$week_idx %in% idxs, c("Year", "Week")]
 }
 
 # Small null-coalesce helper (base R has no built-in %||%)
@@ -457,8 +630,8 @@ cusum_full_window_weeks <- function(asof) {
 # ---- Helper: weekly reported + projected series for a disease/location ----
 # Projected total cases = reported cases / (compliance / 100). NA if
 # compliance is 0 or missing (can't estimate a projection with no reports).
-get_trend_data <- function(disease, location) {
-  d <- raw_data %>% filter(Disease == disease)
+get_trend_data <- function(disease, location, data = raw_data, compliance = compliance_data) {
+  d <- data %>% filter(Disease == disease)
   d <- if (location == "National") d %>% filter(Province == "Total") else d %>% filter(Province == location)
 
   d <- d %>%
@@ -472,7 +645,7 @@ get_trend_data <- function(disease, location) {
     mutate(join_key = if (location == "National") "National" else location)
 
   d %>%
-    left_join(compliance_data, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
+    left_join(compliance, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
     mutate(
       Reported  = Cases,
       Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))
@@ -482,8 +655,8 @@ get_trend_data <- function(disease, location) {
 }
 
 # ---- Helper: national/district weekly series for ALL diseases -------------
-get_all_disease_series <- function(location) {
-  d <- raw_data
+get_all_disease_series <- function(location, data = raw_data, compliance = compliance_data) {
+  d <- data
   d <- if (location == "National") d %>% filter(Province == "Total") else d %>% filter(Province == location)
 
   d %>%
@@ -502,7 +675,7 @@ get_all_disease_series <- function(location) {
       .groups = "drop"
     ) %>%
     mutate(join_key = if (location == "National") "National" else location) %>%
-    left_join(compliance_data, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
+    left_join(compliance, by = c("join_key" = "Region", "Week" = "Week", "Year" = "Year")) %>%
     mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
     select(Disease, Year, Week, Reported = Cases, Projected, Compliance, IsNR)
 }
@@ -626,8 +799,9 @@ format_week_ranges <- function(weeks) {
 # printed text should still read as one continuous span, not skip over a
 # guard-band week that was ALSO non-reported. Must be a superset of
 # `weeks_df` for every province `weeks_df` alone would already qualify.
-provinces_nr_summary <- function(disease = NULL, weeks_df, display_weeks_df = weeks_df) {
-  d <- raw_data %>% filter(Province %in% setdiff(location_choices, "National"), Status == "NR")
+provinces_nr_summary <- function(disease = NULL, weeks_df, display_weeks_df = weeks_df,
+                                  data = raw_data, locations = location_choices) {
+  d <- data %>% filter(Province %in% setdiff(locations, "National"), Status == "NR")
   if (!is.null(disease)) d <- d %>% filter(Disease == disease)
   # NULL disease (the Alerts tab, which evaluates every disease at once) --
   # a province/week counts as non-reporting here if ANY disease was NR that
@@ -663,14 +837,15 @@ provinces_nr_summary <- function(disease = NULL, weeks_df, display_weeks_df = we
 # derived from a single national compliance percentage, since a blended
 # compliance % across an arbitrary subset of provinces has no clean
 # definition -- Compliance is left NA here (tooltips simply omit it).
-get_national_series_excluding <- function(excluded = character(0)) {
-  keep_provs <- setdiff(location_choices, c("National", excluded))
+get_national_series_excluding <- function(excluded = character(0), data = raw_data,
+                                           compliance = compliance_data, locations = location_choices) {
+  keep_provs <- setdiff(locations, c("National", excluded))
   empty <- data.frame(Disease = character(), Year = integer(), Week = integer(),
                        Reported = numeric(), Projected = numeric(),
                        Compliance = numeric(), IsNR = logical(), stringsAsFactors = FALSE)
   if (length(keep_provs) == 0) return(empty)
 
-  reported <- raw_data %>%
+  reported <- data %>%
     filter(Province %in% keep_provs) %>%
     group_by(Disease, Year, Week) %>%
     summarise(
@@ -680,7 +855,7 @@ get_national_series_excluding <- function(excluded = character(0)) {
     )
 
   projected <- bind_rows(lapply(keep_provs, function(p) {
-    get_all_disease_series(p) %>% select(Disease, Year, Week, Projected)
+    get_all_disease_series(p, data = data, compliance = compliance) %>% select(Disease, Year, Week, Projected)
   })) %>%
     group_by(Disease, Year, Week) %>%
     summarise(
@@ -698,8 +873,9 @@ get_national_series_excluding <- function(excluded = character(0)) {
 # Single-disease convenience wrapper, shaped like get_trend_data() (Year,
 # Week, Reported, Projected, Compliance) so it can drop straight into any
 # code that currently calls get_trend_data(disease, "National").
-get_national_trend_excluding <- function(disease, excluded = character(0)) {
-  get_national_series_excluding(excluded) %>%
+get_national_trend_excluding <- function(disease, excluded = character(0), data = raw_data,
+                                          compliance = compliance_data, locations = location_choices) {
+  get_national_series_excluding(excluded, data = data, compliance = compliance, locations = locations) %>%
     filter(Disease == disease) %>%
     select(Year, Week, Reported, Projected, Compliance) %>%
     arrange(Year, Week)
@@ -805,7 +981,7 @@ get_district_map_data <- function(disease, asof, value_col = "Reported") {
 #     all-NR group stays NA rather than being summed down to 0.
 #   - the checks just below are presence/NA-based, never value-based, so
 #     they never mistake a real 0 for a missing or NR report.
-compute_cusum_stats_at <- function(series, year, week, value_col = "Reported") {
+compute_cusum_stats_at <- function(series, year, week, value_col = "Reported", calendar = week_calendar) {
   cur_row <- series[series$Year == year & series$Week == week, ]
   if (nrow(cur_row) == 0) {
     return(list(status = "absent", year = year, week = week))
@@ -815,7 +991,7 @@ compute_cusum_stats_at <- function(series, year, week, value_col = "Reported") {
   }
   current <- cur_row[[value_col]][1]
 
-  target_idx_v <- week_calendar$week_idx[week_calendar$Year == year & week_calendar$Week == week]
+  target_idx_v <- calendar$week_idx[calendar$Year == year & calendar$Week == week]
   if (length(target_idx_v) == 0) {
     return(list(status = "absent", year = year, week = week))
   }
@@ -828,7 +1004,7 @@ compute_cusum_stats_at <- function(series, year, week, value_col = "Reported") {
   # The 7 baseline weeks: the 9 calendar weeks before the target, minus the
   # 2 most recent (the guard band).
   baseline_idxs <- (target_idx - CUSUM_LOOKBACK):(target_idx - CUSUM_GUARD_BAND - 1)
-  baseline_cal <- week_calendar[week_calendar$week_idx %in% baseline_idxs, c("Year", "Week")]
+  baseline_cal <- calendar[calendar$week_idx %in% baseline_idxs, c("Year", "Week")]
 
   baseline_vals <- vapply(seq_len(nrow(baseline_cal)), function(i) {
     r <- series[series$Year == baseline_cal$Year[i] & series$Week == baseline_cal$Week[i], ]
@@ -871,8 +1047,8 @@ compute_cusum_stats_at <- function(series, year, week, value_col = "Reported") {
 # Convenience wrapper: just the z-score (in SD units) at a specific week, or
 # NA if the week has no report or there isn't a usable baseline. Used to
 # colour the map and the weekly summary table.
-cusum_z_at <- function(series, year, week, value_col = "Reported") {
-  stats <- compute_cusum_stats_at(series, year, week, value_col = value_col)
+cusum_z_at <- function(series, year, week, value_col = "Reported", calendar = week_calendar) {
+  stats <- compute_cusum_stats_at(series, year, week, value_col = value_col, calendar = calendar)
   if (stats$status != "ok") NA_real_ else stats$z
 }
 
@@ -908,16 +1084,18 @@ cusum_z_at <- function(series, year, week, value_col = "Reported") {
 #               province non-reporting" control (National-only) is wired
 #               in, without touching how any individual location's own
 #               alerts are evaluated.
-compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, national_series_override = NULL) {
+compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, national_series_override = NULL,
+                                 data = raw_data, compliance = compliance_data, locations = location_choices,
+                                 calendar = week_calendar) {
   alert_rows      <- list()
   missing_rows    <- list()
   reported_counts <- list()
 
-  for (loc in location_choices) {
+  for (loc in locations) {
     series <- if (identical(loc, "National") && !is.null(national_series_override)) {
       national_series_override
     } else {
-      get_all_disease_series(loc)
+      get_all_disease_series(loc, data = data, compliance = compliance)
     }
     if (nrow(series) == 0) next
     diseases_here <- sort(unique(series$Disease))
@@ -925,7 +1103,7 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, nati
 
     for (dis in diseases_here) {
       s <- series %>% filter(Disease == dis) %>% arrange(Year, Week)
-      stats <- compute_cusum_stats_at(s, sel_year, sel_week, value_col = value_col)
+      stats <- compute_cusum_stats_at(s, sel_year, sel_week, value_col = value_col, calendar = calendar)
 
       if (stats$status == "absent") next  # not in this week's bulletin at all -- not evaluated, not flagged
 
@@ -959,7 +1137,7 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, nati
   } else {
     # Order locations within a disease the same way they appear in
     # location_choices (National first, then districts alphabetically)
-    alerts$Location <- factor(alerts$Location, levels = location_choices)
+    alerts$Location <- factor(alerts$Location, levels = locations)
     alerts <- alerts %>% arrange(Disease, desc(Level), desc(Z))
   }
 
@@ -981,7 +1159,7 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, nati
       missing$Status %in% c("insufficient_history", "insufficient_baseline")
     missing <- missing[!drop, ]
 
-    missing$Location <- factor(missing$Location, levels = location_choices)
+    missing$Location <- factor(missing$Location, levels = locations)
     missing <- missing %>% arrange(Location, Disease)
   }
 
@@ -1047,7 +1225,7 @@ sd_continuous_font_colour <- function(z) {
 #
 # One series' week-by-week <td> cells (values + SD shading), shared by
 # every row of build_alert_region_table() below.
-build_alert_week_cells <- function(series, weeks_cal, value_col) {
+build_alert_week_cells <- function(series, weeks_cal, value_col, calendar = week_calendar) {
   cell_at <- function(i) {
     r <- series[series$Year == weeks_cal$Year[i] & series$Week == weeks_cal$Week[i], ]
     list(
@@ -1056,7 +1234,7 @@ build_alert_week_cells <- function(series, weeks_cal, value_col) {
     )
   }
   cells <- lapply(seq_len(nrow(weeks_cal)), cell_at)
-  zs    <- sapply(seq_len(nrow(weeks_cal)), function(i) cusum_z_at(series, weeks_cal$Year[i], weeks_cal$Week[i], value_col = value_col))
+  zs    <- sapply(seq_len(nrow(weeks_cal)), function(i) cusum_z_at(series, weeks_cal$Year[i], weeks_cal$Week[i], value_col = value_col, calendar = calendar))
   bgs   <- sd_continuous_colour(zs)
   fts   <- sd_continuous_font_colour(zs)
 
@@ -1090,8 +1268,10 @@ build_alert_week_cells <- function(series, weeks_cal, value_col) {
 # Shiny.setInputValue(), picked up by the alerts_goto observer in
 # server()) so the two are visually tied to that specific region rather
 # than living in a separate row/element.
-build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
-  weeks_cal <- weeks_up_to(asof, n_weeks)
+build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12,
+                                      data = raw_data, compliance = compliance_data,
+                                      calendar = week_calendar, goto_input_id = "alerts_goto") {
+  weeks_cal <- weeks_up_to(asof, n_weeks, calendar = calendar)
 
   header_cells <- c(
     list(tags$th(style = "padding:4px 8px; font-size:11px; color:#555; font-weight:600; background-color:#FFFFFF; border-bottom:1px solid #DDE1E4; text-align:left;", "Region")),
@@ -1101,8 +1281,8 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
   )
 
   body_rows <- lapply(locs, function(loc) {
-    series <- get_all_disease_series(loc) %>% filter(Disease == dis)
-    value_cells <- build_alert_week_cells(series, weeks_cal, value_col)
+    series <- get_all_disease_series(loc, data = data, compliance = compliance) %>% filter(Disease == dis)
+    value_cells <- build_alert_week_cells(series, weeks_cal, value_col, calendar = calendar)
     goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
 
     label_cell <- tags$td(
@@ -1112,8 +1292,8 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12) {
         href = "#",
         style = "font-size:11px; color:var(--who-blue); font-weight:600; text-decoration:none;",
         onclick = sprintf(
-          "Shiny.setInputValue('alerts_goto', %s, {priority:'event'}); return false;",
-          goto_payload
+          "Shiny.setInputValue('%s', %s, {priority:'event'}); return false;",
+          goto_input_id, goto_payload
         ),
         "Data Visualisation →"
       )
@@ -1318,6 +1498,25 @@ REGION_COLOR_MAP <- setNames(
   REGION_NAMES
 )
 
+# Somalia's own year/region colour maps, same conventions, reusing the same
+# fixed colour sequences above so the two dashboards read as one visual
+# system.
+if (somalia_data_available) {
+  ALL_YEARS_DESC_SOM <- sort(unique(raw_data_som$Year), decreasing = TRUE)
+  YEAR_COLOR_MAP_SOM <- setNames(
+    rep(YEAR_COLOR_SEQUENCE, length.out = length(ALL_YEARS_DESC_SOM)),
+    as.character(ALL_YEARS_DESC_SOM)
+  )
+  REGION_NAMES_SOM <- location_choices_som[location_choices_som != "National"]
+  REGION_COLOR_MAP_SOM <- setNames(
+    rep(REGION_COLOR_SEQUENCE, length.out = length(REGION_NAMES_SOM)),
+    REGION_NAMES_SOM
+  )
+} else {
+  YEAR_COLOR_MAP_SOM <- character(0)
+  REGION_COLOR_MAP_SOM <- character(0)
+}
+
 # ---- Helper: Pakistan admin-1 boundaries (bundled, static) -----------------
 # Shipped as Data/pakistan_admin1.geojson: 7 provinces/territories dissolved
 # from district-level polygons (source: click_that_hood, CC-licensed OSM-
@@ -1368,6 +1567,50 @@ if (!is.null(pak_district_admin2_sf)) {
 }
 if (!is.null(pak_district_admin1_sf)) {
   pak_district_admin1_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin1_sf$adm1_name])
+}
+
+# ---- Somalia boundary file: district-level layer, plus a dissolved -------
+# state-level layer built from it at startup. Somalia ships only ONE
+# boundary file (74 districts, no separate state-level file the way
+# Pakistan has pakistan_admin1.geojson) -- so instead of a second shipped
+# file, the state-level shape used by the Data visualisation tab's map is
+# dissolved from this same district file once, here, at app startup (not
+# on every page load).
+som_district_sf <- load_pak_boundary_file(SOMALIA_DISTRICT_GEOJSON)
+som_regions_sf  <- NULL
+
+if (!is.null(som_district_sf) && somalia_data_available) {
+  som_district_sf$dist_key <- resolve_dist_key(som_district_sf$DISTRICT, table = SOM_DISTRICT_NAME_ALIASES)
+
+  # Which Somalia STATE each boundary district belongs to -- the boundary
+  # file itself has no State field (only REGION/DISTRICT), so this is
+  # derived from the workbook: for each dist_key, whichever State reported
+  # the most rows under it. Unambiguous for almost every district; the
+  # exception is a handful of contested districts (e.g. Buuhoodle) reported
+  # by more than one administration in the workbook -- the modal State wins
+  # for map-COLOURING purposes only. The District-level table itself still
+  # keeps every State's own rows fully separate regardless.
+  som_dist_state_votes <- raw_district_data_som %>%
+    mutate(dist_key = som_dist_key_for(Province, District)) %>%
+    filter(nzchar(dist_key)) %>%
+    count(dist_key, Province, name = "n_rows") %>%
+    group_by(dist_key) %>%
+    slice_max(n_rows, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(dist_key, State = Province)
+
+  som_district_sf <- som_district_sf %>% left_join(som_dist_state_votes, by = "dist_key")
+
+  som_regions_sf <- tryCatch({
+    som_district_sf %>%
+      filter(!is.na(State)) %>%
+      group_by(State) %>%
+      summarise(geometry = sf::st_union(geometry), .groups = "drop") %>%
+      sf::st_make_valid()
+  }, error = function(e) {
+    message("Could not dissolve Somalia state boundaries: ", conditionMessage(e))
+    NULL
+  })
 }
 
 # ---- Helper: standard Web Mercator lng/lat -> global pixel coordinates --
@@ -1442,7 +1685,7 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
 ui <- tagList(
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=11"),
-    tags$title("WHO EMRO | Pakistan IDSR Dashboard")
+    tags$title("WHO EMRO | IDSR Dashboard")
   ),
 
   # ---- WHO branded header ----
@@ -1465,10 +1708,12 @@ ui <- tagList(
     div(
       class = "who-header-text",
       style = "text-align:left;",
-      div(class = "who-title", style = "font-size:34px; font-weight:700; color:#00205C; line-height:1.15;",
-          "Pakistan IDSR Surveillance Dashboard"),
-      div(class = "who-subtitle", style = "font-size:15px; color:#555555; margin-top:2px;",
-          "Alpha Version - Internal and Preliminary")
+      # Swaps between "Pakistan IDSR..." and "Somalia IDSR..." based on
+      # which top-level country tab is selected (input$who_nav) -- see
+      # output$country_header_text in the server. Pakistan's own wording is
+      # unchanged from before; this only makes it reactive instead of
+      # hardcoded, since the same header now also has to speak for Somalia.
+      uiOutput("country_header_text")
     )
   ),
 
@@ -1476,6 +1721,19 @@ ui <- tagList(
     title = NULL,
     id = "who_nav",
     collapsible = TRUE,
+
+    # =========================================================
+    # PAKISTAN -- everything from here down to the matching "close
+    # pak_subtab" comment is byte-for-byte the same content as before;
+    # it's simply been re-parented one level deeper, under its own country
+    # tab, so Somalia can sit alongside it as a sibling top-level tab
+    # instead of being squeezed into the same tab strip.
+    # =========================================================
+    tabPanel(
+      "Pakistan",
+      tabsetPanel(
+        id = "pak_subtab",
+        type = "tabs",
 
     # ---------------------------------------------------------
     tabPanel(
@@ -2029,12 +2287,451 @@ ui <- tagList(
         )
       )
     )
+      )  # close pak_subtab tabsetPanel
+    ),  # close tabPanel("Pakistan")
+
+    # =========================================================
+    # SOMALIA
+    # ----------------------------------------------------------------
+    # Whole tab degrades to a single message if somalia_data_available is
+    # FALSE (missing/wrong SOMALIA_DATA_KEY, or Data/SOM_IDSR_Data.enc not
+    # yet committed) -- every selectInput/radioButtons below assumes real
+    # choices exist, so none of it is safe to render against the empty
+    # placeholders somalia_data_available's FALSE branch sets up.
+    # =========================================================
+    tabPanel(
+      "Somalia",
+      if (!somalia_data_available) {
+        div(
+          style = "padding:60px 24px; text-align:center; color:#777;",
+          icon("triangle-exclamation", style = "font-size:28px; color:#F4A81D; margin-bottom:12px;"),
+          h3("Somalia data not available"),
+          p(style = "max-width:520px; margin:0 auto;",
+            "The encrypted Somalia dataset (Data/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
+            code("SOMALIA_DATA_KEY"), " environment variable isn't set (or doesn't match) on this deployment. ",
+            "See 2_1_ProcessData_SOM.R's header comment for how to build and configure it.")
+        )
+      } else {
+      tabsetPanel(
+        id = "som_subtab",
+        type = "tabs",
+
+        tabPanel(
+          "Home",
+          div(
+            class = "page-tint-bg",
+            div(
+              style = "max-width: 1200px; margin: 0; padding-left: 24px;",
+              h4("About this dashboard"),
+              p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern ",
+                "Mediterranean (EMRO) in monitoring disease case reporting from Somalia, provided by the ",
+                "Integrated Disease Surveillance and Response (IDSR) weekly workbook."),
+              p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
+                "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, ",
+                "and ", strong("Weekly summary table"), " for the full week-by-week breakdown."),
+              h4("Data sources and limitations", style = "margin-top: 20px;"),
+              tags$ul(
+                tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are mostly ",
+                        "suspected cases, not laboratory-confirmed diagnoses. Treat them as an early-warning signal, ",
+                        "not a confirmed count of cases."),
+                tags$li(strong("Reporting compliance not yet available: "), "Unlike the Pakistan dashboard, there is ",
+                        "currently no reporting-compliance (expected vs received reports) data for Somalia, so the ",
+                        strong("Projected total cases"), " option will show no data until a compliance file is ",
+                        "added -- the underlying case counts (", strong("Reported cases"), ") are complete and ",
+                        "unaffected."),
+                tags$li(strong("Geographic coverage: "), "Regions match Somalia's State-level administrative ",
+                        "divisions: ", paste(location_choices_som[location_choices_som != "National"], collapse = ", "), "."),
+                tags$li(strong("Missing data: "), "A district/week with no submitted report at all is treated as ",
+                        "non-reported (NR) for every disease that week. A district that submitted a report, but ",
+                        "left a specific disease's count blank, is treated as NR for that disease only -- not as ",
+                        "zero cases.")
+              ),
+              h4("Methodology", style = "margin-top: 20px;"),
+              h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
+              p("Using the number of reported cases and the compliance percentage, we can estimate the true number ",
+                "of cases for a given week and region. We use a simple projection: reported cases ÷ (compliance ",
+                "% / 100). This assumes non-reporting sites have a similar case rate to reporting sites, which may ",
+                "not hold -- particularly during active outbreaks or access constraints -- so treat projected ",
+                "figures as a rough estimate, not a precise count. ", strong("A compliance file for Somalia hasn't ",
+                "been added yet"), " -- this calculation is already wired up dashboard-wide and will start ",
+                "producing projected figures the moment one is."),
+              h5("Handling non-reported provinces", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
+                "data comparison between total case counts. ", strong("Keep province for reported weeks"), " (the ",
+                "default) allows the region to contribute to total case counts during its reported weeks, while ",
+                "contributing 0 when there is non-reporting. ", strong("Remove province entirely"), " instead drops ",
+                "that region from the calculation for every week being shown, therefore enabling a like-to-like ",
+                "comparison. Under this setting, by default, regions with any non-reported weeks over the ",
+                "visualised window are removed. These removed regions are listed as tick boxes (ticked = removed), ",
+                "so any of them can be added back in by hand."),
+              h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("Alerts are generated using the same CUSUM/C2 aberration detection method as the Pakistan ",
+                "dashboard. For a given disease and location, we look at the 9 weeks immediately before the week ",
+                "being evaluated. We drop the 2 most recent of those weeks (a “guard band”), so an ",
+                "emerging outbreak can't inflate its own baseline. The mean (μ) and standard deviation (σ) ",
+                "of the remaining 7 baseline weeks set three thresholds: T1 = μ + 2σ (yellow), ",
+                "T2 = μ + 3σ (medium red), and T3 = μ + 4σ (dark red)."),
+              div(
+                class = "info-card",
+                style = "border-left: 6px solid #B0121A; background-color: #FDF2F2; margin-top: 24px;",
+                h4("Disclaimer", style = "color:#B0121A;"),
+                p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support ",
+                  "the exploratory review and interpretation of surveillance data. Its outputs, including ",
+                  "statistical signals and projected estimates, are preliminary and require validation. They do ",
+                  "not constitute official WHO epidemiological assessments, alerts, or recommendations and do not ",
+                  "replace established Public Health Intelligence (PHI) processes, expert epidemiological review, ",
+                  "verification by national authorities, or formal WHO information products. The underlying case ",
+                  "data is not publicly redistributed through this dashboard -- see the ", strong("References"),
+                  " tab.")
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "Alerts",
+          div(
+            style = "padding-top: 16px; padding-bottom: 28px;",
+            sidebarLayout(
+              sidebarPanel(
+                width = 3,
+                selectInput("asof_week_alerts_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
+                radioButtons("case_type_alerts_som", "Case counts to evaluate",
+                             choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                             selected = "reported"),
+                tags$p(
+                  style = "font-size: 12px; color: #555;",
+                  strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
+                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
+                  "option currently has nothing to show. See the ", strong("Home"), " tab for full details."
+                ),
+                tags$hr(),
+                uiOutput("alerts_nr_control_som"),
+                tags$p(
+                  style = "font-size: 12px; color: #555;",
+                  "When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
+                  "data comparison between total case counts. Removing these regions entirely enables like-to-like ",
+                  "comparison between weeks. See the ", strong("Home"), " tab for full details."
+                )
+              ),
+              mainPanel(width = 9, uiOutput("alerts_output_som"))
+            )
+          )
+        ),
+
+        tabPanel(
+          "Data visualisation",
+          div(
+            style = "padding: 14px 24px;",
+            div(
+              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
+              div(style = "flex: 1 1 0;", selectInput("disease_som", "Disease", choices = disease_choices_som, selected = disease_choices_som[1], width = "100%")),
+              div(style = "flex: 1 1 0;", selectInput("location_som", "Location", choices = location_choices_som, selected = "National", width = "100%")),
+              div(style = "flex: 1 1 0;", selectInput("asof_week_viz_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM, width = "100%"))
+            ),
+            div(
+              class = "info-disclosure",
+              div(
+                style = "font-size: 12.5px; color: #555;",
+                p(style = "margin-bottom: 6px;", strong("Calculations:")),
+                p(style = "margin-bottom: 6px;",
+                  strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
+                  "option currently has nothing to show."),
+                p(style = "margin-bottom: 6px;",
+                  strong("Handling non-reported provinces:"), " choose whether a region that is non-reported for ",
+                  "some visualised weeks just contributes 0 for those weeks, or is also excluded from every other ",
+                  "week to enable a like-to-like comparison."),
+                p(style = "margin-bottom: 6px;",
+                  strong("SD"), " shows how many standard deviations a week's case count is from its expected ",
+                  "baseline, using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 ",
+                  "weeks dropped)."),
+                p(style = "margin-bottom: 0;", "See the ", strong("Home"), " tab for full details.")
+              )
+            ),
+            fluidRow(
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                  h4("Weekly case trend", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("trend_subtitle_som"),
+                  plotlyOutput("trend_plot_som", height = "420px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                    uiOutput("year_selector_som"),
+                    radioButtons("case_type_som", "Case counts to show",
+                                 choices = c("Reported cases only" = "reported",
+                                             "Projected total cases" = "projected",
+                                             "Both" = "both"),
+                                 selected = "reported", inline = TRUE),
+                    uiOutput("trend_nr_control_som")
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                  h4("Deviation from expected baseline (SD), by state", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("map_subtitle_som"),
+                  plotOutput("region_map_som", height = "420px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                    radioButtons("case_type_map_som", "Case counts to colour the map by",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported", inline = TRUE)
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 12,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
+                  h4("Regional contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("stack_subtitle_som"),
+                  plotlyOutput("region_stack_plot_som", height = "380px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                    radioButtons("case_type_stack_som", "Case counts to show",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported", inline = TRUE),
+                    uiOutput("stack_nr_control_som")
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
+                  h4("Deviation from expected baseline (SD), by state: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("map_subtitle_som"),
+                  leafletOutput("region_map_leaflet_som", height = "500px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                    sd_gradient_legend_ui(show_no_data = TRUE),
+                    radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported", inline = TRUE)
+                  )
+                )
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "Weekly summary table",
+          div(
+            style = "padding-top: 16px;",
+            sidebarLayout(
+              sidebarPanel(
+                width = 3,
+                selectInput("location_tbl_som", "Location", choices = location_choices_som, selected = "National"),
+                selectInput("asof_week_tbl_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
+                numericInput("n_weeks_tbl_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+                radioButtons("case_type_tbl_som", "Case counts to display",
+                             choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                             selected = "reported"),
+                tags$p(
+                  style = "font-size: 12px; color: #555;",
+                  strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                  "cases by the compliance percentage. No compliance data is available for Somalia yet, so this ",
+                  "option currently has nothing to show."
+                ),
+                conditionalPanel(
+                  condition = "input.location_tbl_som == 'National'",
+                  tags$p(
+                    style = "font-size: 12px; color: #555;",
+                    "When exploring national data, this can be addressed using the ",
+                    strong("handling non-reported provinces"), " settings. See the ", strong("Home"), " tab for full details."
+                  )
+                ),
+                tags$hr(),
+                uiOutput("tbl_nr_control_som"),
+                conditionalPanel(
+                  condition = "input.location_tbl_som == 'National'",
+                  tags$p(
+                    style = "font-size: 12px; color: #555;",
+                    "When exploring National data, inconsistent non-reporting in some regions results in ",
+                    "inconsistent data comparison between total case counts. Removing these regions entirely ",
+                    "enables like-to-like comparison between weeks. See the ", strong("Home"), " tab for full details."
+                  )
+                ),
+                tags$hr(),
+                div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
+                sd_gradient_legend_ui(show_no_data = FALSE),
+                tags$p(
+                  style = "font-size: 12px; color: #555; margin-top: 8px;",
+                  "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+                )
+              ),
+              mainPanel(
+                width = 9,
+                p(style = "font-size: 13px; color:#555;",
+                  icon("triangle-exclamation"), " Looking for a scan across ", strong("all"), " regions and diseases at once? ",
+                  "See the ", strong("Alerts"), " tab."),
+                DTOutput("weekly_table_som")
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "District-level data",
+          div(
+            style = "padding: 14px 24px;",
+            tags$p(
+              style = "font-size: 12.5px; color: #555; margin: 0 0 10px 0;",
+              strong("Geographic coverage: "),
+              sprintf(
+                "district-level data is currently only reported for %s. No district-level breakdown is available for %s -- these states are shown in grey on the map below, and don't appear in the table.",
+                paste(provinces_with_district_data_som, collapse = ", "),
+                if (length(provinces_without_district_data_som) > 0) paste(provinces_without_district_data_som, collapse = ", ") else "none"
+              )
+            ),
+            div(
+              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
+              div(style = "flex: 1 1 0;",
+                  selectInput("disease_district_tbl_som", "Disease", choices = district_disease_choices_som,
+                              selected = district_disease_choices_som[1], width = "100%")),
+              div(style = "flex: 1 1 0;",
+                  selectInput("asof_week_district_tbl_som", "As of week", choices = WEEK_CHOICES_SOM,
+                              selected = LATEST_WEEK_CHOICE_SOM, width = "100%")),
+              div(style = "flex: 1 1 0;",
+                  selectInput("state_district_tbl_som", "State", choices = provinces_with_district_data_som,
+                              selected = provinces_with_district_data_som[1], width = "100%")),
+              div(style = "flex: 1 1 0;",
+                  radioButtons("case_type_district_tbl_som", "Case counts to display",
+                               choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                               selected = "reported", inline = TRUE))
+            ),
+
+            # ---- Weekly case trend (left) + map (right) -----------------------
+            # No separate Province/District selector row on the left the way
+            # Pakistan's tab has -- Somalia's whole tab is already scoped to one
+            # State at a time via state_district_tbl_som above, shared by the
+            # trend panel, map, and table alike, so only a District dropdown is
+            # needed here.
+            fluidRow(
+              style = "display:flex; flex-wrap:wrap;",
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  h4("Weekly case trend"),
+                  uiOutput("district_trend_subtitle_som"),
+                  div(
+                    style = "margin-bottom:10px;",
+                    uiOutput("district_curve_district_ui_som")
+                  ),
+                  plotlyOutput("district_trend_plot_som", height = "360px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "min-height: 60px;",
+                    uiOutput("district_year_selector_som")
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  h4("District map"),
+                  uiOutput("district_map_subtitle_som"),
+                  leafletOutput("district_map_som", height = "360px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "min-height: 60px;",
+                    sd_gradient_legend_ui(show_no_data = TRUE),
+                    tags$p(
+                      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+                      "SD shows how many standard deviations a week's case count is from its expected baseline, ",
+                      "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). ",
+                      "See the ", strong("Home"), " tab for full details."
+                    ),
+                    uiOutput("district_map_boundary_note_som")
+                  )
+                )
+              )
+            ),
+
+            div(
+              class = "viz-panel",
+              style = "margin-top:16px;",
+              fluidRow(
+                column(
+                  width = 3,
+                  numericInput("n_weeks_district_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+                  tags$hr(),
+                  div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
+                  sd_gradient_legend_ui(show_no_data = FALSE),
+                  tags$p(
+                    style = "font-size: 12px; color: #555; margin-top: 8px;",
+                    "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+                  ),
+                  tags$p(
+                    style = "font-size: 12px; color: #555; margin-top: 8px;",
+                    strong(style = "color:inherit;", "NR"), " means the district submitted no report at all that ",
+                    "week. A blank cell means the district reported, but left this specific disease's count blank."
+                  )
+                ),
+                column(
+                  width = 9,
+                  p(style = "font-size: 13px; color:#555;",
+                    icon("circle-info"), " Districts within the selected State, most recent weeks first."),
+                  DTOutput("district_table_som")
+                )
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "References",
+          div(
+            class = "page-tint-bg",
+            div(
+              style = "max-width: 1000px; margin: 0; padding-left: 24px;",
+              div(
+                style = "padding-top: 18px;",
+                h4("Primary data source"),
+                p("Weekly IDSR case-count workbook for Somalia. Unlike the Pakistan dashboard's public NIH ",
+                  "bulletins, this data is not publicly redistributed: the underlying file is encrypted before ",
+                  "being committed to this project's (public) GitHub repository, and is only decrypted in memory ",
+                  "by the deployed dashboard itself -- there is no download link for it anywhere in this app."),
+                h4("Alert detection methodology", style = "margin-top: 20px;"),
+                p("The Alerts tab and the SD-based shading on the weekly summary table use the same modified ",
+                  "CUSUM/C2 aberration detection method as the Pakistan dashboard (rolling 9-week baseline, most ",
+                  "recent 2 weeks dropped as a guard band). See the ", strong("Home"), " tab for a full explanation ",
+                  "of how it's calculated."),
+                h4("Contact", style = "margin-top: 20px;"),
+                p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
+              )
+            )
+          )
+        )
+      )
+      }  # close somalia_data_available else-branch
+    )  # close tabPanel("Somalia")
   ),
 
   div(
     class = "who-footer",
     style = "padding:16px 28px; font-size:12px; color:#555555; background-color:#FFFFFF; border-top:1px solid #C9DEF3;",
-    "Data source: National Institute of Health (NIH) Pakistan, IDSR weekly bulletins."
+    uiOutput("country_footer_text")
   )
 )
 
@@ -2042,6 +2739,41 @@ ui <- tagList(
 # SERVER
 # =================================================================
 server <- function(input, output, session) {
+
+  # ---------------- Header / footer text (country-aware) ------------------
+  # Swaps between Pakistan's and Somalia's wording based on which top-level
+  # country tab is currently selected (input$who_nav) -- identical
+  # markup/styling to the previously-hardcoded Pakistan-only version (see
+  # who-title/who-subtitle/who-footer usage below), just made reactive so
+  # the same header/footer element can also speak for Somalia. Defined
+  # outside the somalia_data_available guard below so the header still
+  # swaps correctly even while Somalia's tab is showing its "not
+  # configured" placeholder message.
+  output$country_header_text <- renderUI({
+    if (identical(input$who_nav, "Somalia")) {
+      tagList(
+        div(class = "who-title", style = "font-size:34px; font-weight:700; color:#00205C; line-height:1.15;",
+            "Somalia IDSR Surveillance Dashboard"),
+        div(class = "who-subtitle", style = "font-size:15px; color:#555555; margin-top:2px;",
+            "Alpha Version - Internal and Preliminary")
+      )
+    } else {
+      tagList(
+        div(class = "who-title", style = "font-size:34px; font-weight:700; color:#00205C; line-height:1.15;",
+            "Pakistan IDSR Surveillance Dashboard"),
+        div(class = "who-subtitle", style = "font-size:15px; color:#555555; margin-top:2px;",
+            "Alpha Version - Internal and Preliminary")
+      )
+    }
+  })
+
+  output$country_footer_text <- renderUI({
+    if (identical(input$who_nav, "Somalia")) {
+      "Data source: Somalia IDSR weekly case-count workbook (not publicly redistributed -- see the Somalia References tab)."
+    } else {
+      "Data source: National Institute of Health (NIH) Pakistan, IDSR weekly bulletins."
+    }
+  })
 
   # ---------------- Trends tab ----------------
 
@@ -2103,22 +2835,12 @@ server <- function(input, output, session) {
     checkboxGroupInput("years_selected", "Years to show", choices = yrs, selected = default_selected, inline = TRUE)
   })
 
-  output$trend_plot <- renderPlotly({
-    req(input$asof_week_viz)
-    d <- trend_data_all()
-    validate(need(nrow(d) > 0, "No data available for this selection."))
-    years_selected <- if (is.null(input$years_selected)) unique(d$Year) else as.integer(input$years_selected)
-    d <- d %>% filter(Year %in% years_selected)
-
-    # "As of week": don't show data beyond the selected point in time, so
-    # the view reflects what the dashboard would have looked like then.
-    asof <- parse_asof(input$asof_week_viz)
-    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
-    validate(need(nrow(d) > 0, "No years selected."))
-
-    cols <- YEAR_COLOR_MAP[as.character(sort(unique(d$Year)))]
-
-    case_type <- input$case_type %||% "reported"
+  # Extracted from what used to be output$trend_plot's own renderPlotly
+  # body, unchanged, so it can be shared with output$trend_plot_som below.
+  # `d` is already filtered to the selected years/as-of-week by the caller;
+  # `year_color_map` defaults to Pakistan's YEAR_COLOR_MAP.
+  render_trend_plotly <- function(d, case_type, year_color_map = YEAR_COLOR_MAP) {
+    cols <- year_color_map[as.character(sort(unique(d$Year)))]
 
     # Year-to-date cumulative totals, computed per calendar year so the
     # hover box can show "how many cases so far this year" alongside the
@@ -2225,6 +2947,20 @@ server <- function(input, output, session) {
       }
     }
     gg
+  }
+
+  output$trend_plot <- renderPlotly({
+    req(input$asof_week_viz)
+    d <- trend_data_all()
+    validate(need(nrow(d) > 0, "No data available for this selection."))
+    years_selected <- if (is.null(input$years_selected)) unique(d$Year) else as.integer(input$years_selected)
+    d <- d %>% filter(Year %in% years_selected)
+
+    asof <- parse_asof(input$asof_week_viz)
+    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
+    validate(need(nrow(d) > 0, "No years selected."))
+
+    render_trend_plotly(d, input$case_type %||% "reported")
   })
 
   # ---------------- Map ----------------
@@ -2424,24 +3160,10 @@ server <- function(input, output, session) {
     nonreporting_control_ui("nr_mode_stack", "nr_excl_stack", info$provinces, info$summary)
   })
 
-  output$region_stack_plot <- renderPlotly({
-    req(input$disease, input$asof_week_viz)
-    asof <- parse_asof(input$asof_week_viz)
-    metric <- if (identical(input$case_type_stack, "projected")) "Projected" else "Reported"
-    locs <- location_choices[location_choices != "National"]
-
-    if (identical(input$nr_mode_stack, "remove")) {
-      info <- stack_nr_info()
-      excluded <- resolve_nonreporting_excluded(input$nr_mode_stack, input$nr_excl_stack, info$provinces)
-      locs <- setdiff(locs, excluded)
-    }
-
-    region_list <- lapply(locs, function(loc) {
-      s <- get_trend_data(input$disease, loc) %>% filter(Year == asof$year, Week <= asof$week)
-      if (nrow(s) == 0) return(NULL)
-      s %>% transmute(Region = loc, Week, Cases = .data[[metric]])
-    })
-    dstack <- bind_rows(region_list) %>% filter(!is.na(Cases))
+  # Extracted from what used to be output$region_stack_plot's own
+  # renderPlotly body, unchanged from `dstack <- dstack %>% mutate(...)`
+  # onward, so it can be shared with output$region_stack_plot_som below.
+  render_stack_plotly <- function(dstack, asof, region_color_map = REGION_COLOR_MAP) {
     validate(need(nrow(dstack) > 0, "No data available for this selection."))
 
     dstack <- dstack %>% mutate(
@@ -2455,7 +3177,7 @@ server <- function(input, output, session) {
 
     p <- ggplot(dstack, aes(x = Week, y = Cases, fill = Region, text = tooltip)) +
       geom_col(position = "stack") +
-      scale_fill_manual(values = REGION_COLOR_MAP, name = "Region") +
+      scale_fill_manual(values = region_color_map, name = "Region") +
       scale_x_continuous(breaks = week_breaks, labels = week_labels) +
       scale_y_continuous(labels = comma) +
       labs(x = "Week", y = "Number of cases") +
@@ -2479,6 +3201,27 @@ server <- function(input, output, session) {
         )
       ) %>%
       config(displaylogo = FALSE)
+  }
+
+  output$region_stack_plot <- renderPlotly({
+    req(input$disease, input$asof_week_viz)
+    asof <- parse_asof(input$asof_week_viz)
+    metric <- if (identical(input$case_type_stack, "projected")) "Projected" else "Reported"
+    locs <- location_choices[location_choices != "National"]
+
+    if (identical(input$nr_mode_stack, "remove")) {
+      info <- stack_nr_info()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_stack, input$nr_excl_stack, info$provinces)
+      locs <- setdiff(locs, excluded)
+    }
+
+    region_list <- lapply(locs, function(loc) {
+      s <- get_trend_data(input$disease, loc) %>% filter(Year == asof$year, Week <= asof$week)
+      if (nrow(s) == 0) return(NULL)
+      s %>% transmute(Region = loc, Week, Cases = .data[[metric]])
+    })
+    dstack <- bind_rows(region_list) %>% filter(!is.na(Cases))
+    render_stack_plotly(dstack, asof)
   })
 
   # ---------------- Weekly table tab ----------------
@@ -2564,9 +3307,12 @@ server <- function(input, output, session) {
     )
   })
 
-  output$weekly_table <- renderDT({
-    tbl <- weekly_table_reactive()
-
+  # Extracted from what used to be output$weekly_table's own renderDT body,
+  # unchanged, so it can be shared with output$weekly_table_som below --
+  # takes exactly what weekly_table_reactive() already returns, plus the
+  # location label for the caption (the one piece renderDT read directly
+  # off `input$` before).
+  render_weekly_summary_dt <- function(tbl, location_label) {
     display_df <- cbind(tbl$display_values, tbl$sd, tbl$nr)
     sd_col_names <- paste0(tbl$week_cols, "_sd")
     nr_col_names <- paste0(tbl$week_cols, "_nr")
@@ -2604,19 +3350,22 @@ server <- function(input, output, session) {
         columnDefs = c(list(list(visible = FALSE, targets = hidden_idx)), week_column_defs)
       ),
       caption = paste0(
-        "Weekly ", label, " cases by disease, ", input$location_tbl,
+        "Weekly ", label, " cases by disease, ", location_label,
         ", ", tbl$n_wk, " week(s) up to and including Week ", tbl$week, ", ", tbl$year
       )
     )
 
-    dt <- formatStyle(
+    formatStyle(
       dt,
       columns = tbl$week_cols,
       valueColumns = sd_col_names,
       backgroundColor = sd_continuous_bg_js(),
       color = sd_continuous_font_js()
     )
-    dt
+  }
+
+  output$weekly_table <- renderDT({
+    render_weekly_summary_dt(weekly_table_reactive(), input$location_tbl)
   })
 
   # ---------------- District-level data tab -------------------------------
@@ -2864,22 +3613,15 @@ server <- function(input, output, session) {
     div(class = "viz-subtitle", paste0("Disease: ", input$disease_district_tbl, ", Location: ", loc_label))
   })
 
-  output$district_trend_plot <- renderPlotly({
-    req(input$asof_week_district_tbl)
-    d <- district_curve_data_all()
-    validate(need(nrow(d) > 0, "No data available for this selection."))
-
-    years_selected <- if (is.null(input$district_years_selected)) c(2025, 2026) else as.integer(input$district_years_selected)
-    d <- d %>% filter(Year %in% years_selected)
-    validate(need(nrow(d) > 0, "No years selected."))
-
-    asof <- parse_asof(input$asof_week_district_tbl)
-    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
-    validate(need(nrow(d) > 0, "No data available up to the selected week."))
-
-    value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
+  # Extracted from what used to be output$district_trend_plot's own
+  # renderPlotly body, unchanged, so it can be shared with
+  # output$district_trend_plot_som below. `d` is already filtered to the
+  # selected years/as-of-week by the caller (same convention as
+  # render_trend_plotly above); `year_color_map` defaults to Pakistan's
+  # YEAR_COLOR_MAP.
+  render_district_trend_plotly <- function(d, value_col, year_color_map = YEAR_COLOR_MAP) {
     label_txt <- if (value_col == "Projected") "Projected total cases" else "Reported cases"
-    cols <- YEAR_COLOR_MAP[as.character(sort(unique(d$Year)))]
+    cols <- year_color_map[as.character(sort(unique(d$Year)))]
 
     d <- d %>%
       arrange(Year, Week) %>%
@@ -2939,6 +3681,23 @@ server <- function(input, output, session) {
         )
       ) %>%
       config(displaylogo = FALSE)
+  }
+
+  output$district_trend_plot <- renderPlotly({
+    req(input$asof_week_district_tbl)
+    d <- district_curve_data_all()
+    validate(need(nrow(d) > 0, "No data available for this selection."))
+
+    years_selected <- if (is.null(input$district_years_selected)) c(2025, 2026) else as.integer(input$district_years_selected)
+    d <- d %>% filter(Year %in% years_selected)
+    validate(need(nrow(d) > 0, "No years selected."))
+
+    asof <- parse_asof(input$asof_week_district_tbl)
+    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
+    validate(need(nrow(d) > 0, "No data available up to the selected week."))
+
+    value_col <- if (identical(input$case_type_district_tbl, "projected")) "Projected" else "Reported"
+    render_district_trend_plotly(d, value_col)
   })
 
   # ---------------- District-level data tab: map ---------------------------
@@ -3115,16 +3874,27 @@ server <- function(input, output, session) {
     req(input$alerts_goto$disease, input$alerts_goto$location)
     updateSelectInput(session, "disease", selected = input$alerts_goto$disease)
     updateSelectInput(session, "location", selected = input$alerts_goto$location)
-    updateNavbarPage(session, "who_nav", selected = "Data visualisation")
+    # "Data visualisation" now lives one level deeper, under the "Pakistan"
+    # country tab (see the Somalia country-tab restructuring above) -- both
+    # need to be selected, not just the inner one, or the jump silently
+    # does nothing if a viewer is currently on the Somalia country tab.
+    updateNavbarPage(session, "who_nav", selected = "Pakistan")
+    updateTabsetPanel(session, "pak_subtab", selected = "Data visualisation")
   })
 
-  output$alerts_output <- renderUI({
-    result <- alerts_reactive()
+  # Extracted from what used to be output$alerts_output's own renderUI
+  # body, unchanged, so it can be shared with output$alerts_output_som
+  # below. `locations`/`data`/`compliance`/`calendar` default to the
+  # Pakistan globals (identical behaviour to before); `goto_input_id` picks
+  # which Shiny input the "Data Visualisation →" links on each detail
+  # table fire (see build_alert_region_table() and the two
+  # observeEvent(input$alerts_goto...) handlers).
+  render_alerts_ui <- function(result, value_col, asof, locations = location_choices,
+                                data = raw_data, compliance = compliance_data,
+                                calendar = week_calendar, goto_input_id = "alerts_goto") {
     alerts  <- result$alerts
     missing <- result$missing
-    label     <- if (identical(input$case_type_alerts, "projected")) "projected total" else "reported"
-    value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
-    asof  <- parse_asof(input$asof_week_alerts)
+    label     <- if (identical(value_col, "Projected")) "projected total" else "reported"
 
     note <- p(
       style = "font-size: 12.5px; color:#555;",
@@ -3186,7 +3956,9 @@ server <- function(input, output, session) {
           tags$div(
             id = row_id,
             style = "display:none; margin:8px 0 4px 20px;",
-            build_alert_region_table(dis, as.character(d$Location), asof, value_col, n_weeks = 12)
+            build_alert_region_table(dis, as.character(d$Location), asof, value_col, n_weeks = 12,
+                                      data = data, compliance = compliance, calendar = calendar,
+                                      goto_input_id = goto_input_id)
           )
         )
       })
@@ -3201,7 +3973,7 @@ server <- function(input, output, session) {
     # listing every disease name.
     missing_section <- NULL
     if (nrow(missing) > 0) {
-      locs_here <- location_choices[location_choices %in% as.character(unique(missing$Location))]
+      locs_here <- locations[locations %in% as.character(unique(missing$Location))]
       missing_boxes <- lapply(locs_here, function(loc) {
         d <- missing %>% filter(as.character(Location) == loc)
         no_report_d <- sort(unique(d$Disease[d$Status == "no_report"]))
@@ -3228,7 +4000,869 @@ server <- function(input, output, session) {
     }
 
     tagList(note, alert_section, missing_section)
+  }
+
+  output$alerts_output <- renderUI({
+    result <- alerts_reactive()
+    value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
+    asof <- parse_asof(input$asof_week_alerts)
+    render_alerts_ui(result, value_col, asof)
   })
+
+  # ==========================================================================
+  # SOMALIA SERVER
+  # ==========================================================================
+  # Mirrors the Pakistan server code above almost exactly -- same reactive
+  # shapes, same shared render_*()/get_*() helper functions -- but reads
+  # from the *_som globals (Somalia's decrypted data bundle) instead of
+  # Pakistan's, and every input it depends on has its own "_som"-suffixed
+  # id so nothing here can collide with Pakistan's own inputs/outputs.
+  # Entirely wrapped in `if (somalia_data_available)` so none of these
+  # reactives/outputs are ever registered when the SOMALIA_DATA_KEY secret
+  # isn't set -- the Somalia tab's UI already shows a "not configured"
+  # message in that case instead of these sub-tabs at all, so there would
+  # be nothing here for them to feed anyway.
+  if (somalia_data_available) {
+
+  # ---------------- Somalia: Data visualisation tab (trend) ---------------
+  trend_data_base_som <- reactive({
+    req(input$disease_som, input$location_som)
+    get_trend_data(input$disease_som, input$location_som, data = raw_data_som, compliance = compliance_data_som)
+  })
+
+  trend_window_som <- reactive({
+    req(input$disease_som, input$asof_week_viz_som)
+    d <- trend_data_base_som()
+    years_selected <- if (is.null(input$years_selected_som)) unique(d$Year) else as.integer(input$years_selected_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    d %>%
+      filter(Year %in% years_selected, Year < asof$year | (Year == asof$year & Week <= asof$week)) %>%
+      select(Year, Week)
+  })
+
+  trend_nr_info_som <- reactive({
+    req(input$disease_som)
+    provinces_nr_summary(input$disease_som, trend_window_som(), data = raw_data_som, locations = location_choices_som)
+  })
+
+  output$trend_nr_control_som <- renderUI({
+    if (!identical(input$location_som, "National")) return(NULL)
+    info <- trend_nr_info_som()
+    nonreporting_control_ui("nr_mode_trend_som", "nr_excl_trend_som", info$provinces, info$summary)
+  })
+
+  trend_data_all_som <- reactive({
+    req(input$disease_som, input$location_som)
+    if (identical(input$location_som, "National") && identical(input$nr_mode_trend_som, "remove")) {
+      info     <- trend_nr_info_som()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_trend_som, input$nr_excl_trend_som, info$provinces)
+      get_national_trend_excluding(input$disease_som, excluded, data = raw_data_som, compliance = compliance_data_som,
+                                    locations = location_choices_som)
+    } else {
+      get_trend_data(input$disease_som, input$location_som, data = raw_data_som, compliance = compliance_data_som)
+    }
+  })
+
+  output$trend_subtitle_som <- renderUI({
+    req(input$disease_som, input$location_som)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_som, ", Location: ", input$location_som))
+  })
+
+  output$year_selector_som <- renderUI({
+    d <- trend_data_base_som()
+    yrs <- sort(unique(d$Year), decreasing = TRUE)
+    default_selected <- head(yrs, 2)
+    checkboxGroupInput("years_selected_som", "Years to show", choices = yrs, selected = default_selected, inline = TRUE)
+  })
+
+  output$trend_plot_som <- renderPlotly({
+    req(input$asof_week_viz_som)
+    d <- trend_data_all_som()
+    validate(need(nrow(d) > 0, "No data available for this selection."))
+    years_selected <- if (is.null(input$years_selected_som)) unique(d$Year) else as.integer(input$years_selected_som)
+    d <- d %>% filter(Year %in% years_selected)
+
+    asof <- parse_asof(input$asof_week_viz_som)
+    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
+    validate(need(nrow(d) > 0, "No years selected."))
+
+    render_trend_plotly(d, input$case_type_som %||% "reported", year_color_map = YEAR_COLOR_MAP_SOM)
+  })
+
+  # ---------------- Somalia: Data visualisation tab (regional stack) ------
+  output$stack_subtitle_som <- renderUI({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_som, ", Year: ", asof$year, " (up to Week ", asof$week, ")"))
+  })
+
+  # Always a breakdown of the NATIONAL total by state -- same convention as
+  # Pakistan's own stack chart -- so this control isn't gated on Location.
+  stack_nr_info_som <- reactive({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    provinces_nr_summary(input$disease_som, data.frame(Year = asof$year, Week = seq_len(asof$week)),
+                          data = raw_data_som, locations = location_choices_som)
+  })
+
+  output$stack_nr_control_som <- renderUI({
+    info <- stack_nr_info_som()
+    nonreporting_control_ui("nr_mode_stack_som", "nr_excl_stack_som", info$provinces, info$summary)
+  })
+
+  output$region_stack_plot_som <- renderPlotly({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    metric <- if (identical(input$case_type_stack_som, "projected")) "Projected" else "Reported"
+    locs <- location_choices_som[location_choices_som != "National"]
+
+    if (identical(input$nr_mode_stack_som, "remove")) {
+      info <- stack_nr_info_som()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_stack_som, input$nr_excl_stack_som, info$provinces)
+      locs <- setdiff(locs, excluded)
+    }
+
+    region_list <- lapply(locs, function(loc) {
+      s <- get_trend_data(input$disease_som, loc, data = raw_data_som, compliance = compliance_data_som) %>%
+        filter(Year == asof$year, Week <= asof$week)
+      if (nrow(s) == 0) return(NULL)
+      s %>% transmute(Region = loc, Week, Cases = .data[[metric]])
+    })
+    dstack <- bind_rows(region_list) %>% filter(!is.na(Cases))
+    render_stack_plotly(dstack, asof, region_color_map = REGION_COLOR_MAP_SOM)
+  })
+
+  # ---------------- Somalia: Data visualisation tab (SD-by-state map) -----
+  # Both panels below colour Somalia's 8 states by the same CUSUM SD-from-
+  # baseline statistic as Pakistan's region_map/region_map_leaflet, using
+  # the ONE dissolved state-level layer built at startup (som_regions_sf --
+  # see its construction, and the district-to-state crosswalk it relies on,
+  # near the top of this file), since Somalia has no separately-shipped
+  # dissolved state file the way Pakistan does.
+  compute_region_change_data_som <- function(dis, asof, metric) {
+    locs <- location_choices_som[location_choices_som != "National"]
+    region_list <- lapply(locs, function(loc) {
+      s <- get_trend_data(dis, loc, data = raw_data_som, compliance = compliance_data_som)
+      if (nrow(s) == 0) return(data.frame(region = loc, z = NA_real_, status = "absent"))
+      stats <- compute_cusum_stats_at(s, asof$year, asof$week, value_col = metric, calendar = week_calendar_som)
+      data.frame(
+        region = loc,
+        z = if (stats$status == "ok") stats$z else NA_real_,
+        status = stats$status
+      )
+    })
+    bind_rows(region_list)
+  }
+
+  region_change_data_som <- reactive({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    metric <- if (identical(input$case_type_map_som, "projected")) "Projected" else "Reported"
+    compute_region_change_data_som(input$disease_som, asof, metric)
+  })
+
+  region_change_data_leaflet_som <- reactive({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    metric <- if (identical(input$case_type_map_leaflet_som, "projected")) "Projected" else "Reported"
+    compute_region_change_data_som(input$disease_som, asof, metric)
+  })
+
+  output$map_subtitle_som <- renderUI({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_som, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  output$region_map_som <- renderPlot({
+    if (is.null(som_regions_sf)) {
+      return(
+        ggplot() +
+          annotate("text", x = 0, y = 0, label = "Map unavailable: Somalia boundary file could not be read.",
+                   color = who_red, size = 5) +
+          theme_void()
+      )
+    }
+
+    rc <- region_change_data_som()
+    sf_map <- som_regions_sf %>% left_join(rc, by = c("State" = "region"))
+    sf_map$z_capped <- pmin(pmax(sf_map$z, -SD_SCALE_LIMIT), SD_SCALE_LIMIT)
+
+    label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
+    coords <- sf::st_coordinates(label_pts)
+    status_suffix <- case_when(
+      sf_map$status == "ok" ~ paste0("\n(", round(sf_map$z, 1), " SD)"),
+      sf_map$status == "no_report" ~ "\n(no reports)",
+      sf_map$status == "absent" ~ "\n(not in this week's data)",
+      TRUE ~ "\n(insufficient baseline data)"
+    )
+    label_df <- data.frame(
+      x = coords[, 1], y = coords[, 2],
+      label = paste0(sf_map$State, status_suffix)
+    )
+
+    p <- ggplot(sf_map) +
+      geom_sf(aes(fill = z_capped), color = "#8A8F94", linewidth = 0.3) +
+      scale_fill_gradient2(
+        low = SD_SCALE_LOW, mid = SD_SCALE_MID, high = SD_SCALE_HIGH, midpoint = 0,
+        limits = c(-SD_SCALE_LIMIT, SD_SCALE_LIMIT), na.value = "#B7BCC2", name = "SD from\nbaseline",
+        labels = function(x) paste0(x, " SD")
+      ) +
+      ggrepel::geom_text_repel(
+        data = label_df, aes(x = x, y = y, label = label),
+        size = 3.3, color = who_navy, fontface = "bold",
+        segment.color = who_navy, segment.size = 0.3, min.segment.length = 0.05, force_pull = 10, force = 0.01,
+        max.overlaps = Inf, box.padding = 0.4, seed = 42
+      ) +
+      theme_void(base_size = 13) +
+      theme(legend.position = "right")
+
+    selected_geom <- sf_map[sf_map$State == input$location_som, ]
+    if (nrow(selected_geom) > 0) {
+      p <- p + geom_sf(data = selected_geom, fill = NA, color = who_navy, linewidth = 0.9)
+    }
+
+    p
+  }, res = 96)
+
+  # Same state-level SD-from-baseline data as region_map_som above, but on
+  # an interactive leaflet map. State names are permanent on-map labels
+  # (addLabelOnlyMarkers) rather than a hover tooltip, same as Pakistan's
+  # region_map_leaflet.
+  output$region_map_leaflet_som <- renderLeaflet({
+    validate(need(!is.null(som_regions_sf), "Map unavailable: Somalia boundary file could not be read."))
+
+    rc <- region_change_data_leaflet_som()
+    sf_map <- som_regions_sf %>% left_join(rc, by = c("State" = "region"))
+
+    matched_ok <- !is.na(sf_map$status) & sf_map$status == "ok"
+    fill_col <- rep(DISTRICT_NO_DATA_COLOUR, nrow(sf_map))
+    fill_col[matched_ok] <- sd_continuous_colour(sf_map$z[matched_ok])
+
+    status_line <- ifelse(
+      is.na(sf_map$status), "No data available",
+      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "no_report", "No report this week",
+      ifelse(sf_map$status == "absent", "Not in this week's data",
+             "Insufficient baseline data")))
+    )
+    label_html <- lapply(
+      paste0("<strong>", sf_map$State, "</strong><br>", status_line),
+      htmltools::HTML
+    )
+
+    label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
+    coords <- sf::st_coordinates(label_pts)
+    offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$State, status_line, zoom = 5)
+
+    m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        fillColor = fill_col, fillOpacity = 0.85,
+        color = "#6B7280", weight = 0.8, opacity = 0.8,
+        highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
+      )
+
+    for (i in seq_len(nrow(sf_map))) {
+      m <- m %>% addLabelOnlyMarkers(
+        lng = coords[i, 1], lat = coords[i, 2],
+        label = label_html[[i]],
+        labelOptions = labelOptions(
+          noHide = TRUE, direction = "center", textOnly = TRUE,
+          offset = c(offsets[i, 1], offsets[i, 2]),
+          style = list(
+            "font-weight" = "600", "font-size" = "12px", color = who_navy,
+            "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
+          )
+        )
+      )
+    }
+
+    m %>% setView(lng = 46, lat = 5.5, zoom = 6)
+  })
+
+  # ---------------- Somalia: Weekly summary table tab ----------------------
+  tbl_nr_info_som <- reactive({
+    req(input$asof_week_tbl_som, input$n_weeks_tbl_som)
+    asof <- parse_asof(input$asof_week_tbl_som)
+    provinces_nr_summary(disease = NULL, weeks_up_to(asof, input$n_weeks_tbl_som, calendar = week_calendar_som),
+                          data = raw_data_som, locations = location_choices_som)
+  })
+
+  output$tbl_nr_control_som <- renderUI({
+    if (!identical(input$location_tbl_som, "National")) return(NULL)
+    info <- tbl_nr_info_som()
+    nonreporting_control_ui("nr_mode_tbl_som", "nr_excl_tbl_som", info$provinces, info$summary, inline = FALSE)
+  })
+
+  weekly_table_reactive_som <- reactive({
+    req(input$location_tbl_som, input$n_weeks_tbl_som, input$asof_week_tbl_som)
+
+    if (identical(input$location_tbl_som, "National") && identical(input$nr_mode_tbl_som, "remove")) {
+      info     <- tbl_nr_info_som()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_tbl_som, input$nr_excl_tbl_som, info$provinces)
+      series   <- get_national_series_excluding(excluded, data = raw_data_som, compliance = compliance_data_som,
+                                                 locations = location_choices_som)
+    } else {
+      series <- get_all_disease_series(input$location_tbl_som, data = raw_data_som, compliance = compliance_data_som)
+    }
+    validate(need(nrow(series) > 0, "No data available for this selection."))
+
+    asof      <- parse_asof(input$asof_week_tbl_som)
+    weeks_cal <- weeks_up_to(asof, input$n_weeks_tbl_som, calendar = week_calendar_som)
+    n_wk      <- nrow(weeks_cal)
+    week_cols <- weeks_cal$week_lab
+    diseases_here <- sort(unique(series$Disease))
+
+    value_col <- if (identical(input$case_type_tbl_som, "projected")) "Projected" else "Reported"
+
+    values_wide <- series %>%
+      inner_join(weeks_cal, by = c("Year", "Week")) %>%
+      select(Disease, week_lab, Value = all_of(value_col)) %>%
+      complete(Disease = diseases_here, week_lab = week_cols, fill = list(Value = NA_real_)) %>%
+      select(Disease, week_lab, Value)
+
+    values_wide_wide <- values_wide %>% pivot_wider(names_from = week_lab, values_from = Value)
+    values_wide_wide <- values_wide_wide[, c("Disease", week_cols)]
+
+    sd_matrix <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+      yy <- weeks_cal$Year[i]; ww <- weeks_cal$Week[i]
+      sapply(diseases_here, function(dis) {
+        s <- series %>% filter(Disease == dis)
+        cusum_z_at(s, yy, ww, value_col = value_col, calendar = week_calendar_som)
+      })
+    })
+    sd_wide <- as.data.frame(sd_matrix)
+    colnames(sd_wide) <- paste0(week_cols, "_sd")
+
+    nr_matrix <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+      yy <- weeks_cal$Year[i]; ww <- weeks_cal$Week[i]
+      sapply(diseases_here, function(dis) {
+        r <- series[series$Disease == dis & series$Year == yy & series$Week == ww, ]
+        if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
+      })
+    })
+    nr_wide <- as.data.frame(nr_matrix)
+    colnames(nr_wide) <- paste0(week_cols, "_nr")
+
+    list(
+      display_values = values_wide_wide,
+      sd = sd_wide,
+      nr = nr_wide,
+      week_cols = week_cols,
+      year = asof$year, week = asof$week, n_wk = n_wk, diseases = diseases_here, weeks_cal = weeks_cal,
+      value_col = value_col
+    )
+  })
+
+  output$weekly_table_som <- renderDT({
+    render_weekly_summary_dt(weekly_table_reactive_som(), input$location_tbl_som)
+  })
+
+  # ---------------- Somalia: Alerts tab ------------------------------------
+  alerts_nr_info_som <- reactive({
+    req(input$asof_week_alerts_som)
+    asof <- parse_asof(input$asof_week_alerts_som)
+    provinces_nr_summary(disease = NULL, cusum_window_weeks(asof, calendar = week_calendar_som),
+                          display_weeks_df = cusum_full_window_weeks(asof, calendar = week_calendar_som),
+                          data = raw_data_som, locations = location_choices_som)
+  })
+
+  output$alerts_nr_control_som <- renderUI({
+    info <- alerts_nr_info_som()
+    nonreporting_control_ui("nr_mode_alerts_som", "nr_excl_alerts_som", info$provinces, info$summary, inline = FALSE)
+  })
+
+  alerts_reactive_som <- reactive({
+    req(input$asof_week_alerts_som)
+    value_col <- if (identical(input$case_type_alerts_som, "projected")) "Projected" else "Reported"
+    asof <- parse_asof(input$asof_week_alerts_som)
+
+    national_override <- NULL
+    if (identical(input$nr_mode_alerts_som, "remove")) {
+      info     <- alerts_nr_info_som()
+      excluded <- resolve_nonreporting_excluded(input$nr_mode_alerts_som, input$nr_excl_alerts_som, info$provinces)
+      national_override <- get_national_series_excluding(excluded, data = raw_data_som, compliance = compliance_data_som,
+                                                           locations = location_choices_som)
+    }
+
+    compute_alerts_long(value_col = value_col, sel_year = asof$year, sel_week = asof$week,
+                         national_series_override = national_override,
+                         data = raw_data_som, compliance = compliance_data_som, locations = location_choices_som,
+                         calendar = week_calendar_som)
+  })
+
+  # Somalia's own "Data Visualisation ->" jump-link target (see
+  # build_alert_region_table()'s goto_input_id, passed below) -- kept
+  # entirely separate from Pakistan's alerts_goto so a click on one
+  # country's alert can never affect the other country's tab/selectors.
+  observeEvent(input$alerts_goto_som, {
+    req(input$alerts_goto_som$disease, input$alerts_goto_som$location)
+    updateSelectInput(session, "disease_som", selected = input$alerts_goto_som$disease)
+    updateSelectInput(session, "location_som", selected = input$alerts_goto_som$location)
+    updateNavbarPage(session, "who_nav", selected = "Somalia")
+    updateTabsetPanel(session, "som_subtab", selected = "Data visualisation")
+  })
+
+  output$alerts_output_som <- renderUI({
+    result <- alerts_reactive_som()
+    value_col <- if (identical(input$case_type_alerts_som, "projected")) "Projected" else "Reported"
+    asof <- parse_asof(input$asof_week_alerts_som)
+    render_alerts_ui(result, value_col, asof, locations = location_choices_som,
+                      data = raw_data_som, compliance = compliance_data_som, calendar = week_calendar_som,
+                      goto_input_id = "alerts_goto_som")
+  })
+
+  # ---------------- Somalia: District-level data tab -----------------------
+  # Full functionality mirroring Pakistan's own district tab: an expandable
+  # State/District table (below), a weekly case-trend epi curve with a
+  # cascading District dropdown, and an interactive district map coloured by
+  # the same CUSUM SD statistic -- using the boundary file/crosswalk/dissolve
+  # built near the top of this file (som_district_sf, som_regions_sf,
+  # som_dist_key_for(), SOM_DISTRICT_NAME_ALIASES). One difference from
+  # Pakistan's layout: the table stays scoped to a single selected State at
+  # a time (via state_district_tbl_som, shared with the epi curve/map below)
+  # rather than showing every state's districts at once, since Somalia's 8
+  # states x many districts would otherwise make for a very long single
+  # table -- unlike Pakistan's table, which shows every province at once.
+  get_district_disease_series_som <- function(disease) {
+    raw_district_data_som %>%
+      filter(Disease == disease) %>%
+      group_by(Province, District, Year, Week) %>%
+      # See get_trend_data() above for why this isn't a plain sum(na.rm=TRUE).
+      summarise(
+        Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
+        IsNR  = is.na(Cases) && all(Status == "NR"),
+        .groups = "drop"
+      ) %>%
+      left_join(district_compliance_data_som, by = c("Province", "District", "Week", "Year")) %>%
+      mutate(Projected = ifelse(is.na(Compliance) | Compliance <= 0, NA_real_, Cases / (Compliance / 100))) %>%
+      select(Province, District, Year, Week, Reported = Cases, Projected, Compliance, IsNR)
+  }
+
+  # ---- Helper: district series aggregated onto MAP POLYGONS (Somalia) -----
+  # Mirrors get_district_polygon_series() above, using som_dist_key_for()
+  # (Banadir-aware) in place of resolve_dist_key(). Because a handful of
+  # contested districts (e.g. Buuhoodle) are reported under more than one
+  # State in the workbook, grouping includes Province -- see
+  # get_district_map_data_som()'s join below for how the right one is
+  # picked for a given polygon.
+  get_district_polygon_series_som <- function(district_series) {
+    district_series %>%
+      mutate(dist_key = som_dist_key_for(Province, District)) %>%
+      group_by(Province, dist_key, Year, Week) %>%
+      summarise(
+        Reported  = if (all(is.na(Reported)))  NA_real_ else sum(Reported,  na.rm = TRUE),
+        Projected = if (all(is.na(Projected))) NA_real_ else sum(Projected, na.rm = TRUE),
+        IsNR      = is.na(Reported) && all(IsNR),
+        .groups = "drop"
+      )
+  }
+
+  # ---- Helper: one row per (Province, map polygon) with its CUSUM stats ---
+  # at a given week (Somalia). Mirrors get_district_map_data() above.
+  get_district_map_data_som <- function(disease, asof, value_col = "Reported") {
+    district_series <- get_district_disease_series_som(disease)
+    if (nrow(district_series) == 0) {
+      return(data.frame(Province = character(), dist_key = character(), z = numeric(),
+                         status = character(), Reported = numeric(), Projected = numeric(),
+                         stringsAsFactors = FALSE))
+    }
+    poly_series <- get_district_polygon_series_som(district_series)
+    keys <- poly_series %>% distinct(Province, dist_key)
+
+    rows <- lapply(seq_len(nrow(keys)), function(i) {
+      p  <- keys$Province[i]
+      dk <- keys$dist_key[i]
+      s  <- poly_series %>% filter(Province == p, dist_key == dk) %>% arrange(Year, Week)
+      stats <- compute_cusum_stats_at(s, asof$year, asof$week, value_col = value_col, calendar = week_calendar_som)
+      cur <- s[s$Year == asof$year & s$Week == asof$week, ]
+      data.frame(
+        Province = p, dist_key = dk,
+        z = if (stats$status == "ok") stats$z else NA_real_,
+        status = stats$status,
+        Reported  = if (nrow(cur) > 0) cur$Reported[1]  else NA_real_,
+        Projected = if (nrow(cur) > 0) cur$Projected[1] else NA_real_,
+        stringsAsFactors = FALSE
+      )
+    })
+    bind_rows(rows)
+  }
+
+  # ---------------- Somalia: District-level data tab: epi curve -----------
+  # Cascading District dropdown, scoped to the State already selected via
+  # state_district_tbl_som (the tab's own top-banner selector, shared with
+  # the table below) -- unlike Pakistan, which has a second, separate
+  # Province selector just for this panel, Somalia's tab is already
+  # State-scoped everywhere, so reusing that one selector avoids a
+  # redundant second dropdown.
+  output$district_curve_district_ui_som <- renderUI({
+    req(input$state_district_tbl_som)
+    dists <- sort(unique(raw_district_data_som$District[raw_district_data_som$Province == input$state_district_tbl_som]))
+    choices <- c("All districts (state total)" = "__ALL__", setNames(dists, dists))
+    selectInput("district_curve_district_som", "District", choices = choices, selected = "__ALL__", width = "100%")
+  })
+
+  output$district_year_selector_som <- renderUI({
+    checkboxGroupInput("district_years_selected_som", "Years to show",
+                        choices = ALL_YEARS_DESC_SOM, selected = head(ALL_YEARS_DESC_SOM, 2), inline = TRUE)
+  })
+
+  district_curve_data_all_som <- reactive({
+    req(input$disease_district_tbl_som, input$state_district_tbl_som)
+    ds <- get_district_disease_series_som(input$disease_district_tbl_som) %>%
+      filter(Province == input$state_district_tbl_som)
+    sel_dist <- input$district_curve_district_som %||% "__ALL__"
+    if (identical(sel_dist, "__ALL__")) {
+      # State total -- the same raw_data_som State-grain rollup used by
+      # district_table_reactive_som's own state row above (keeps IsNR).
+      get_all_disease_series(input$state_district_tbl_som, data = raw_data_som, compliance = compliance_data_som) %>%
+        filter(Disease == input$disease_district_tbl_som) %>%
+        mutate(Compliance = NA_real_) %>%
+        select(Year, Week, Reported, Projected, Compliance)
+    } else {
+      ds %>%
+        filter(District == sel_dist) %>%
+        select(Year, Week, Reported, Projected, Compliance)
+    }
+  })
+
+  output$district_trend_subtitle_som <- renderUI({
+    req(input$disease_district_tbl_som, input$state_district_tbl_som)
+    sel_dist <- input$district_curve_district_som %||% "__ALL__"
+    loc_label <- if (identical(sel_dist, "__ALL__")) {
+      paste0(input$state_district_tbl_som, " (state total)")
+    } else {
+      paste0(sel_dist, ", ", input$state_district_tbl_som)
+    }
+    div(class = "viz-subtitle", paste0("Disease: ", input$disease_district_tbl_som, ", Location: ", loc_label))
+  })
+
+  output$district_trend_plot_som <- renderPlotly({
+    req(input$asof_week_district_tbl_som)
+    d <- district_curve_data_all_som()
+    validate(need(nrow(d) > 0, "No data available for this selection."))
+
+    years_selected <- if (is.null(input$district_years_selected_som)) ALL_YEARS_DESC_SOM else as.integer(input$district_years_selected_som)
+    d <- d %>% filter(Year %in% years_selected)
+    validate(need(nrow(d) > 0, "No years selected."))
+
+    asof <- parse_asof(input$asof_week_district_tbl_som)
+    d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
+    validate(need(nrow(d) > 0, "No data available up to the selected week."))
+
+    value_col <- if (identical(input$case_type_district_tbl_som, "projected")) "Projected" else "Reported"
+    render_district_trend_plotly(d, value_col, year_color_map = YEAR_COLOR_MAP_SOM)
+  })
+
+  # ---------------- Somalia: District-level data tab: map ------------------
+  district_map_data_som <- reactive({
+    req(input$disease_district_tbl_som, input$asof_week_district_tbl_som, input$case_type_district_tbl_som)
+    asof <- parse_asof(input$asof_week_district_tbl_som)
+    value_col <- if (identical(input$case_type_district_tbl_som, "projected")) "Projected" else "Reported"
+    get_district_map_data_som(input$disease_district_tbl_som, asof, value_col)
+  })
+
+  output$district_map_subtitle_som <- renderUI({
+    req(input$disease_district_tbl_som, input$asof_week_district_tbl_som)
+    asof <- parse_asof(input$asof_week_district_tbl_som)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_district_tbl_som, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  # ---- Dynamic boundary-adjustment note, below the Somalia District map ---
+  # Mirrors district_map_boundary_note_reactive() above, adapted for
+  # Somalia's two kinds of adjustment: (1) Banadir/Mogadishu, always noted
+  # when it has data in the displayed window, since EVERY Mogadishu
+  # sub-district rolls onto that one polygon (not a short fixed list like
+  # Pakistan's Hub/Karachi Keamari concordances); (2) any other district
+  # with data in the window that has no boundary match at all (no exact
+  # name match and nothing in SOM_DISTRICT_NAME_ALIASES).
+  district_map_boundary_note_reactive_som <- reactive({
+    req(input$disease_district_tbl_som, input$asof_week_district_tbl_som)
+    if (is.null(som_district_sf)) return(NULL)
+
+    asof      <- parse_asof(input$asof_week_district_tbl_som)
+    weeks_cal <- weeks_up_to(asof, 9, calendar = week_calendar_som)   # displayed week + its 9-week CUSUM baseline
+
+    district_series <- get_district_disease_series_som(input$disease_district_tbl_som)
+    in_window <- district_series %>% semi_join(weeks_cal, by = c("Year", "Week"))
+    if (nrow(in_window) == 0) return(NULL)
+
+    banadir_has_data <- any(in_window$Province == "BANADIR")
+    banadir_item <- if (banadir_has_data) {
+      "disease counts for every Mogadishu sub-district (Hodan, Shangani, Yaqshid, and others) have been combined into the single Banadir/Mogadishu polygon"
+    } else NA_character_
+
+    other <- in_window %>% filter(Province != "BANADIR")
+    districts_with_data <- sort(unique(other$District))
+    boundary_keys <- som_district_sf$dist_key
+    unmatched_districts <- districts_with_data[!(resolve_dist_key(districts_with_data, table = SOM_DISTRICT_NAME_ALIASES) %in% boundary_keys)]
+    unmatched_items <- if (length(unmatched_districts) > 0) {
+      sprintf("no district match found for %s", paste(unmatched_districts, collapse = ", "))
+    } else character(0)
+
+    items <- c(banadir_item, unmatched_items)
+    items <- items[!is.na(items)]
+    if (length(items) == 0) return(NULL)
+    items[1] <- paste0(toupper(substr(items[1], 1, 1)), substr(items[1], 2, nchar(items[1])))
+    items
+  })
+
+  output$district_map_boundary_note_som <- renderUI({
+    items <- district_map_boundary_note_reactive_som()
+    if (is.null(items)) return(NULL)
+    tags$p(
+      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+      "In some cases, the districts in the workbook do not align with the mapped administrative boundaries. ",
+      "For this map, the following adjustments have been made: ",
+      paste0(paste(items, collapse = ", "), ". "),
+      "Where counts have been combined between reported areas, the map's projected total and ",
+      "compliance-adjusted figures are calculated by summing the underlying reported case counts and ",
+      "projected totals of the districts combined into it, rather than by averaging their individual ",
+      "compliance percentages."
+    )
+  })
+
+  output$district_map_som <- renderLeaflet({
+    validate(need(!is.null(som_district_sf), "Map unavailable: Somalia boundary file could not be read."))
+
+    md <- district_map_data_som()
+    # Joined on BOTH dist_key and State -- som_district_sf has exactly one
+    # polygon per dist_key, pre-assigned to whichever State reported the
+    # most rows for it (see its construction near the top of this file);
+    # md can have more than one (Province, dist_key) row for a contested
+    # district reported by more than one State, so this picks out only the
+    # one matching the State that polygon is actually shown under.
+    sf_map <- som_district_sf %>%
+      left_join(md, by = c("dist_key" = "dist_key", "State" = "Province"))
+
+    covered      <- sf_map$State %in% provinces_with_district_data_som
+    has_match    <- covered & !is.na(sf_map$status)
+    matched_ok   <- has_match & sf_map$status == "ok"
+
+    fill_col <- rep(DISTRICT_PROVINCE_NOT_COVERED_COLOUR, nrow(sf_map))
+    fill_col[covered] <- DISTRICT_NO_DATA_COLOUR
+    fill_col[matched_ok] <- sd_continuous_colour(sf_map$z[matched_ok])
+
+    status_txt <- ifelse(
+      !covered, "No district-level data currently reported for this state.",
+      ifelse(!has_match, "No matching district-level data for this district.",
+      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "no_report", "No report this week",
+      ifelse(sf_map$status == "absent", "Not in this week's data",
+             "Insufficient baseline data")))))
+
+    cases_txt <- ifelse(
+      has_match & !is.na(sf_map$Reported),
+      paste0(
+        "<br>Reported cases: ", comma(round(sf_map$Reported)),
+        ifelse(is.na(sf_map$Projected), "",
+               paste0("<br>Projected total cases: ", comma(round(sf_map$Projected))))
+      ),
+      ""
+    )
+
+    tooltip <- paste0(
+      "<strong>", sf_map$DISTRICT, "</strong> (", ifelse(is.na(sf_map$State), sf_map$REGION, sf_map$State), ")",
+      cases_txt, "<br>", status_txt
+    )
+
+    m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(
+        fillColor = fill_col, fillOpacity = 0.85,
+        color = "#6B7280", weight = 0.5, opacity = 0.8,
+        label = lapply(tooltip, htmltools::HTML),
+        labelOptions = labelOptions(direction = "auto", textsize = "12px"),
+        highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
+      ) %>%
+      setView(lng = 46, lat = 5.5, zoom = 6)
+
+    if (!is.null(som_regions_sf)) {
+      m <- m %>% addPolylines(data = som_regions_sf, color = who_navy, weight = 1.3, opacity = 0.7)
+    }
+    m
+  })
+
+  district_table_reactive_som <- reactive({
+    req(input$disease_district_tbl_som, input$n_weeks_district_som, input$asof_week_district_tbl_som,
+        input$state_district_tbl_som)
+
+    district_series <- get_district_disease_series_som(input$disease_district_tbl_som) %>%
+      filter(Province == input$state_district_tbl_som)
+    validate(need(nrow(district_series) > 0, "No district-level data available for this disease/state."))
+
+    # The State's own row, from raw_data_som's State-grain rollup (via
+    # get_all_disease_series(), which keeps IsNR) -- rather than summing
+    # district_series itself, so a state that's explicitly NR (every one of
+    # its districts NR that week -- see 2_1_ProcessData_SOM.R's rollup rule)
+    # still displays as "NR" here, exactly like a Pakistan province row.
+    state_series <- get_all_disease_series(input$state_district_tbl_som, data = raw_data_som,
+                                            compliance = compliance_data_som) %>%
+      filter(Disease == input$disease_district_tbl_som) %>%
+      select(Year, Week, Reported, Projected, Compliance, IsNR)
+
+    asof      <- parse_asof(input$asof_week_district_tbl_som)
+    weeks_cal <- weeks_up_to(asof, input$n_weeks_district_som, calendar = week_calendar_som)
+    n_wk      <- nrow(weeks_cal)
+    week_cols <- weeks_cal$week_lab
+    sd_cols   <- paste0(week_cols, "_sd")
+    nr_cols   <- paste0(week_cols, "_nr")
+
+    value_col <- if (identical(input$case_type_district_tbl_som, "projected")) "Projected" else "Reported"
+
+    row_for_series <- function(s, label) {
+      vals <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        r <- s[s$Year == weeks_cal$Year[i] & s$Week == weeks_cal$Week[i], ]
+        if (nrow(r) == 0) NA_real_ else r[[value_col]][1]
+      })
+      sds <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        cusum_z_at(s, weeks_cal$Year[i], weeks_cal$Week[i], value_col = value_col, calendar = week_calendar_som)
+      })
+      nrs <- sapply(seq_len(nrow(weeks_cal)), function(i) {
+        r <- s[s$Year == weeks_cal$Year[i] & s$Week == weeks_cal$Week[i], ]
+        if (nrow(r) == 0) FALSE else isTRUE(r$IsNR[1])
+      })
+      as.data.frame(c(
+        list(Toggle = "", Location = label),
+        setNames(as.list(vals), week_cols),
+        setNames(as.list(sds), sd_cols),
+        setNames(as.list(nrs), nr_cols)
+      ), stringsAsFactors = FALSE, check.names = FALSE)
+    }
+
+    state_row <- row_for_series(state_series, input$state_district_tbl_som)
+    state_row$RowType <- "province"
+    state_row$Group   <- input$state_district_tbl_som
+
+    rows <- list(state_row)
+    districts_here <- sort(unique(district_series$District))
+    for (dis_name in districts_here) {
+      s_dist <- district_series %>% filter(District == dis_name) %>% arrange(Year, Week)
+      dist_row <- row_for_series(s_dist, dis_name)
+      dist_row$RowType <- "district"
+      dist_row$Group   <- input$state_district_tbl_som
+      rows[[length(rows) + 1]] <- dist_row
+    }
+
+    display_df <- bind_rows(rows)
+
+    list(
+      display_df = display_df,
+      week_cols = week_cols,
+      sd_cols = sd_cols,
+      nr_cols = nr_cols,
+      year = asof$year, week = asof$week, n_wk = n_wk,
+      value_col = value_col,
+      disease = input$disease_district_tbl_som,
+      state = input$state_district_tbl_som
+    )
+  })
+
+  output$district_table_som <- renderDT({
+    tbl <- district_table_reactive_som()
+    df  <- tbl$display_df
+    week_cols <- tbl$week_cols
+    sd_cols   <- tbl$sd_cols
+    nr_cols   <- tbl$nr_cols
+
+    toggle_idx   <- which(names(df) == "Toggle")   - 1
+    location_idx <- which(names(df) == "Location") - 1
+    sd_idx       <- which(names(df) %in% sd_cols)  - 1
+    nr_idx       <- which(names(df) %in% nr_cols)  - 1
+    rowtype_idx  <- which(names(df) == "RowType")  - 1
+    group_idx    <- which(names(df) == "Group")    - 1
+
+    label <- if (tbl$value_col == "Projected") "projected total" else "reported"
+
+    week_column_defs <- lapply(week_cols, function(wc) {
+      col_idx <- which(names(df) == wc) - 1
+      wc_nr_idx <- which(names(df) == paste0(wc, "_nr")) - 1
+      list(
+        targets = col_idx,
+        render = JS(sprintf(
+          "function(data, type, row) {
+             if (type !== 'display') return data;
+             if (row[%d]) return '<span style=\"color:#888; font-style:italic;\">NR</span>';
+             if (data === null) return '';
+             return Math.round(data).toLocaleString();
+           }", wc_nr_idx
+        ))
+      )
+    })
+
+    dt <- datatable(
+      df,
+      rownames = FALSE,
+      escape = FALSE,
+      selection = "none",
+      colnames = c(" " = "Toggle", "State / District" = "Location"),
+      options = list(
+        paging = FALSE, ordering = FALSE, searching = FALSE, info = FALSE, dom = "t",
+        columnDefs = c(
+          list(
+            list(
+              targets = toggle_idx, className = "details-control", width = "18px",
+              render = JS(sprintf(
+                "function(data, type, row) { return row[%d] === 'province' ? '&#9654;' : ''; }", rowtype_idx
+              ))
+            ),
+            list(
+              targets = location_idx,
+              render = JS(sprintf(
+                "function(data, type, row) {
+                   if (type !== 'display') return data;
+                   return row[%d] === 'district'
+                     ? '<span style=\"padding-left:26px; color:#333;\">' + data + '</span>'
+                     : '<strong>' + data + '</strong>';
+                 }", rowtype_idx
+              ))
+            ),
+            list(visible = FALSE, targets = c(sd_idx, nr_idx, rowtype_idx, group_idx))
+          ),
+          week_column_defs
+        ),
+        createdRow = JS(sprintf(
+          "function(row, data, dataIndex) {
+             if (data[%d] === 'district') { $(row).hide(); }
+             $(row).attr('data-group', data[%d]);
+           }", rowtype_idx, group_idx
+        ))
+      ),
+      callback = JS(
+        "table.column(0).nodes().to$().css({cursor: 'pointer'});",
+        "table.on('click', 'td.details-control', function() {",
+        "  var tr  = $(this).closest('tr');",
+        "  var row = table.row(tr);",
+        sprintf("  if (row.data()[%d] !== 'province') return;", rowtype_idx),
+        sprintf("  var grp = row.data()[%d];", group_idx),
+        "  var $children = $(table.table().body()).find('tr[data-group=\"' + grp + '\"]').not(tr);",
+        "  var willShow = !$children.first().is(':visible');",
+        "  $children.toggle(willShow);",
+        "  $(this).html(willShow ? '&#9660;' : '&#9654;');",
+        "});"
+      ),
+      caption = paste0(
+        "District-level weekly ", label, " cases of ", tbl$disease, " in ", tbl$state, ", ",
+        tbl$n_wk, " week(s) up to and including Week ", tbl$week, ", ", tbl$year,
+        ". Click the arrow on the state row to expand its districts."
+      )
+    )
+
+    formatStyle(
+      dt,
+      columns = week_cols,
+      valueColumns = sd_cols,
+      backgroundColor = sd_continuous_bg_js(),
+      color = sd_continuous_font_js()
+    )
+  })
+
+  }  # close if (somalia_data_available)
 
   # ---------------- References tab: raw data downloads --------------------
   # Serve the original CSV files as-is (not the filtered/cleaned in-memory
