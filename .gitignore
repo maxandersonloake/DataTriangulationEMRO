@@ -8,3 +8,4 @@
 # by 2_1_ProcessData_SOM.R), which IS committed -- see that script's header
 # comment.
 Somalia_Raw/
+.Renviron
