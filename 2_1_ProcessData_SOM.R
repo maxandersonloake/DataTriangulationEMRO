@@ -483,33 +483,108 @@ raw <- raw %>%
 # (title-cased) spelling AND that raw spelling isn't itself already one of
 # our canonical names -- i.e. genuinely nothing in the corresponding
 # lookup matched it, at any tier. Visibility without blocking: these rows
-# are NOT dropped, they just kept their own spelling, so a fresh
-# misspelling (or a genuinely new place) is easy to spot in the console
-# output of a future run and, if it's a duplicate spelling, added to the
-# relevant lookup above.
-unmatched_states <- raw %>%
+# are NOT dropped -- they keep their own (raw) spelling and their Cases
+# still flow all the way through into every rollup that doesn't key on the
+# unmatched column itself (in particular, an unmatched District's counts
+# still fully reach its State/national totals, since raw_data_state below
+# groups only by Province/Disease/Year/Week, not District -- see
+# SOM_UNMATCHED_REPORT_DIR's own README-style header line for the same
+# note). What's lost is only fine-grained CONSOLIDATION: the row sits in
+# its own un-merged District/State/Region bucket instead of joining a
+# sibling that's actually the same real place under a different spelling.
+#
+# In addition to the console warning(), a full text-file report is written
+# per level (State/Region/District) so a fresh misspelling -- or a
+# genuinely new place -- can be tracked down to exactly which Year/Week
+# rows it came from, not just spotted by eye in a console list.
+SOM_UNMATCHED_REPORT_DIR <- "Reports"
+dir.create(SOM_UNMATCHED_REPORT_DIR, showWarnings = FALSE)
+
+.write_unmatched_report <- function(detail, raw_col, out_path, label) {
+  if (nrow(detail) == 0) {
+    writeLines(c(
+      paste0("Somalia ", label, " values with no fuzzy match (kept as their own raw spelling)"),
+      paste0("Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+      "",
+      "None -- every raw value in this run matched a known canonical spelling.",
+      "",
+      "Note: an unmatched value is NOT dropped from the data -- it's kept",
+      "under its own raw spelling, and its case counts still flow fully into",
+      "every rollup that doesn't key on this specific column (an unmatched",
+      "District's Cases still reach its State/national totals; only the",
+      "District-level consolidation is affected)."
+    ), out_path)
+    return(invisible(NULL))
+  }
+  by_value <- detail %>%
+    group_by(.data[[raw_col]]) %>%
+    summarise(
+      n_rows = n(),
+      weeks  = paste(sort(unique(paste0(Year, "-W", sprintf("%02d", Week)))), collapse = ", "),
+      .groups = "drop"
+    ) %>%
+    arrange(.data[[raw_col]])
+
+  lines <- c(
+    paste0("Somalia ", label, " values with no fuzzy match (kept as their own raw spelling)"),
+    paste0("Generated: ", format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z")),
+    paste0("Total unmatched ", tolower(label), " values: ", nrow(by_value)),
+    "",
+    "Note: an unmatched value is NOT dropped from the data -- it's kept",
+    "under its own raw spelling, and its case counts still flow fully into",
+    "every rollup that doesn't key on this specific column (an unmatched",
+    "District's Cases still reach its State/national totals; only the",
+    "District-level consolidation is affected). Add a confirmed duplicate-",
+    "spelling entry to the relevant lookup above once you've identified",
+    "what a value below should really be.",
+    ""
+  )
+  for (i in seq_len(nrow(by_value))) {
+    lines <- c(
+      lines,
+      paste0(by_value[[raw_col]][i], "  (", by_value$n_rows[i],
+             " row", if (by_value$n_rows[i] != 1) "s" else "", ")"),
+      paste0("  Weeks: ", by_value$weeks[i]),
+      ""
+    )
+  }
+  writeLines(lines, out_path)
+}
+
+unmatched_states_detail <- raw %>%
   filter(State == State_raw, !(State %in% names(SOM_STATE_LOOKUP))) %>%
-  distinct(State_raw) %>% pull(State_raw)
-if (length(unmatched_states) > 0) {
+  distinct(State_raw, Year, Week)
+.write_unmatched_report(unmatched_states_detail, "State_raw",
+                         file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_states.txt"), "State")
+if (nrow(unmatched_states_detail) > 0) {
   warning("Somalia State values with no fuzzy match (kept as their own raw spelling): ",
-          paste(unmatched_states, collapse = ", "))
+          paste(sort(unique(unmatched_states_detail$State_raw)), collapse = ", "),
+          " -- see ", file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_states.txt"), " for week/year detail")
 }
 
-unmatched_regions <- raw %>%
+unmatched_regions_detail <- raw %>%
   filter(Region == Region_raw, !(Region %in% names(SOM_REGION_LOOKUP))) %>%
-  distinct(Region_raw) %>% pull(Region_raw)
-if (length(unmatched_regions) > 0) {
+  distinct(Region_raw, Year, Week)
+.write_unmatched_report(unmatched_regions_detail, "Region_raw",
+                         file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_regions.txt"), "Region")
+if (nrow(unmatched_regions_detail) > 0) {
   warning("Somalia Region values with no fuzzy match (kept as their own raw spelling): ",
-          paste(unmatched_regions, collapse = ", "))
+          paste(sort(unique(unmatched_regions_detail$Region_raw)), collapse = ", "),
+          " -- see ", file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_regions.txt"), " for week/year detail")
 }
 
-unmatched_districts <- raw %>%
+unmatched_districts_detail <- raw %>%
   filter(District == District_raw, !(District %in% names(district_lookup_som))) %>%
-  distinct(District_raw) %>% pull(District_raw)
-if (length(unmatched_districts) > 0) {
+  distinct(District_raw, Year, Week)
+.write_unmatched_report(unmatched_districts_detail, "District_raw",
+                         file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_districts.txt"), "District")
+if (nrow(unmatched_districts_detail) > 0) {
   warning("Somalia District values with no fuzzy match (kept as their own raw spelling): ",
-          paste(unmatched_districts, collapse = ", "))
+          paste(sort(unique(unmatched_districts_detail$District_raw)), collapse = ", "),
+          " -- see ", file.path(SOM_UNMATCHED_REPORT_DIR, "som_unmatched_districts.txt"), " for week/year detail")
 }
+
+cat("Unmatched-value reports written to ", SOM_UNMATCHED_REPORT_DIR, "/som_unmatched_{states,regions,districts}.txt\n", sep = "")
 
 raw <- raw %>% select(-State_raw, -Region_raw, -District_raw)
 

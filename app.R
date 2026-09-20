@@ -1658,7 +1658,42 @@ if (!is.null(som_district_sf) && somalia_data_available) {
     ungroup() %>%
     select(dist_key, State = Province)
 
-  som_district_sf <- som_district_sf %>% left_join(som_dist_state_votes, by = "dist_key")
+  # A boundary district whose OWN dist_key never appears anywhere in the
+  # workbook (so the vote above has no rows to count) gets no State from
+  # it, and previously just dropped out of the dissolve below entirely --
+  # not shown grey as "no reports", but missing from the map outright,
+  # leaving a literal hole in whichever state it belonged to (this is what
+  # was happening to Bari -- Iskushuban and Qandala have no matching
+  # workbook district of their own -- and to all of Middle Juba, none of
+  # whose 3 districts, Bu'aale/Jilib/Saakow, the workbook reports under
+  # any spelling). Falls back one level up: whichever State most commonly
+  # reports under that district's own Region (adm1_name) -- still entirely
+  # data-driven, so a contested region (e.g. Sool/Sanaag) still resolves
+  # exactly the way the workbook's own State column already has it, never
+  # a guess on our part.
+  som_region_state_votes <- raw_district_data_som %>%
+    count(Region, Province, name = "n_rows") %>%
+    group_by(Region) %>%
+    slice_max(n_rows, n = 1, with_ties = FALSE) %>%
+    ungroup() %>%
+    select(Region, State_by_region = Province)
+
+  # Last resort, for the rare region with NO rows in the workbook at all
+  # under any spelling, so even the region-level vote above has nothing to
+  # go on -- currently just Middle Juba. Safe to hardcode here because
+  # Middle Juba's state membership isn't contested (it's one of the three
+  # regions, along with Gedo and Lower Juba, that make up Jubaland) --
+  # add an entry here only for a region this certain about; leave anything
+  # genuinely contested to the data-driven vote above instead of guessing.
+  SOM_REGION_STATE_MANUAL_OVERRIDE <- c(
+    "Middle Juba" = "Jubaland"
+  )
+
+  som_district_sf <- som_district_sf %>%
+    left_join(som_dist_state_votes, by = "dist_key") %>%
+    left_join(som_region_state_votes, by = "Region") %>%
+    mutate(State = coalesce(State, State_by_region, unname(SOM_REGION_STATE_MANUAL_OVERRIDE[Region]))) %>%
+    select(-State_by_region)
 
   som_regions_sf <- tryCatch({
     som_district_sf %>%
@@ -2687,15 +2722,6 @@ ui <- tagList(
           "District-level data",
           div(
             style = "padding: 14px 24px;",
-            tags$p(
-              style = "font-size: 12.5px; color: #555; margin: 0 0 10px 0;",
-              strong("Geographic coverage: "),
-              sprintf(
-                "district-level data is currently only reported for %s. No district-level breakdown is available for %s -- these states are shown in grey on the map below, and don't appear in the table.",
-                paste(provinces_with_district_data_som, collapse = ", "),
-                if (length(provinces_without_district_data_som) > 0) paste(provinces_without_district_data_som, collapse = ", ") else "none"
-              )
-            ),
             div(
               style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
               div(style = "flex: 1 1 0;",

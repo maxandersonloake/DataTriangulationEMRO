@@ -1,0 +1,10 @@
+Somalia State values with no fuzzy match (kept as their own raw spelling)
+Generated: 2026-09-20 16:21:35 AEST
+
+None -- every raw value in this run matched a known canonical spelling.
+
+Note: an unmatched value is NOT dropped from the data -- it's kept
+under its own raw spelling, and its case counts still flow fully into
+every rollup that doesn't key on this specific column (an unmatched
+District's Cases still reach its State/national totals; only the
+District-level consolidation is affected).
