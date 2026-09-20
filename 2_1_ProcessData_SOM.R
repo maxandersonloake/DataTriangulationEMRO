@@ -20,10 +20,13 @@
 #   2. Push/redeploy as normal.
 #
 # Before running:
-#   - install.packages(c("readxl", "dplyr", "tidyr", "openssl")) if you
-#     don't already have them (readxl in particular is NOT one of the
-#     app's own runtime dependencies, so it won't already be in renv.lock
-#     -- that's fine, this script never runs on Posit Connect Cloud).
+#   - install.packages(c("readxl", "dplyr", "tidyr", "openssl", "stringdist"))
+#     if you don't already have them (readxl and stringdist in particular
+#     are NOT among the app's own runtime dependencies, so they won't
+#     already be in renv.lock -- that's fine, this script never runs on
+#     Posit Connect Cloud). stringdist powers the fuzzy State/Region/
+#     District name matching below, mirroring Pakistan's own
+#     1_1_DownloadData_PAK_v4.R ingestion pipeline.
 #   - Put the raw workbook somewhere OUTSIDE the repo, or inside the
 #     Somalia_Raw/ folder (already listed in .gitignore so it's never
 #     accidentally committed even if you drop it there), and point
@@ -40,6 +43,9 @@ library(tidyr)
 if (!requireNamespace("readxl", quietly = TRUE)) {
   stop("Install readxl first: install.packages('readxl')")
 }
+if (!requireNamespace("stringdist", quietly = TRUE)) {
+  stop("Install stringdist first: install.packages('stringdist')")
+}
 source("encryption_utils.R")
 
 SOM_RAW_XLSX  <- "Somalia_Raw/IDSR_data.xlsx"
@@ -55,40 +61,467 @@ if (!nzchar(passphrase)) {
 cat("Reading", SOM_RAW_XLSX, "...\n")
 raw <- readxl::read_excel(SOM_RAW_XLSX, sheet = SOM_SHEET)
 
-# Title-Case helper for District/Region -- the raw workbook mixes ALL CAPS
-# and Title Case for what's very often the exact same place (e.g. "BADHAN"
-# and "Badhan" both appear as separate rows). Normalising casing at
-# ingestion, before ANY grouping happens below, means every downstream
+# Title-Case helper for State/Region/District -- the raw workbook mixes ALL
+# CAPS and Title Case for what's very often the exact same place (e.g.
+# "BADHAN" and "Badhan" both appear as separate rows). Normalising casing
+# at ingestion, before ANY grouping happens below, means every downstream
 # group_by() (duplicate-row collapse, district reporting span, District x
 # Disease x Week grid, State rollup) automatically treats these as the same
-# district instead of silently fragmenting one real district's case counts
-# across two "different" ones. This only fixes case/whitespace variants --
-# genuine alternate SPELLINGS of the same place (e.g. "Galkayu North" vs
-# "Galkaio", both meaning Galkacyo) are a separate, larger transliteration
-# clean-up and are left as distinct rows here; they're instead reconciled
-# for MAP colouring purposes only via SOM_DISTRICT_NAME_ALIASES in app.R.
+# place instead of silently fragmenting one real State/Region/District's
+# case counts across two "different" ones. This only fixes case/whitespace
+# variants -- genuine alternate SPELLINGS of the same place are handled
+# separately, by the fuzzy-matching system below.
 .title_case <- function(x) {
   x <- tolower(trimws(x))
   gsub("(?:^|(?<=[\\s'-]))([a-z])", "\\U\\1", x, perl = TRUE)
 }
 
+# ================================================================
+# State / Region / District canonical-name lookups + fuzzy matching
+# ----------------------------------------------------------------
+# Ports the region_lookup / district_region_lookup + build_matcher() /
+# fuzzy_match() / is_subsequence() system from Pakistan's own
+# 1_1_DownloadData_PAK_v4.R ingestion pipeline. Rather than a short manual
+# alias table covering only the handful of misspellings someone happened
+# to notice, every place name we know about lives in one of the three
+# lookups below as a canonical spelling plus a list of known variant
+# spellings the raw workbook has actually used for it; anything not in
+# that variant list still gets a chance to match via the same fuzzy
+# distance/subsequence tiers Pakistan's pipeline uses, so a fresh, not-yet-
+# catalogued misspelling in a future workbook update still has a good
+# chance of being consolidated automatically instead of silently creating
+# a brand-new "district".
+#
+# The 139 canonical District entries below were derived from the raw
+# workbook's 171 case/whitespace-normalised District spellings via a
+# systematic pairwise edit-distance scan (distance <= 2) across all of
+# them, manually triaged one pair at a time against domain knowledge (e.g.
+# same-state proximity alone was NOT treated as sufficient evidence --
+# "Barawe" and "Bardale" are both real, distinct South West towns despite
+# being edit-distance 2 apart in the same state; cross-state look-alikes
+# such as "Hudun"/"Hudur" or "Gardo"/"Bahdo" were left as separate
+# districts, since a place name resembling another one in a DIFFERENT
+# state is much more likely to be two different real places than a
+# transcription slip). Nest-by-State is used only to organise this list
+# for editing and to derive district_to_state_som below -- matching itself
+# is still done against the full flattened District variant list, exactly
+# like Pakistan's own district_region_lookup.
+# ================================================================
+
+# ---- Generic helpers (ported from 1_1_DownloadData_PAK_v4.R) ------------
+
+# TRUE if every character of `needle` appears in `haystack`, in the same
+# order (not necessarily contiguously). Used only as fuzzy_match()'s
+# last-resort tier below.
+is_subsequence <- function(needle, haystack) {
+  if (nchar(needle) == 0) return(TRUE)
+  hp <- 1L
+  hn <- nchar(haystack)
+  for (i in seq_len(nchar(needle))) {
+    ch <- substr(needle, i, i)
+    found <- FALSE
+    while (hp <= hn) {
+      if (substr(haystack, hp, hp) == ch) { found <- TRUE; hp <- hp + 1L; break }
+      hp <- hp + 1L
+    }
+    if (!found) return(FALSE)
+  }
+  TRUE
+}
+
+# Flattens a list(canonical = c(variant1, variant2, ...)) lookup into a
+# flat named character vector variant -> canonical (lower-cased,
+# whitespace-trimmed on both sides, canonical spelling itself always
+# included as a variant of itself) -- the form fuzzy_match() expects.
+build_matcher <- function(lookup) {
+  out <- character(0)
+  for (canonical in names(lookup)) {
+    variants <- unique(c(tolower(trimws(canonical)), tolower(trimws(lookup[[canonical]]))))
+    for (v in variants) out[[v]] <- canonical
+  }
+  out
+}
+
+# 4-tier match of a raw string against a variant_map (as built by
+# build_matcher()):
+#   1. Exact match (case-insensitive/trimmed).
+#   2. Unambiguous prefix match (raw string is >= 4 chars and an
+#      unambiguous startsWith() match against exactly one canonical name's
+#      variants) -- stop()s if the prefix is ambiguous, since that means
+#      the variant list needs a manual disambiguating entry, not a guess.
+#   3. Edit-distance match (stringdist's OSA method), tolerance scaled by
+#      input length (<=4 chars: 0, 5-7 chars: 1, >=8 chars: 2, capped at
+#      max_dist) -- stop()s on an ambiguous tie, same reasoning as above.
+#   4. Subsequence match (last resort): only considered when the
+#      candidate's no-space length is within 0-3 characters of the input's,
+#      and the input is at least half the candidate's length (to avoid a
+#      short fragment matching almost everything); an ambiguous subsequence
+#      match is NOT an error -- it message()s and returns NA_character_,
+#      leaving the row to fall back to its own raw spelling rather than
+#      guessing between two real places.
+# Returns NA_character_ if nothing matches at any tier.
+fuzzy_match <- function(raw, variant_map, max_dist = 2) {
+  if (is.na(raw) || !nzchar(trimws(raw))) return(NA_character_)
+  x <- tolower(trimws(raw))
+
+  # 1. Exact
+  if (x %in% names(variant_map)) return(unname(variant_map[[x]]))
+
+  # 2. Unambiguous prefix
+  if (nchar(x) >= 4) {
+    hits <- variant_map[startsWith(names(variant_map), x)]
+    if (length(hits) > 0) {
+      canon <- unique(unname(hits))
+      if (length(canon) == 1) return(canon)
+      stop("Ambiguous prefix match for '", raw, "': could be ", paste(canon, collapse = " / "))
+    }
+  }
+
+  # 3. Edit distance (OSA), tolerance scaled by input length
+  tol <- if (nchar(x) <= 4) 0L else if (nchar(x) <= 7) 1L else 2L
+  tol <- min(tol, max_dist)
+  if (tol > 0) {
+    dists <- stringdist::stringdist(x, names(variant_map), method = "osa")
+    hits <- names(variant_map)[dists <= tol]
+    if (length(hits) > 0) {
+      canon <- unique(unname(variant_map[hits]))
+      if (length(canon) == 1) return(canon)
+      stop("Ambiguous fuzzy match for '", raw, "': could be ", paste(canon, collapse = " / "))
+    }
+  }
+
+  # 4. Subsequence match (last resort)
+  x_nospace <- gsub("\\s", "", x)
+  hits <- character(0)
+  for (cand in names(variant_map)) {
+    cand_nospace <- gsub("\\s", "", cand)
+    len_diff <- nchar(cand_nospace) - nchar(x_nospace)
+    if (len_diff >= 0 && len_diff <= 3 &&
+        nchar(x_nospace) >= nchar(cand_nospace) / 2 &&
+        is_subsequence(x_nospace, cand_nospace)) {
+      hits <- c(hits, cand)
+    }
+  }
+  if (length(hits) > 0) {
+    canon <- unique(unname(variant_map[hits]))
+    if (length(canon) == 1) return(canon)
+    message("Ambiguous subsequence match for '", raw, "': could be ",
+            paste(canon, collapse = " / "), " -- leaving unmatched.")
+    return(NA_character_)
+  }
+
+  NA_character_
+}
+
+# ---- Base State lookup ---------------------------------------------------
+SOM_STATE_LOOKUP <- list(
+  "Banadir"      = c("banadir"),
+  "Galmudug"     = c("galmudug"),
+  "Hir-Shabelle" = c("hir-shabelle", "hirshabelle", "hir shabelle"),
+  "Jubaland"     = c("jubaland"),
+  "North East"   = c("north east", "northeast", "north-east"),
+  "Puntland"     = c("puntland"),
+  "Somaliland"   = c("somaliland"),
+  "South West"   = c("south west", "southwest", "south-west")
+)
+
+# ---- Base Region lookup ---------------------------------------------------
+# Canonical spelling matched against the official boundary file's
+# adm1_name (Data/som_admin_boundaries/som_admin1.geojson) where one of the
+# 18 exists; a handful of raw Region values are local/historical
+# sub-region names with no single corresponding official ADM1 region
+# (Karkaar, Ras-Asayr, Sahil, South Mudug, Ayn) and are kept as their own
+# distinct canonical entries rather than forced onto a boundary region
+# they don't actually match. "Marodi Jeh" is Somaliland's own name for the
+# region the old national system (and the boundary file) calls "Woqooyi
+# Galbeed" -- kept as the workbook's own name (same convention as the
+# District lookup below), with "Woqooyi Galbeed" listed as a variant in
+# case a future workbook switches to it. Region isn't currently surfaced
+# anywhere in the dashboard UI, but is still worth canonicalising here: it
+# feeds district_span/district_full_grid's group_by() below alongside
+# State and District, so an inconsistently-spelled Region for the same
+# real district could otherwise silently fragment that district's own
+# reporting-span calculation.
+SOM_REGION_LOOKUP <- list(
+  "Awdal"           = c("awdal"),
+  "Ayn"             = c("ayn", "cayn"),
+  "Bakool"          = c("bakool", "bakol"),
+  "Banadir"         = c("banadir"),
+  "Bari"            = c("bari"),
+  "Bay"             = c("bay"),
+  "Galgaduud"       = c("galgaduud", "galgadud"),
+  "Gedo"            = c("gedo"),
+  "Hiraan"          = c("hiraan", "hiran"),
+  "Karkaar"         = c("karkaar", "karkar"),
+  "Lower Juba"      = c("lower juba"),
+  "Lower Shabelle"  = c("lower shabelle"),
+  "Marodi Jeh"      = c("marodi jeh", "maroodi jeex", "woqooyi galbeed"),
+  "Middle Shabelle" = c("middle shabelle"),
+  "Mudug"           = c("mudug"),
+  "Nugaal"          = c("nugaal", "nugal"),
+  "Ras-Asayr"       = c("ras-asayr", "ras asayr"),
+  "Sahil"           = c("sahil"),
+  "Sanaag"          = c("sanaag", "sanaq"),
+  "Sool"            = c("sool"),
+  "South Mudug"     = c("south mudug"),
+  "Togdheer"        = c("togdheer", "togdher")
+)
+
+# ---- Base District lookup, nested by State --------------------------------
+SOM_DISTRICT_STATE_LOOKUP <- list(
+  Banadir = list(
+    "Abdul Aziz" = c("abdul aziz"),
+    "Bondere" = c("bondere", "bondheere"),
+    "Danyile" = c("danyile", "deynile"),
+    "Darusalam" = c("darusalam"),
+    "Dharkeynley" = c("dharkenly", "dharkeynley"),
+    "Garasbaley" = c("garasbaaley", "garasbaley", "gubadleey"),
+    "Gubadley" = c("gubadley"),
+    "Hamar Jabjab" = c("hamar jabjab"),
+    "Hamar Weyn" = c("hamar wayne", "hamar weyn"),
+    "Hawal Wadag" = c("hawal wadag"),
+    "Heliwa" = c("heliwa", "heliwaa"),
+    "Hodan" = c("hodan"),
+    "Kahda" = c("kahda"),
+    "Karan" = c("karan"),
+    "Madina" = c("madina"),
+    "Shangani" = c("shangani"),
+    "Shibis" = c("shibis"),
+    "Waberi" = c("waberi"),
+    "Wadajir" = c("wadajir"),
+    "Wardegly" = c("wardegly"),
+    "Warta Nabada" = c("warta nabada"),
+    "Yaqshid" = c("yaqshid")
+  ),
+  Galmudug = list(
+    "Abudwaq" = c("abudwak", "abudwaq"),
+    "Adado" = c("adado"),
+    "Afbarwaqo" = c("afbarwaqo"),
+    "Bahdo" = c("bahdo"),
+    "Balanbale" = c("balanbale"),
+    "Bandiridley" = c("bandiridley"),
+    "Celgaras" = c("celgaras"),
+    "Dhabad" = c("dhabad"),
+    "Dhuusamarreb" = c("dhuusamarreb"),
+    "Dusamreb" = c("dusamreb"),
+    "El Bur" = c("el bur"),
+    "El Dhere" = c("el dhere", "eldheer"),
+    "Elgula" = c("elgula"),
+    "Gadoon" = c("gadoon"),
+    "Galcad" = c("galcad"),
+    "Galinsoor" = c("galinsoor", "galinsor"),
+    "Galkacyo" = c("galkacyo"),
+    "Galkayu South" = c("galkayu south"),
+    "Godinlabe" = c("godinlabe"),
+    "Guriel" = c("guriel"),
+    "Harardheere" = c("haradhere", "harardheere"),
+    "Heraale" = c("heraale"),
+    "Herodhagley" = c("herodhagahley", "herodhagley"),
+    "Hobyo" = c("hobyo"),
+    "Wisil" = c("wisil")
+  ),
+  `Hir-Shabelle` = list(
+    "Adale" = c("adale"),
+    "Aden Yabal" = c("aden yabal"),
+    "Balad" = c("balad"),
+    "Belet Weyne" = c("belet weyne"),
+    "Buloburte" = c("bulo burti", "buloburte"),
+    "Jalalaqsi" = c("jalalaqsi"),
+    "Jowhar" = c("jowhar"),
+    "Mahaday" = c("mahaday"),
+    "Mahas" = c("mahas"),
+    "Mataban" = c("mataban"),
+    "Raaga Celle" = c("raaga celle"),
+    "Runingod" = c("runingod"),
+    "Warsheikh" = c("warsheikh")
+  ),
+  Jubaland = list(
+    "Afmadow" = c("afmadow"),
+    "Badhadhe" = c("badhadhe"),
+    "Bardera" = c("bardera"),
+    "Beled Hawo" = c("beled hawo"),
+    "Belet Hawa" = c("belet hawa"),
+    "Buurdhubo" = c("burdubo", "buurdhubo"),
+    "Ceel Waaq" = c("ceel waaq"),
+    "Dhobley" = c("dhobely", "dhobley"),
+    "Dolow" = c("dolo", "dolow"),
+    "El Wak" = c("el wak"),
+    "Garbaharey" = c("garbaharey"),
+    "Jamame" = c("jamame"),
+    "Kismayo" = c("kismayo"),
+    "Luuq" = c("luuq"),
+    "Xagar" = c("hagar", "xagar")
+  ),
+  `North East` = list(
+    "Las Anod" = c("laasaanod", "las anod", "lasanod")
+  ),
+  Puntland = list(
+    "Alula" = c("alula"),
+    "Badhan" = c("badhan"),
+    "Bender Bayla" = c("bender bayla", "benderbayla"),
+    "Bossaso" = c("bossaso"),
+    "Buhodle" = c("buhodle"),
+    "Burtinle" = c("burtinle"),
+    "Carmo" = c("carmo"),
+    "Dangoroyo" = c("dangoroyo"),
+    "Dhahar" = c("dahar", "dhahar"),
+    "Eyl" = c("eyl"),
+    "Galkaio" = c("galkaio"),
+    "Galkayu North" = c("galkayu north"),
+    "Gardo" = c("gardo"),
+    "Garowe" = c("garowe"),
+    "Goldogob" = c("goldogob"),
+    "Horufadhi" = c("horufadhi"),
+    "Jariiban" = c("jariban", "jariiban"),
+    "Qardho" = c("qardho"),
+    "Taleh" = c("taleh"),
+    "Ufeyn" = c("ufain", "ufeyn"),
+    "Waaciya" = c("waaciya", "waciya"),
+    "Widhwidh" = c("widhwidh"),
+    "Xingalool" = c("xingalol", "xingalool")
+  ),
+  Somaliland = list(
+    "Aynabo" = c("ainabo", "aynabo"),
+    "Baki" = c("baki"),
+    "Baligubadle" = c("baligubadle"),
+    "Berbera" = c("berbera"),
+    "Borama" = c("borama"),
+    "Burco" = c("burco", "buroa"),
+    "Buuhoodle" = c("buuhoodle"),
+    "El Afweyn" = c("el afweyn", "el-afweyn"),
+    "Erigavo" = c("erigavo"),
+    "Gabiley" = c("gabiley"),
+    "Garadag" = c("garadag"),
+    "Hargeisa" = c("hargeisa"),
+    "Hudun" = c("hudun"),
+    "Las-Qoray" = c("las-qoray", "las-qoreh"),
+    "Lughaya" = c("lughaya"),
+    "Odwayne" = c("odwayne", "odweine"),
+    "Sheikh" = c("sheikh"),
+    "Taleeh" = c("taleeh"),
+    "Zeila" = c("zeila")
+  ),
+  `South West` = list(
+    "Afgoi" = c("afgoi"),
+    "Afgooye" = c("afgooye"),
+    "Awdhegle" = c("awdhegle"),
+    "Baidoa" = c("baidoa", "baidoba"),
+    "Barawe" = c("barawe"),
+    "Bardale" = c("bardale"),
+    "Berdalle" = c("berdalle"),
+    "Brava" = c("brava"),
+    "Burhakaba" = c("burhakaba"),
+    "Diinsor" = c("diinsor", "dinsor"),
+    "El Barde" = c("el barde", "el-barde"),
+    "Hudur" = c("hudur"),
+    "Kurtunwaarey" = c("kurtunwaarey", "kurtunwarey"),
+    "Marka" = c("marka"),
+    "Qansaxdhere" = c("qansahdhere", "qansaxdhere"),
+    "Qoryoley" = c("qoryoley", "qoryoolay"),
+    "Quracjome" = c("quracjome"),
+    "Rabdhure" = c("rabdhure", "rabdure"),
+    "Tiyeglow" = c("tiyeglo", "tiyeglow"),
+    "Wajid" = c("wajid"),
+    "Wanla Weyn" = c("wanla weyn")
+  )
+)
+
+# ---- Flatten the nested District lookup into the flat forms matching
+# needs: district_lookup_som (canonical -> variants, ungrouped by State,
+# mirroring Pakistan's own flat district_lookup) and district_to_state_som
+# (canonical District -> its State, mirroring Pakistan's
+# district_to_region), then build the variant -> canonical matchers for
+# all three levels.
+district_lookup_som <- list()
+district_to_state_som <- character(0)
+for (state_name in names(SOM_DISTRICT_STATE_LOOKUP)) {
+  state_districts <- SOM_DISTRICT_STATE_LOOKUP[[state_name]]
+  for (canonical_district in names(state_districts)) {
+    district_lookup_som[[canonical_district]] <- state_districts[[canonical_district]]
+    district_to_state_som[[canonical_district]] <- state_name
+  }
+}
+
+state_variant_map        <- build_matcher(SOM_STATE_LOOKUP)
+region_variant_map_som    <- build_matcher(SOM_REGION_LOOKUP)
+district_variant_map_som  <- build_matcher(district_lookup_som)
+
+match_state_name       <- function(x) fuzzy_match(x, state_variant_map, max_dist = 2)
+match_region_name_som  <- function(x) fuzzy_match(x, region_variant_map_som, max_dist = 2)
+match_district_name_som <- function(x) fuzzy_match(x, district_variant_map_som, max_dist = 2)
+
+# ---- Apply the matchers at ingestion, BEFORE any grouping below, so case
+# counts consolidate under one canonical State/Region/District rather than
+# fragmenting across spelling variants. Mirrors Pakistan's own
+# match-then-coalesce-to-raw pattern exactly: a value with no fuzzy match
+# at any tier (fuzzy_match() returns NA) falls back to its own
+# title-cased raw spelling rather than being dropped or erroring, so a
+# genuinely new/unrecognised place name still makes it through as its own
+# (uncorrected) entry instead of silently disappearing from the data.
 raw <- raw %>%
   mutate(
     # State was previously left as-is (only trimws()'d) -- the workbook has
     # it ALL CAPS for 7 of the 8 states ("JUBALAND", "PUNTLAND", ...) but
     # already Title Case for the 8th ("North East"), so State needed the
-    # same .title_case() treatment as Region/District to read consistently
-    # and to group correctly (a mismatched-case State would otherwise be
-    # treated as a distinct state from its own Title-Case self, if it were
-    # ever entered inconsistently within one week the way District already
-    # was).
-    State    = .title_case(as.character(State)),
-    Region   = .title_case(as.character(Region)),
-    District = .title_case(as.character(District)),
+    # same .title_case() treatment as Region/District to read consistently.
+    State_raw    = .title_case(as.character(State)),
+    Region_raw   = .title_case(as.character(Region)),
+    District_raw = .title_case(as.character(District)),
+    State    = vapply(State_raw, match_state_name, character(1)),
+    Region   = vapply(Region_raw, match_region_name_som, character(1)),
+    District = vapply(District_raw, match_district_name_som, character(1)),
+    State    = coalesce(State, State_raw),
+    Region   = coalesce(Region, Region_raw),
+    District = coalesce(District, District_raw),
     Week     = as.integer(Week),
     Year     = as.integer(Year)
   ) %>%
   filter(!is.na(State), !is.na(District), !is.na(Week), !is.na(Year))
+
+# ---- Report anything that fell back to its own raw spelling -------------
+# A value counts as "unmatched" only if it stayed equal to its own raw
+# (title-cased) spelling AND that raw spelling isn't itself already one of
+# our canonical names -- i.e. genuinely nothing in the corresponding
+# lookup matched it, at any tier. Visibility without blocking: these rows
+# are NOT dropped, they just kept their own spelling, so a fresh
+# misspelling (or a genuinely new place) is easy to spot in the console
+# output of a future run and, if it's a duplicate spelling, added to the
+# relevant lookup above.
+unmatched_states <- raw %>%
+  filter(State == State_raw, !(State %in% names(SOM_STATE_LOOKUP))) %>%
+  distinct(State_raw) %>% pull(State_raw)
+if (length(unmatched_states) > 0) {
+  warning("Somalia State values with no fuzzy match (kept as their own raw spelling): ",
+          paste(unmatched_states, collapse = ", "))
+}
+
+unmatched_regions <- raw %>%
+  filter(Region == Region_raw, !(Region %in% names(SOM_REGION_LOOKUP))) %>%
+  distinct(Region_raw) %>% pull(Region_raw)
+if (length(unmatched_regions) > 0) {
+  warning("Somalia Region values with no fuzzy match (kept as their own raw spelling): ",
+          paste(unmatched_regions, collapse = ", "))
+}
+
+unmatched_districts <- raw %>%
+  filter(District == District_raw, !(District %in% names(district_lookup_som))) %>%
+  distinct(District_raw) %>% pull(District_raw)
+if (length(unmatched_districts) > 0) {
+  warning("Somalia District values with no fuzzy match (kept as their own raw spelling): ",
+          paste(unmatched_districts, collapse = ", "))
+}
+
+raw <- raw %>% select(-State_raw, -Region_raw, -District_raw)
+
+# The full set of District spellings we're left with after the above --
+# i.e. the "base" district list this run of the pipeline is actually
+# working with (a subset of the full SOM_DISTRICT_STATE_LOOKUP catalogue
+# above if this particular workbook doesn't have data for every known
+# district, plus any genuinely unmatched raw spellings reported above).
+# Printed for visibility, the same way the disease list below is.
+SOM_BASE_DISTRICTS <- sort(unique(raw$District))
+cat("Base districts after case/spelling clean-up + fuzzy matching (", length(SOM_BASE_DISTRICTS), "):\n  ",
+    paste(SOM_BASE_DISTRICTS, collapse = ", "), "\n", sep = "")
 
 # ---- Identify the disease case AND death columns ------------------------
 # The workbook pairs each disease with its own "<Disease> case"/"<Disease>
