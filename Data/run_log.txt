@@ -1,11 +1,16 @@
-PAK IDSR data pipeline run -- 2026-09-24 09:49:11 UTC
+PAK IDSR data pipeline run -- 2026-09-25 10:06:36 UTC
 Mode: province-level + district-level
 
-New weeks processed: 0
+New weeks processed: 1
 Changed weeks reprocessed: 0
 
-=== WARNINGS (1) -- review recommended ===
+=== WARNINGS (6) -- review recommended ===
 (fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
 
-[MESSAGE] No new or changed bulletins — dataset is already up to date.
+[MESSAGE] 1 new week(s) and 0 changed week(s) to (re-)extract.
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
+[WARNING] District table "Table 3: District wise distribution of most frequently reported suspected cases during Week 36, Balochistan.": 1 district name(s) unmatched, kept as-is: (South) Duki
+[WARNING] District compliance table "Table 6: Compliance of IDSR reporting districts Week 36, Pakistan.": 1 district(s) with no resolvable region, kept with Region = NA: Dera Bugti South
 
