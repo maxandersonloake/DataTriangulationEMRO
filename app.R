@@ -1822,6 +1822,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
         noHide = TRUE, direction = "center", textOnly = TRUE,
         style = list(
           "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
+          "line-height" = "1.15",
           "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
         )
       )
@@ -3361,7 +3362,7 @@ server <- function(input, output, session) {
 
     status_line <- ifelse(
       is.na(sf_map$status), "No data available",
-      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "ok", paste0("(", round(sf_map$z, 1), " SD)"),
       ifelse(sf_map$status == "no_report", "No report this week",
       ifelse(sf_map$status == "absent", "Not in this week's bulletin",
              "Insufficient baseline data")))
@@ -4535,7 +4536,7 @@ server <- function(input, output, session) {
 
     status_line <- ifelse(
       is.na(sf_map$status), "No data available",
-      ifelse(sf_map$status == "ok", paste0(round(sf_map$z, 1), " SD from baseline"),
+      ifelse(sf_map$status == "ok", paste0("(", round(sf_map$z, 1), " SD)"),
       ifelse(sf_map$status == "no_report", "No report this week",
       ifelse(sf_map$status == "absent", "Not in this week's data",
              "Insufficient baseline data")))
