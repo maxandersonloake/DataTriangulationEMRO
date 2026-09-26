@@ -1754,28 +1754,35 @@ pixel_to_lonlat <- function(x, y, zoom) {
 }
 
 # ---- Helper: draw the province/state name + SD-status labels onto a
-# leaflet map, each at a FIXED position hand-picked to keep the whole
-# country readable at its default full-country view (no live decluttering
-# algorithm any more -- an earlier version recomputed label positions on
-# every zoom change, which made labels visibly jump/resettle as you
-# zoomed, not what was wanted here). Shared by both region_map_leaflet
-# (Pakistan) and region_map_leaflet_som (Somalia). `offsets_px` is a named
-# list, keyed by exact region name, of a fixed (dx, dy) SCREEN PIXEL shift
-# (computed once at `zoom_ref` -- the country's default zoom -- then
-# converted to a real lng/lat and left alone) for the handful of regions
-# that need to move to clear the crowded parts of the map; any region not
-# listed keeps its label exactly on its true point.
+# leaflet map. At the country's default full-country view (`zoom_ref`),
+# every label sits exactly where it was hand-placed -- most provinces
+# right on their true point, but a handful (via `offsets_px`, a named
+# list keyed by exact region name giving a fixed (dx, dy) SCREEN PIXEL
+# shift) pushed aside to clear the crowded parts of the map. Shared by
+# both region_map_leaflet (Pakistan) and region_map_leaflet_som
+# (Somalia).
 #
-# EVERY region's label -- not just the ones with a manual offset -- gets
-# no permanent leader line but does get a small bit of CLIENT-SIDE-ONLY
-# JavaScript (via htmlwidgets::onRender) that bumps its font size up
-# slightly whenever the mouse is over its own polygon, and reverts it on
-# mouseout. This is plain Leaflet layer events run entirely in the
-# browser (map.layerManager + directly setting the tooltip DOM element's
-# style) -- no Shiny input/output round trip -- so it doesn't reintroduce
-# the per-hover server redraw that caused the earlier "connection
-# struggling" slowdown. It relies on the caller giving each polygon the
-# SAME layerId as its `name_lines` entry (both region_map_leaflet's and
+# Two bits of CLIENT-SIDE-ONLY JavaScript (via htmlwidgets::onRender) add
+# interactivity on top of that fixed layout, entirely in the browser --
+# no Shiny input/output round trip for either, so neither reintroduces
+# the per-hover/per-zoom server redraw that caused the earlier
+# "connection struggling" slowdown:
+#   1. EVERY region's label (not just the offset ones) briefly gets a
+#      slightly larger font while the mouse is over its own polygon, and
+#      reverts on mouseout (map.layerManager + the tooltip DOM element's
+#      style).
+#   2. Each OFFSET region's label is gradually pulled back toward its
+#      true point as you zoom in past `zoom_ref` -- linearly, reaching
+#      exactly its true point at the map's max zoom -- and pushed back
+#      out to its full hand-picked offset if you zoom back out to
+#      `zoom_ref` or below. This runs on the map's own 'zoom' event
+#      (which fires continuously during an animated zoom, so the label
+#      glides rather than jumps) using Leaflet's own map.project() /
+#      map.unproject() plus marker.setLatLng() -- no recomputation of
+#      the overall layout, just these markers sliding along a fixed
+#      line back to their true point.
+# Both rely on the caller giving each polygon the SAME layerId as its
+# `name_lines` entry (both region_map_leaflet's and
 # region_map_leaflet_som's addPolygons() calls do this).
 #
 # `group` lets the caller identify just these label layers if it ever
@@ -1816,7 +1823,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
     )
   }
 
-  js <- sprintf(
+  js_hover <- sprintf(
     "function(el, x) {
        var map = this;
        var NORMAL_SIZE = '%s';
@@ -1835,7 +1842,44 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
     LABEL_FONT_SIZE_NORMAL, LABEL_FONT_SIZE_HOVER,
     jsonlite::toJSON(unique(name_lines))
   )
-  map <- htmlwidgets::onRender(map, js)
+  map <- htmlwidgets::onRender(map, js_hover)
+
+  if (length(offsets_px) > 0) {
+    moved_idx <- which(name_lines %in% names(offsets_px))
+    moved_info <- lapply(moved_idx, function(i) {
+      nm <- name_lines[i]
+      o <- offsets_px[[nm]]
+      list(name = nm, lng = coords[i, 1], lat = coords[i, 2], dx = o[1], dy = o[2])
+    })
+    js_converge <- sprintf(
+      "function(el, x) {
+         var map = this;
+         var ZOOM_REF = %s;
+         var moved = %s;
+         var markers = moved.map(function(m) {
+           return { m: m, label: map.layerManager.getLayer('marker', m.name) };
+         }).filter(function(o) { return !!o.label; });
+         function update() {
+           var z = map.getZoom();
+           var maxZ = map.getMaxZoom();
+           var span = maxZ - ZOOM_REF;
+           // s = 1 (full hand-picked offset) at zoom_ref or below,
+           // linearly shrinking to 0 (label right on its true point) by
+           // the map's max zoom.
+           var s = span > 0 ? Math.max(0, Math.min(1, (maxZ - z) / span)) : 1;
+           markers.forEach(function(o) {
+             var truePt = map.project([o.m.lat, o.m.lng], z);
+             var pt = L.point(truePt.x + o.m.dx * s, truePt.y + o.m.dy * s);
+             o.label.setLatLng(map.unproject(pt, z));
+           });
+         }
+         map.on('zoom', update);
+       }",
+      zoom_ref,
+      jsonlite::toJSON(moved_info, auto_unbox = TRUE)
+    )
+    map <- htmlwidgets::onRender(map, js_converge)
+  }
 
   map
 }
@@ -3338,10 +3382,13 @@ server <- function(input, output, session) {
   # over ANY province's shape briefly enlarges its own label's text (see
   # the on-hover JS in draw_region_labels()), which is especially useful
   # for confirming which label belongs to which shape among the shifted
-  # trio, but applies to every province. These positions are fixed once
-  # at render time and don't move as you zoom -- an earlier version
-  # recomputed them on every zoom change, which made labels visibly
-  # jump/resettle, not what was wanted here.
+  # trio, but applies to every province. Every province's label sits at
+  # this fixed position at the default zoom and below; the three shifted
+  # ones then gradually slide back in toward their true point as you
+  # zoom in further, reaching it exactly at max zoom (also handled
+  # client-side in draw_region_labels() -- not the old per-zoom
+  # server-side recompute that made labels visibly jump/resettle, which
+  # is specifically what wasn't wanted here).
   PAK_MAP_DEFAULT_ZOOM <- 5
 
   # Hand-picked (dx, dy) SCREEN PIXEL shifts, at the default zoom above,
