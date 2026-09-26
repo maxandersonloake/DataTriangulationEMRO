@@ -1739,6 +1739,16 @@ lonlat_to_pixel <- function(lng, lat, zoom) {
   cbind(x, y)
 }
 
+# ---- Helper: a horizontal PIXEL distance (at a given zoom) -> the
+# longitude delta covering that many pixels, i.e. the inverse of the x
+# half of lonlat_to_pixel() above. Since declutter_label_offsets() now
+# only ever shifts labels horizontally, this is all that's needed to turn
+# a label's pixel offset back into an actual lng/lat point to draw its
+# leader line to and to place its marker at -- latitude is unchanged.
+pixel_dx_to_lng_delta <- function(dx, zoom) {
+  (dx / (256 * 2^zoom)) * 360
+}
+
 # ---- Helper: crude ggrepel-style label decluttering for leaflet markers -
 # Leaflet has no built-in label-collision avoidance (and ggrepel itself
 # only works with static ggplot2 output, not an interactive htmlwidget),
@@ -1746,13 +1756,11 @@ lonlat_to_pixel <- function(lng, lat, zoom) {
 # permanent on-map labels: project each label's lng/lat anchor to screen
 # pixels at a reference zoom, estimate each label's rough on-screen box
 # from its text length, and run a few iterations of simple pairwise
-# repulsion -- any two overlapping boxes get pushed apart along whichever
-# axis has the smaller overlap (the standard cheap AABB-declutter
-# heuristic), same spirit as ggrepel's box-repulsion but computed by hand.
-# Returns one (dx, dy) PIXEL offset per point, meant for
-# labelOptions(offset = ...) -- a fixed screen-space shift from the
-# marker's true anchor, so it stays put across pan/zoom even though it
-# was only computed for one reference zoom.
+# repulsion. Unlike a general 2D declutter, every push is HORIZONTAL ONLY
+# (labels never move vertically) -- this keeps every leader line drawn
+# from a region's true point to its (possibly shifted) label perfectly
+# horizontal, and keeps each label at its own region's latitude. Returns
+# one (dx, dy) PIXEL offset per point, with dy always 0.
 declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, iterations = 60) {
   px <- lonlat_to_pixel(lng, lat, zoom)
   n  <- nrow(px)
@@ -1761,36 +1769,32 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
   half_w <- pmax(nchar(name_lines), nchar(sub_lines)) * 3.4 + 6
   half_h <- rep(16, n)
 
-  pos <- px
+  pos_x <- px[, 1]
   if (n > 1) {
     for (iter in seq_len(iterations)) {
       moved <- FALSE
       for (i in seq_len(n - 1)) {
         for (j in (i + 1):n) {
-          dx <- pos[j, 1] - pos[i, 1]
-          dy <- pos[j, 2] - pos[i, 2]
+          dx <- pos_x[j] - pos_x[i]
+          dy <- px[j, 2] - px[i, 2]  # vertical position never changes
           overlap_x <- (half_w[i] + half_w[j]) - abs(dx)
           overlap_y <- (half_h[i] + half_h[j]) - abs(dy)
           if (overlap_x > 0 && overlap_y > 0) {
+            # Two labels only actually collide if their vertical extents
+            # also overlap -- but since neither can move vertically, the
+            # full horizontal overlap must be resolved by an x-only push.
             moved <- TRUE
-            if (overlap_x < overlap_y) {
-              shift <- overlap_x / 2 + 0.5
-              s <- if (dx == 0) 1 else sign(dx)
-              pos[i, 1] <- pos[i, 1] - s * shift
-              pos[j, 1] <- pos[j, 1] + s * shift
-            } else {
-              shift <- overlap_y / 2 + 0.5
-              s <- if (dy == 0) 1 else sign(dy)
-              pos[i, 2] <- pos[i, 2] - s * shift
-              pos[j, 2] <- pos[j, 2] + s * shift
-            }
+            shift <- overlap_x / 2 + 0.5
+            s <- if (dx == 0) 1 else sign(dx)
+            pos_x[i] <- pos_x[i] - s * shift
+            pos_x[j] <- pos_x[j] + s * shift
           }
         }
       }
       if (!moved) break
     }
   }
-  pos - px
+  cbind(pos_x - px[, 1], 0)
 }
 
 # =================================================================
@@ -2067,17 +2071,39 @@ ui <- tagList(
           ),
           column(
             width = 6,
+            # ---- Static ggplot version of this map (region_map) -- commented
+            # out in favour of the interactive leaflet version below. Left
+            # intact (not deleted) so it can be swapped back in later if
+            # needed; its server-side output (output$region_map) and inputs
+            # (case_type_map) are untouched. ----
+            # div(
+            #   class = "viz-panel",
+            #   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+            #   h4("Deviation from expected baseline (SD), by region", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+            #   uiOutput("map_subtitle"),
+            #   plotOutput("region_map", height = "420px"),
+            #   div(
+            #     class = "viz-panel-controls",
+            #     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+            #     radioButtons(
+            #       "case_type_map", "Case counts to colour the map by",
+            #       choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+            #       selected = "reported", inline = TRUE
+            #     )
+            #   )
+            # ),
             div(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-              h4("Deviation from expected baseline (SD), by region", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-              uiOutput("map_subtitle"),
-              plotOutput("region_map", height = "420px"),
+              h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              uiOutput("map_subtitle_leaflet"),
+              leafletOutput("region_map_leaflet", height = "420px"),
               div(
                 class = "viz-panel-controls",
-                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                sd_gradient_legend_ui(show_no_data = TRUE),
                 radioButtons(
-                  "case_type_map", "Case counts to colour the map by",
+                  "case_type_map_leaflet", "Case counts to colour the map by",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
                   selected = "reported", inline = TRUE
                 )
@@ -2103,28 +2129,6 @@ ui <- tagList(
                   selected = "reported", inline = TRUE
                 ),
                 uiOutput("stack_nr_control")
-              )
-            )
-          )
-        ),
-        fluidRow(
-          column(
-            width = 6,
-            div(
-              class = "viz-panel",
-              style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
-              h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-              uiOutput("map_subtitle_leaflet"),
-              leafletOutput("region_map_leaflet", height = "500px"),
-              div(
-                class = "viz-panel-controls",
-                style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
-                sd_gradient_legend_ui(show_no_data = TRUE),
-                radioButtons(
-                  "case_type_map_leaflet", "Case counts to colour the map by",
-                  choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                  selected = "reported", inline = TRUE
-                )
               )
             )
           )
@@ -2620,17 +2624,40 @@ ui <- tagList(
               ),
               column(
                 width = 6,
+                # ---- Static ggplot version of this map (region_map_som) --
+                # commented out in favour of the interactive leaflet version
+                # below. Left intact (not deleted) so it can be swapped back
+                # in later if needed; its server-side output
+                # (output$region_map_som) and inputs (case_type_map_som) are
+                # untouched. ----
+                # div(
+                #   class = "viz-panel",
+                #   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                #   h4("Deviation from expected baseline (SD), by state", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                #   uiOutput("map_subtitle_som"),
+                #   plotOutput("region_map_som", height = "420px"),
+                #   div(
+                #     class = "viz-panel-controls",
+                #     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                #     if (somalia_has_compliance) {
+                #       radioButtons("case_type_map_som", "Case counts to colour the map by",
+                #                    choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                #                    selected = "reported", inline = TRUE)
+                #     }
+                #   )
+                # ),
                 div(
                   class = "viz-panel",
                   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                  h4("Deviation from expected baseline (SD), by state", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                  uiOutput("map_subtitle_som"),
-                  plotOutput("region_map_som", height = "420px"),
+                  h4("Deviation from expected baseline (SD), by state: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("map_subtitle_leaflet_som"),
+                  leafletOutput("region_map_leaflet_som", height = "420px"),
                   div(
                     class = "viz-panel-controls",
-                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                    sd_gradient_legend_ui(show_no_data = TRUE),
                     if (somalia_has_compliance) {
-                      radioButtons("case_type_map_som", "Case counts to colour the map by",
+                      radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
                                    choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
                                    selected = "reported", inline = TRUE)
                     }
@@ -2656,28 +2683,6 @@ ui <- tagList(
                                    selected = "reported", inline = TRUE)
                     },
                     uiOutput("stack_nr_control_som")
-                  )
-                )
-              )
-            ),
-            fluidRow(
-              column(
-                width = 6,
-                div(
-                  class = "viz-panel",
-                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
-                  h4("Deviation from expected baseline (SD), by state: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                  uiOutput("map_subtitle_leaflet_som"),
-                  leafletOutput("region_map_leaflet_som", height = "500px"),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
-                    sd_gradient_legend_ui(show_no_data = TRUE),
-                    if (somalia_has_compliance) {
-                      radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
-                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                   selected = "reported", inline = TRUE)
-                    }
                   )
                 )
               )
@@ -3314,9 +3319,15 @@ server <- function(input, output, session) {
     # ggrepel only works on static ggplot2 output, not an interactive
     # leaflet htmlwidget -- declutter_label_offsets() (defined near the
     # top of this file) is a small hand-rolled stand-in that nudges any
-    # overlapping province labels apart in pixel space, applied per
-    # marker below via labelOptions(offset = ...).
+    # overlapping province labels apart, horizontally only, in pixel
+    # space. Converted back to an actual lng/lat point (pixel_dx_to_
+    # lng_delta(), also near the top of this file) so every label can be
+    # placed at a real map coordinate and joined to its true in-polygon
+    # point by a straight horizontal leader line -- latitude never
+    # changes, so every line is perfectly horizontal.
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$adm1_name, status_line, zoom = 5)
+    label_lng <- coords[, 1] + pixel_dx_to_lng_delta(offsets[, 1], zoom = 5)
+    label_lat <- coords[, 2]
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
@@ -3326,18 +3337,28 @@ server <- function(input, output, session) {
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       )
 
+    # One horizontal leader line per province, from its true in-polygon
+    # point to its (possibly shifted) label -- drawn for every province,
+    # not just the ones that needed to move, so every label has the same
+    # consistent visual anchor back to its region.
+    for (i in seq_len(nrow(sf_map))) {
+      m <- m %>% addPolylines(
+        lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
+        color = who_navy, weight = 1, opacity = 0.6
+      )
+    }
+
     # One addLabelOnlyMarkers() call per province rather than one
-    # vectorised call for all of them, since each needs its OWN
-    # declutter offset -- labelOptions() is a single shared options
-    # object per call, so a varying per-marker offset needs a separate
-    # call per marker (only 7 provinces, so this is cheap).
+    # vectorised call for all of them, since each is placed at its own
+    # shifted lng/lat (labelOptions() is a single shared options object
+    # per call, so a varying per-marker position needs a separate call
+    # per marker -- only 7 provinces, so this is cheap).
     for (i in seq_len(nrow(sf_map))) {
       m <- m %>% addLabelOnlyMarkers(
-        lng = coords[i, 1], lat = coords[i, 2],
+        lng = label_lng[i], lat = label_lat[i],
         label = label_html[[i]],
         labelOptions = labelOptions(
           noHide = TRUE, direction = "center", textOnly = TRUE,
-          offset = c(offsets[i, 1], offsets[i, 2]),
           style = list(
             "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
             "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
@@ -4477,7 +4498,11 @@ server <- function(input, output, session) {
 
     label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
     coords <- sf::st_coordinates(label_pts)
+    # Horizontal-only decluttering, converted back to a real lng/lat point
+    # -- see the matching comment on Pakistan's region_map_leaflet above.
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$State, status_line, zoom = 5)
+    label_lng <- coords[, 1] + pixel_dx_to_lng_delta(offsets[, 1], zoom = 5)
+    label_lat <- coords[, 2]
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
@@ -4487,13 +4512,22 @@ server <- function(input, output, session) {
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       )
 
+    # One horizontal leader line per state, from its true in-polygon point
+    # to its (possibly shifted) label -- drawn for every state, not just
+    # the ones that needed to move (see Pakistan's map above).
+    for (i in seq_len(nrow(sf_map))) {
+      m <- m %>% addPolylines(
+        lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
+        color = who_navy, weight = 1, opacity = 0.6
+      )
+    }
+
     for (i in seq_len(nrow(sf_map))) {
       m <- m %>% addLabelOnlyMarkers(
-        lng = coords[i, 1], lat = coords[i, 2],
+        lng = label_lng[i], lat = label_lat[i],
         label = label_html[[i]],
         labelOptions = labelOptions(
           noHide = TRUE, direction = "center", textOnly = TRUE,
-          offset = c(offsets[i, 1], offsets[i, 2]),
           style = list(
             "font-weight" = "600", "font-size" = "12px", color = who_navy,
             "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
