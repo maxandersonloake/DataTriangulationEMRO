@@ -52,7 +52,7 @@ body { background-color: #FFFFFF; color: #222222; }
   background-color: var(--who-navy);
 }
 .who-banner-logo {
-  height: 140px;
+  height: 93px;
   max-width: 100%;
   flex-shrink: 0;
   border: none;
