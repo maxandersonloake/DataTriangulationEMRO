@@ -30,22 +30,30 @@ body { background-color: #FFFFFF; color: #222222; }
    Header, in 2 stacked rows -- modelled on the WHO Data platform
    (apps.who.int/data), but with the navy banner brought right to the
    very top of the page (no separate white logo row above it): a navy
-   title banner holding the (transparent-background) logo stacked above
-   the title/subtitle text, then a white sub-nav row holding the country
-   picker (left) and the current country's own tab strip (right).
+   title banner holding the title/subtitle text on the left, vertically
+   centred in line with the (transparent-background, large) logo on the
+   right, then a white sub-nav row holding the country picker (left) and
+   the current country's own tab strip (right).
    ================================================================ */
 
-/* ---- Row 1: navy title banner, logo stacked above title/subtitle ---- */
+/* ---- Row 1: navy title banner -- title/subtitle (left), logo (right),
+   both vertically centred on the same row. Wraps to logo-under-text on
+   narrow screens (rather than overflowing) since the logo has a fixed
+   height and won't shrink to fit a phone-width row alongside the title
+   text. ---- */
 .who-banner {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 20px 24px 22px 24px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 16px 24px;
   background-color: var(--who-navy);
 }
 .who-banner-logo {
   height: 140px;
+  max-width: 100%;
   flex-shrink: 0;
   border: none;
   outline: none;
@@ -53,9 +61,10 @@ body { background-color: #FFFFFF; color: #222222; }
 }
 .who-banner-text {
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 20px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 4px;
 }
 .who-title { font-size: 26px; font-weight: 700; color: #FFFFFF; line-height: 1.2; margin: 0; }
 .who-subtitle { font-size: 14px; color: #C9DEF3; margin: 0; }
