@@ -26,39 +26,94 @@ body, .shiny-app, * {
 
 body { background-color: #FFFFFF; color: #222222; }
 
-/* ---- Header ---- */
-.who-header {
+/* ================================================================
+   Header, in 3 stacked rows -- modelled on the WHO Data platform
+   (apps.who.int/data): a slim white logo row, a navy title banner,
+   then a white sub-nav row holding the country picker (left) and the
+   current country's own tab strip (right). Replaces the old single
+   white row (logo + title side-by-side) plus Shiny's own default
+   navbarPage tab strip underneath it.
+   ================================================================ */
+
+/* ---- Row 1: slim white logo row ---- */
+.who-toprow {
+  display: flex;
+  align-items: center;
+  padding: 10px 24px;
+  background-color: #FFFFFF;
+}
+.who-toprow img { height: 56px; border: none; outline: none; box-shadow: none; }
+
+/* ---- Row 2: navy title banner ---- */
+.who-banner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  padding: 18px 24px;
+  background-color: var(--who-navy);
+}
+.who-title { font-size: 26px; font-weight: 700; color: #FFFFFF; line-height: 1.2; margin: 0; }
+.who-subtitle { font-size: 14px; color: #C9DEF3; margin: 0; }
+
+/* ---- Row 3: white sub-nav row -- country picker (left) + the active
+   country's own tab strip (right), replacing Shiny's default
+   navbarPage tabs (hidden below) and each tabsetPanel's own auto
+   nav-tabs strip (also hidden below, per country -- #pak_subtab /
+   #som_subtab) ---- */
+.who-subnav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-direction: row-reverse;
-  padding: 14px 24px;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding: 10px 24px;
   background-color: #FFFFFF;
-  border-bottom: 3px solid var(--who-navy);
+  border-bottom: 1px solid #DDE1E4;
 }
-.who-header img { height: 92px; border: none; outline: none; box-shadow: none; }
-.who-header-text { text-align: left; }
-.who-title { font-size: 34px; font-weight: 700; color: var(--who-navy); line-height: 1.15; }
-.who-subtitle { font-size: 15px; color: #555555; margin-top: 2px; }
-
-/* ---- Nav bar ---- */
-.navbar-default {
-  background-color: var(--who-navy) !important;
-  border: none;
-  border-radius: 0;
-  margin-bottom: 0;
-}
-.navbar-default .navbar-nav > li > a {
-  color: #FFFFFF !important;
+.who-country-picker { display: flex; align-items: center; }
+.who-country-picker select.form-control {
+  border: 1px solid #C9CDD1;
+  border-radius: 6px;
   font-weight: 600;
+  color: var(--who-navy);
+  min-width: 190px;
+  padding-right: 28px;
+}
+.who-country-picker .form-group { margin-bottom: 0; }
+
+.who-subtabs { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.who-subtabs a,
+.who-subtabs a:visited {
+  display: inline-block;
+  padding: 6px 2px 8px 2px;
   font-size: 15px;
+  font-weight: 600;
+  color: #555555;
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
 }
-.navbar-default .navbar-nav > li > a:hover,
-.navbar-default .navbar-nav > .active > a {
-  background-color: var(--who-blue) !important;
-  color: #FFFFFF !important;
+.who-subtabs a:hover { color: var(--who-navy); }
+.who-subtabs a.active,
+.who-subtabs a.active:visited {
+  color: var(--who-navy);
+  border-bottom-color: var(--who-blue);
 }
-.navbar-default .navbar-nav > .active > a:hover { background-color: var(--who-blue) !important; }
+
+/* Hide Shiny's own default top-level country tab strip (navbarPage) and
+   each country's own auto-rendered Home/Alerts/... nav-tabs strip -- both
+   fully replaced by the country picker + .who-subtabs links above, which
+   drive the exact same underlying tabsetPanel/navbarPage inputs via
+   Bootstrap's tab('show') API, so every existing reactive keyed off
+   input$who_nav / input$pak_subtab / input$som_subtab keeps working
+   unchanged. */
+.navbar-static-top,
+#pak_subtab.nav-tabs,
+#som_subtab.nav-tabs {
+  display: none !important;
+}
 
 /* ---- Sidebar / panels ---- */
 .well, .sidebar-panel, .box {

@@ -1798,37 +1798,61 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=11"),
-    tags$title("WHO EMRO | IDSR Dashboard")
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=12"),
+    tags$title("WHO EMRO | IDSR Dashboard"),
+    # Drives a hidden native Shiny tab (tabsetPanel/navbarPage both render
+    # one under the hood) via Bootstrap's own tab('show') API, exactly as
+    # if its real (now visually hidden) <a data-toggle="tab"> had been
+    # clicked -- so input$who_nav / input$pak_subtab / input$som_subtab
+    # keep updating normally and every existing reactive keyed off them
+    # (including the two "Jump to Data visualisation" links elsewhere in
+    # this app that call updateNavbarPage()/updateTabsetPanel() the other
+    # way) is unaffected. Used by the custom country-picker-and-tab-strip
+    # header row below in place of Shiny's own default nav UI (which is
+    # hidden, not removed, via who_brand.css).
+    tags$script(HTML(
+      "function whoSwitchTab(tabsetId, value) {\n  $('#' + tabsetId + ' a[data-value=\"' + value + '\"]').tab('show');\n}"
+    ))
   ),
 
-  # ---- WHO branded header ----
-  # Inline styles are applied alongside the who-header/.who-title classes
-  # (in www/who_brand.css) as a safety net -- if a browser or CDN ever
-  # serves a stale cached copy of the CSS file, the header still renders
-  # correctly because these rules don't depend on the external file at all.
+  # ---- WHO branded header, in 3 stacked rows -- modelled on the WHO Data
+  # platform (apps.who.int/data): a slim logo row, a navy title banner,
+  # then a country-picker + tab-strip row. See who_brand.css for the row
+  # styling and for how Shiny's own default navbarPage/tabsetPanel nav
+  # strips are hidden (not removed) in favour of the custom controls here.
   div(
-    class = "who-header",
-    style = "display:flex; flex-direction:row-reverse; align-items:center; justify-content:space-between; padding:14px 24px; background-color:#FFFFFF; border-bottom:3px solid #00205C;",
+    class = "who-toprow",
     if (!is.null(logo_uri)) {
-      tags$img(src = logo_uri, alt = "World Health Organization",
-               style = "height:92px; border:none; outline:none; box-shadow:none;")
+      tags$img(src = logo_uri, alt = "World Health Organization")
     } else {
       div(
         style = "color:#EF3842; border:2px dashed #EF3842; padding:6px 10px; font-size:12px;",
         paste0("LOGO NOT FOUND at www/", LOGO_FILENAME, " -- add the official WHO logo PNG there.")
       )
-    },
+    }
+  ),
+  div(
+    class = "who-banner",
+    # Swaps between "Pakistan IDSR..." and "Somalia IDSR..." based on
+    # which top-level country tab is selected (input$who_nav) -- see
+    # output$country_header_text in the server.
+    uiOutput("country_header_text")
+  ),
+  div(
+    class = "who-subnav",
     div(
-      class = "who-header-text",
-      style = "text-align:left;",
-      # Swaps between "Pakistan IDSR..." and "Somalia IDSR..." based on
-      # which top-level country tab is selected (input$who_nav) -- see
-      # output$country_header_text in the server. Pakistan's own wording is
-      # unchanged from before; this only makes it reactive instead of
-      # hardcoded, since the same header now also has to speak for Somalia.
-      uiOutput("country_header_text")
-    )
+      class = "who-country-picker",
+      # Replaces Shiny's own default navbarPage tab strip (Pakistan /
+      # Somalia) as the way input$who_nav changes -- see the
+      # country_select <-> who_nav sync observers in the server.
+      selectInput("country_select", label = NULL,
+                  choices = c("Pakistan" = "Pakistan", "Somalia" = "Somalia"),
+                  selected = "Pakistan", width = "auto", selectize = FALSE)
+    ),
+    # The current country's own Home / Alerts / Data visualisation / ...
+    # tab strip, replacing that country's own tabsetPanel's default
+    # nav-tabs UI (see output$country_subtabs_ui in the server).
+    uiOutput("country_subtabs_ui")
   ),
 
   navbarPage(
@@ -2087,7 +2111,7 @@ ui <- tagList(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
               h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-              uiOutput("map_subtitle"),
+              uiOutput("map_subtitle_leaflet"),
               leafletOutput("region_map_leaflet", height = "500px"),
               div(
                 class = "viz-panel-controls",
@@ -2640,7 +2664,7 @@ ui <- tagList(
                   class = "viz-panel",
                   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
                   h4("Deviation from expected baseline (SD), by state: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                  uiOutput("map_subtitle_som"),
+                  uiOutput("map_subtitle_leaflet_som"),
                   leafletOutput("region_map_leaflet_som", height = "500px"),
                   div(
                     class = "viz-panel-controls",
@@ -2869,29 +2893,74 @@ server <- function(input, output, session) {
 
   # ---------------- Header / footer text (country-aware) ------------------
   # Swaps between Pakistan's and Somalia's wording based on which top-level
-  # country tab is currently selected (input$who_nav) -- identical
-  # markup/styling to the previously-hardcoded Pakistan-only version (see
-  # who-title/who-subtitle/who-footer usage below), just made reactive so
-  # the same header/footer element can also speak for Somalia. Defined
+  # country tab is currently selected (input$who_nav). Styling (white bold
+  # title / pale subtitle, laid out as a flex row by the surrounding
+  # .who-banner) lives in who_brand.css now, not inline here. Defined
   # outside the somalia_data_available guard below so the header still
   # swaps correctly even while Somalia's tab is showing its "not
   # configured" placeholder message.
   output$country_header_text <- renderUI({
     if (identical(input$who_nav, "Somalia")) {
       tagList(
-        div(class = "who-title", style = "font-size:34px; font-weight:700; color:#00205C; line-height:1.15;",
-            "Somalia IDSR Surveillance Dashboard"),
-        div(class = "who-subtitle", style = "font-size:15px; color:#555555; margin-top:2px;",
-            "Alpha Version - Internal and Preliminary")
+        div(class = "who-title", "Somalia IDSR Surveillance Dashboard"),
+        div(class = "who-subtitle", "Alpha Version - Internal and Preliminary")
       )
     } else {
       tagList(
-        div(class = "who-title", style = "font-size:34px; font-weight:700; color:#00205C; line-height:1.15;",
-            "Pakistan IDSR Surveillance Dashboard"),
-        div(class = "who-subtitle", style = "font-size:15px; color:#555555; margin-top:2px;",
-            "Alpha Version - Internal and Preliminary")
+        div(class = "who-title", "Pakistan IDSR Surveillance Dashboard"),
+        div(class = "who-subtitle", "Alpha Version - Internal and Preliminary")
       )
     }
+  })
+
+  # ---------------- Country picker <-> navbarPage sync --------------------
+  # The custom country <select> in the who-subnav row (input$country_select)
+  # is the only VISIBLE way to switch country now (navbarPage's own tab
+  # strip is hidden via CSS, not removed), so a change there needs to drive
+  # the real navbarPage input (input$who_nav) that everything else in this
+  # app already keys off. The reverse observer keeps the dropdown in sync
+  # on the rare occasion input$who_nav changes some OTHER way (e.g. the
+  # "Jump to Data visualisation" alert links elsewhere in this app, which
+  # call updateNavbarPage() directly) -- ignoreInit avoids a spurious loop
+  # on startup, and Shiny doesn't re-fire an update*() call that would set
+  # an input to the value it already has, so this pair can't loop.
+  observeEvent(input$country_select, {
+    updateNavbarPage(session, "who_nav", selected = input$country_select)
+  })
+  observeEvent(input$who_nav, {
+    updateSelectInput(session, "country_select", selected = input$who_nav)
+  }, ignoreInit = TRUE)
+
+  # ---------------- Country sub-tab strip (Home / Alerts / ...) -----------
+  # Renders the who-subnav row's right-hand tab links for whichever
+  # country is currently active, bolding/underlining whichever one is
+  # currently selected. Each link calls whoSwitchTab() (see the <script>
+  # in the UI) to trigger the corresponding country's REAL, now-hidden
+  # tabsetPanel tab via Bootstrap's tab('show') API -- so this is a purely
+  # visual replacement for that tabsetPanel's own nav-tabs strip; the
+  # underlying input$pak_subtab/input$som_subtab values, and everything
+  # that already depends on them, are completely unchanged.
+  output$country_subtabs_ui <- renderUI({
+    if (identical(input$who_nav, "Somalia")) {
+      tabset_id <- "som_subtab"
+      active    <- if (is.null(input$som_subtab)) "Home" else input$som_subtab
+    } else {
+      tabset_id <- "pak_subtab"
+      active    <- if (is.null(input$pak_subtab)) "Home" else input$pak_subtab
+    }
+    labels <- c("Home", "Alerts", "Data visualisation", "Weekly summary table",
+                "District-level data", "References")
+    div(
+      class = "who-subtabs",
+      lapply(labels, function(lbl) {
+        tags$a(
+          class = if (identical(lbl, active)) "active" else NULL,
+          onclick = sprintf("whoSwitchTab('%s', '%s'); return false;", tabset_id, lbl),
+          href = "#",
+          lbl
+        )
+      })
+    )
   })
 
   output$country_footer_text <- renderUI({
@@ -3127,6 +3196,19 @@ server <- function(input, output, session) {
   })
 
   output$map_subtitle <- renderUI({
+    req(input$disease, input$location, input$asof_week_viz)
+    asof <- parse_asof(input$asof_week_viz)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  # Duplicate of map_subtitle above, under its own output ID -- the static
+  # (region_map) and interactive (region_map_leaflet) versions of this map
+  # each need their own uiOutput() in the UI (two elements can't share one
+  # id; modern Shiny.js errors on a duplicate output binding rather than
+  # silently updating both, which used to mask this), even though the text
+  # itself is identical.
+  output$map_subtitle_leaflet <- renderUI({
     req(input$disease, input$location, input$asof_week_viz)
     asof <- parse_asof(input$asof_week_viz)
     div(class = "viz-subtitle",
@@ -4298,6 +4380,15 @@ server <- function(input, output, session) {
   })
 
   output$map_subtitle_som <- renderUI({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof <- parse_asof(input$asof_week_viz_som)
+    div(class = "viz-subtitle",
+        paste0("Disease: ", input$disease_som, ", as of Week ", asof$week, ", ", asof$year))
+  })
+
+  # Duplicate of map_subtitle_som above, under its own output ID -- see the
+  # map_subtitle_leaflet comment (same reasoning, Somalia's own copy).
+  output$map_subtitle_leaflet_som <- renderUI({
     req(input$disease_som, input$asof_week_viz_som)
     asof <- parse_asof(input$asof_week_viz_som)
     div(class = "viz-subtitle",
