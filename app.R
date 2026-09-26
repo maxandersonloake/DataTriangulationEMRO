@@ -1790,11 +1790,25 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
   # Leader line only for the regions with a manual offset -- fully opaque
   # and added to `group` after the polygons, so it always reads as a
   # solid line sitting on top of the coloured regions rather than
-  # blending into whichever one is underneath it.
+  # blending into whichever one is underneath it. The line stops
+  # LINE_GAP_PX short of the label's own anchor point (rather than
+  # running all the way to it) so it ends in the blank space just before
+  # the label starts, instead of passing behind/through the label text --
+  # this also reads as a visibly shorter connector rather than a long
+  # line running the whole offset distance.
+  LINE_GAP_PX <- 22
+  offset_len <- sqrt(offset_x^2 + offset_y^2)
+  shrink <- pmin(LINE_GAP_PX / pmax(offset_len, 1e-6), 1)
+  line_end_pos <- pixel_to_lonlat(
+    anchor_px[, 1] + offset_x * (1 - shrink),
+    anchor_px[, 2] + offset_y * (1 - shrink),
+    zoom = zoom_ref
+  )
+
   for (i in seq_len(nrow(coords))) {
     if (!moved[i]) next
     map <- map %>% addPolylines(
-      lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
+      lng = c(coords[i, 1], line_end_pos[i, 1]), lat = c(coords[i, 2], line_end_pos[i, 2]),
       color = who_navy, weight = 1, opacity = 1, group = group
     )
   }
@@ -3327,9 +3341,9 @@ server <- function(input, output, session) {
   # south of it, so it's pushed straight down. Every other province keeps
   # its label on its true point (no entry needed here).
   PAK_LABEL_OFFSETS_PX <- list(
-    "Khyber Pakhtunkhwa" = c(-75, 0),
-    "Azad Kashmir"       = c(75, 0),
-    "Islamabad"          = c(0, 60)
+    "Khyber Pakhtunkhwa" = c(-55, 0),
+    "Azad Kashmir"       = c(55, 0),
+    "Islamabad"          = c(0, 48)
   )
 
   # Data-only reactive (no drawing) -- computed once whenever the
@@ -4498,7 +4512,12 @@ server <- function(input, output, session) {
   # Pakistan's region_map_leaflet above. No states here currently need a
   # manual offset (SOM_LABEL_OFFSETS_PX is empty -- every label sits on
   # its true point), but the mechanism is the same if one ever does.
-  SOM_MAP_DEFAULT_ZOOM <- 6
+  # A fractional default zoom (needs zoomSnap/zoomDelta = 0.5 below, since
+  # Leaflet's default snaps to whole zoom levels only) -- whole zoom 6 cut
+  # off the southern tip of the country, but whole zoom 5 was noticeably
+  # wider than needed. 5.5 is the in-between step that fits the full
+  # country without the extra surrounding whitespace of zoom 5.
+  SOM_MAP_DEFAULT_ZOOM <- 5.5
   SOM_LABEL_OFFSETS_PX <- list()
 
   # Data-only reactive (no drawing) -- see the matching Pakistan reactive
@@ -4543,7 +4562,7 @@ server <- function(input, output, session) {
   output$region_map_leaflet_som <- renderLeaflet({
     d <- region_map_leaflet_som_data()
 
-    leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+    leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9, zoomSnap = 0.5, zoomDelta = 0.5)) %>%
       add_basemap() %>%
       addPolygons(
         fillColor = d$fill_col, fillOpacity = 0.85,
