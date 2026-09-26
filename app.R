@@ -1766,10 +1766,10 @@ pixel_to_lonlat <- function(x, y, zoom) {
 # that need to move to clear the crowded parts of the map; any region not
 # listed keeps its label exactly on its true point.
 #
-# Regions with an offset get no permanent leader line back to their true
-# point -- instead, a small bit of CLIENT-SIDE-ONLY JavaScript (via
-# htmlwidgets::onRender) bumps that label's font size up slightly
-# whenever the mouse is over its true region's polygon, and reverts it on
+# EVERY region's label -- not just the ones with a manual offset -- gets
+# no permanent leader line but does get a small bit of CLIENT-SIDE-ONLY
+# JavaScript (via htmlwidgets::onRender) that bumps its font size up
+# slightly whenever the mouse is over its own polygon, and reverts it on
 # mouseout. This is plain Leaflet layer events run entirely in the
 # browser (map.layerManager + directly setting the tooltip DOM element's
 # style) -- no Shiny input/output round trip -- so it doesn't reintroduce
@@ -1797,7 +1797,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
   label_lat <- label_pos[, 2]
 
   LABEL_FONT_SIZE_NORMAL <- "12px"
-  LABEL_FONT_SIZE_HOVER  <- "14px"
+  LABEL_FONT_SIZE_HOVER  <- "13px"
 
   for (i in seq_len(nrow(coords))) {
     map <- map %>% addLabelOnlyMarkers(
@@ -1816,28 +1816,26 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
     )
   }
 
-  if (length(offsets_px) > 0) {
-    js <- sprintf(
-      "function(el, x) {
-         var map = this;
-         var NORMAL_SIZE = '%s';
-         var HOVER_SIZE = '%s';
-         var movedNames = %s;
-         movedNames.forEach(function(name) {
-           var poly = map.layerManager.getLayer('shape', name);
-           var label = map.layerManager.getLayer('marker', name);
-           if (!poly || !label || !label.getTooltip()) return;
-           var tipEl = label.getTooltip().getElement ? label.getTooltip().getElement() : label.getTooltip()._container;
-           if (!tipEl) return;
-           poly.on('mouseover', function() { tipEl.style.fontSize = HOVER_SIZE; });
-           poly.on('mouseout', function() { tipEl.style.fontSize = NORMAL_SIZE; });
-         });
-       }",
-      LABEL_FONT_SIZE_NORMAL, LABEL_FONT_SIZE_HOVER,
-      jsonlite::toJSON(names(offsets_px))
-    )
-    map <- htmlwidgets::onRender(map, js)
-  }
+  js <- sprintf(
+    "function(el, x) {
+       var map = this;
+       var NORMAL_SIZE = '%s';
+       var HOVER_SIZE = '%s';
+       var allNames = %s;
+       allNames.forEach(function(name) {
+         var poly = map.layerManager.getLayer('shape', name);
+         var label = map.layerManager.getLayer('marker', name);
+         if (!poly || !label || !label.getTooltip()) return;
+         var tipEl = label.getTooltip().getElement ? label.getTooltip().getElement() : label.getTooltip()._container;
+         if (!tipEl) return;
+         poly.on('mouseover', function() { tipEl.style.fontSize = HOVER_SIZE; });
+         poly.on('mouseout', function() { tipEl.style.fontSize = NORMAL_SIZE; });
+       });
+     }",
+    LABEL_FONT_SIZE_NORMAL, LABEL_FONT_SIZE_HOVER,
+    jsonlite::toJSON(unique(name_lines))
+  )
+  map <- htmlwidgets::onRender(map, js)
 
   map
 }
@@ -3337,10 +3335,11 @@ server <- function(input, output, session) {
   # are hand-shifted via PAK_LABEL_OFFSETS_PX below so the whole country
   # reads cleanly at the default full-country view. There's no permanent
   # leader line back to their true location any more -- instead, hovering
-  # over a province's shape briefly enlarges its (possibly shifted)
-  # label's text, so it's clear which label belongs to which shape (see
-  # the on-hover JS in draw_region_labels()). These positions are fixed
-  # once at render time and don't move as you zoom -- an earlier version
+  # over ANY province's shape briefly enlarges its own label's text (see
+  # the on-hover JS in draw_region_labels()), which is especially useful
+  # for confirming which label belongs to which shape among the shifted
+  # trio, but applies to every province. These positions are fixed once
+  # at render time and don't move as you zoom -- an earlier version
   # recomputed them on every zoom change, which made labels visibly
   # jump/resettle, not what was wanted here.
   PAK_MAP_DEFAULT_ZOOM <- 5
