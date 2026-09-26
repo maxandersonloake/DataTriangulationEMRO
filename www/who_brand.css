@@ -27,37 +27,40 @@ body, .shiny-app, * {
 body { background-color: #FFFFFF; color: #222222; }
 
 /* ================================================================
-   Header, in 3 stacked rows -- modelled on the WHO Data platform
-   (apps.who.int/data): a slim white logo row, a navy title banner,
-   then a white sub-nav row holding the country picker (left) and the
-   current country's own tab strip (right). Replaces the old single
-   white row (logo + title side-by-side) plus Shiny's own default
-   navbarPage tab strip underneath it.
+   Header, in 2 stacked rows -- modelled on the WHO Data platform
+   (apps.who.int/data), but with the navy banner brought right to the
+   very top of the page (no separate white logo row above it): a navy
+   title banner holding the (transparent-background) logo stacked above
+   the title/subtitle text, then a white sub-nav row holding the country
+   picker (left) and the current country's own tab strip (right).
    ================================================================ */
 
-/* ---- Row 1: slim white logo row ---- */
-.who-toprow {
-  display: flex;
-  align-items: center;
-  padding: 10px 24px;
-  background-color: #FFFFFF;
-}
-.who-toprow img { height: 56px; border: none; outline: none; box-shadow: none; }
-
-/* ---- Row 2: navy title banner ---- */
+/* ---- Row 1: navy title banner, logo stacked above title/subtitle ---- */
 .who-banner {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 24px;
-  padding: 18px 24px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 24px 22px 24px;
   background-color: var(--who-navy);
+}
+.who-banner-logo {
+  height: 140px;
+  flex-shrink: 0;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+.who-banner-text {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 20px;
 }
 .who-title { font-size: 26px; font-weight: 700; color: #FFFFFF; line-height: 1.2; margin: 0; }
 .who-subtitle { font-size: 14px; color: #C9DEF3; margin: 0; }
 
-/* ---- Row 3: white sub-nav row -- country picker (left) + the active
+/* ---- Row 2: white sub-nav row -- country picker (left) + the active
    country's own tab strip (right), replacing Shiny's default
    navbarPage tabs (hidden below) and each tabsetPanel's own auto
    nav-tabs strip (also hidden below, per country -- #pak_subtab /
@@ -195,12 +198,21 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
 }
 .info-card h4 { margin-top: 0; }
 
-/* Full-bleed pale-blue background for the Home and References tabs --
-   content sits directly on this background rather than in individual
-   boxed cards. The negative margin cancels Shiny's default container
-   gutter so the tint reaches the edges of the visible content area. */
+/* Full-bleed pale-blue background for the References tabs -- content
+   sits directly on this background rather than in individual boxed
+   cards. The negative margin cancels Shiny's default container gutter
+   so the tint reaches the edges of the visible content area. */
 .page-tint-bg {
   background-color: var(--who-blue-10);
+  margin: 0 -15px;
+  padding: 20px 15px 36px 15px;
+  min-height: calc(100vh - 300px);
+}
+
+/* Same full-bleed layout as .page-tint-bg, but plain white -- used on the
+   Home tabs, which no longer get the pale-blue tint. */
+.page-plain-bg {
+  background-color: #FFFFFF;
   margin: 0 -15px;
   padding: 20px 15px 36px 15px;
   min-height: calc(100vh - 300px);

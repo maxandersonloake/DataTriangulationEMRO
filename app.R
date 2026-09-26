@@ -1798,7 +1798,7 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=12"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=14"),
     tags$title("WHO EMRO | IDSR Dashboard"),
     # Drives a hidden native Shiny tab (tabsetPanel/navbarPage both render
     # one under the hood) via Bootstrap's own tab('show') API, exactly as
@@ -1815,28 +1815,30 @@ ui <- tagList(
     ))
   ),
 
-  # ---- WHO branded header, in 3 stacked rows -- modelled on the WHO Data
-  # platform (apps.who.int/data): a slim logo row, a navy title banner,
-  # then a country-picker + tab-strip row. See who_brand.css for the row
-  # styling and for how Shiny's own default navbarPage/tabsetPanel nav
-  # strips are hidden (not removed) in favour of the custom controls here.
+  # ---- WHO branded header, in 2 stacked rows -- the navy title banner now
+  # sits right at the very top of the page (no separate white logo row
+  # above it), with the logo (transparent background, so it sits directly
+  # on the navy) placed inside the banner itself, stacked above the
+  # title/subtitle text. See who_brand.css for the row styling and for
+  # how Shiny's own default navbarPage/tabsetPanel nav strips are hidden
+  # (not removed) in favour of the custom controls here.
   div(
-    class = "who-toprow",
+    class = "who-banner",
     if (!is.null(logo_uri)) {
-      tags$img(src = logo_uri, alt = "World Health Organization")
+      tags$img(src = logo_uri, alt = "World Health Organization", class = "who-banner-logo")
     } else {
       div(
         style = "color:#EF3842; border:2px dashed #EF3842; padding:6px 10px; font-size:12px;",
         paste0("LOGO NOT FOUND at www/", LOGO_FILENAME, " -- add the official WHO logo PNG there.")
       )
-    }
-  ),
-  div(
-    class = "who-banner",
-    # Swaps between "Pakistan IDSR..." and "Somalia IDSR..." based on
-    # which top-level country tab is selected (input$who_nav) -- see
-    # output$country_header_text in the server.
-    uiOutput("country_header_text")
+    },
+    div(
+      class = "who-banner-text",
+      # Swaps between "Pakistan IDSR..." and "Somalia IDSR..." based on
+      # which top-level country tab is selected (input$who_nav) -- see
+      # output$country_header_text in the server.
+      uiOutput("country_header_text")
+    )
   ),
   div(
     class = "who-subnav",
@@ -1877,7 +1879,7 @@ ui <- tagList(
     tabPanel(
       "Home",
       div(
-        class = "page-tint-bg",
+        class = "page-plain-bg",
         div(
           style = "max-width: 1200px; margin: 0; padding-left: 24px;",
           h4("About this dashboard"),
@@ -2457,7 +2459,7 @@ ui <- tagList(
         tabPanel(
           "Home",
           div(
-            class = "page-tint-bg",
+            class = "page-plain-bg",
             div(
               style = "max-width: 1200px; margin: 0; padding-left: 24px;",
               h4("About this dashboard"),
