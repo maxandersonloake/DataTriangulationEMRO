@@ -1727,6 +1727,145 @@ add_basemap <- function(map) {
   )
 }
 
+# ---- Helper: standard Web Mercator lng/lat -> global pixel coordinates --
+# at a given zoom (the same slippy-map tile projection Leaflet itself uses
+# internally). Used by declutter_label_offsets() below to reason about
+# label spacing in genuine on-screen pixels.
+lonlat_to_pixel <- function(lng, lat, zoom) {
+  siny <- sin(lat * pi / 180)
+  siny <- pmin(pmax(siny, -0.9999), 0.9999)
+  x <- 256 * (0.5 + lng / 360) * 2^zoom
+  y <- 256 * (0.5 - log((1 + siny) / (1 - siny)) / (4 * pi)) * 2^zoom
+  cbind(x, y)
+}
+
+# ---- Helper: the inverse of lonlat_to_pixel() above -- global pixel
+# coordinates (at a given zoom) -> Web Mercator lng/lat. Used to turn a
+# label's decluttered PIXEL position back into a real map coordinate, so
+# it can be placed at an actual point and joined to its region's true
+# location by a straight leader line.
+pixel_to_lonlat <- function(x, y, zoom) {
+  lng <- (x / (256 * 2^zoom) - 0.5) * 360
+  ny  <- y / (256 * 2^zoom)
+  n   <- pi * (1 - 2 * ny)
+  lat <- atan(sinh(n)) * 180 / pi
+  cbind(lng, lat)
+}
+
+# ---- Helper: crude ggrepel-style label decluttering for leaflet markers -
+# Leaflet has no built-in label-collision avoidance (and ggrepel itself
+# only works with static ggplot2 output, not an interactive htmlwidget),
+# so this is a small hand-rolled stand-in for the province/state name
+# labels: project each label's lng/lat anchor to screen pixels at a given
+# zoom, estimate each label's rough on-screen box from its text length,
+# and run a few iterations of simple pairwise repulsion -- any two
+# overlapping boxes get pushed apart along whichever axis has the smaller
+# overlap (the standard cheap AABB-declutter heuristic, same spirit as
+# ggrepel's box-repulsion but computed by hand). A label with no
+# overlapping neighbour is never moved, so it keeps offset (0, 0) --
+# draw_region_name_labels() below only draws a leader line for labels
+# that actually moved. Returns one (dx, dy) PIXEL offset per point, meant
+# to be added to the point's own pixel position and converted back to
+# lng/lat via pixel_to_lonlat().
+declutter_label_offsets <- function(lng, lat, name_lines, zoom = 5, iterations = 60) {
+  px <- lonlat_to_pixel(lng, lat, zoom)
+  n  <- nrow(px)
+  # Rough box half-extents in pixels, from text length -- a single bold
+  # ~12px label line, centred.
+  half_w <- nchar(name_lines) * 3.4 + 6
+  half_h <- rep(10, n)
+
+  pos <- px
+  if (n > 1) {
+    for (iter in seq_len(iterations)) {
+      moved <- FALSE
+      for (i in seq_len(n - 1)) {
+        for (j in (i + 1):n) {
+          dx <- pos[j, 1] - pos[i, 1]
+          dy <- pos[j, 2] - pos[i, 2]
+          overlap_x <- (half_w[i] + half_w[j]) - abs(dx)
+          overlap_y <- (half_h[i] + half_h[j]) - abs(dy)
+          if (overlap_x > 0 && overlap_y > 0) {
+            moved <- TRUE
+            if (overlap_x < overlap_y) {
+              shift <- overlap_x / 2 + 0.5
+              s <- if (dx == 0) 1 else sign(dx)
+              pos[i, 1] <- pos[i, 1] - s * shift
+              pos[j, 1] <- pos[j, 1] + s * shift
+            } else {
+              shift <- overlap_y / 2 + 0.5
+              s <- if (dy == 0) 1 else sign(dy)
+              pos[i, 2] <- pos[i, 2] - s * shift
+              pos[j, 2] <- pos[j, 2] + s * shift
+            }
+          }
+        }
+      }
+      if (!moved) break
+    }
+  }
+
+  pos - px
+}
+
+# ---- Helper: draw the province/state name labels onto a leaflet map or
+# leafletProxy, decluttered for a SPECIFIC zoom level, with a leader line
+# back to the true in-polygon point ONLY for labels that actually had to
+# move to avoid overlapping a neighbour. Shared by both region_map_leaflet
+# (Pakistan) and region_map_leaflet_som (Somalia), and called again every
+# time the map's zoom changes (see the input$<id>_zoom observers below) --
+# decluttering computed once at a fixed reference zoom looks fine there
+# but drifts back into overlapping labels at any other zoom, since points
+# on the map get closer together on screen as you zoom out. Recomputing
+# at the map's actual current zoom keeps labels non-overlapping at every
+# zoom level. This only redraws on zoom change (an infrequent, deliberate
+# action), NOT on hover -- an earlier version redrew on every mouse
+# hover via a Shiny server round-trip and made the connection struggle;
+# the SD-value tooltip on hover (see addPolygons() below) is handled
+# entirely client-side by Leaflet and never touches the server, so it
+# doesn't have that problem. `group` lets the caller clear + redraw just
+# these layers (via clearGroup()) without touching the coloured
+# choropleth polygons underneath, which are added separately and never
+# given this group.
+draw_region_name_labels <- function(map, coords, name_lines, zoom, group, min_line_px = 3) {
+  offsets <- declutter_label_offsets(coords[, 1], coords[, 2], name_lines, zoom = zoom)
+  anchor_px <- lonlat_to_pixel(coords[, 1], coords[, 2], zoom = zoom)
+  label_pos <- pixel_to_lonlat(anchor_px[, 1] + offsets[, 1], anchor_px[, 2] + offsets[, 2], zoom = zoom)
+  label_lng <- label_pos[, 1]
+  label_lat <- label_pos[, 2]
+  moved <- sqrt(offsets[, 1]^2 + offsets[, 2]^2) > min_line_px
+
+  # Leader line only for labels that were actually displaced -- fully
+  # opaque and drawn before the labels (but after the polygons, since
+  # both are added to `group`, which is always added/cleared AFTER the
+  # polygons) so it reads as a solid line sitting on top of the coloured
+  # regions rather than blending into whichever one is underneath it.
+  for (i in seq_len(nrow(coords))) {
+    if (!moved[i]) next
+    map <- map %>% addPolylines(
+      lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
+      color = who_navy, weight = 1, opacity = 1, group = group
+    )
+  }
+
+  for (i in seq_len(nrow(coords))) {
+    map <- map %>% addLabelOnlyMarkers(
+      lng = label_lng[i], lat = label_lat[i],
+      label = name_lines[i],
+      group = group,
+      labelOptions = labelOptions(
+        noHide = TRUE, direction = "center", textOnly = TRUE,
+        style = list(
+          "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
+          "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
+        )
+      )
+    )
+  }
+
+  map
+}
+
 # =================================================================
 # UI
 # =================================================================
@@ -3215,15 +3354,18 @@ server <- function(input, output, session) {
   # but rendered on an interactive leaflet map (province admin1
   # boundaries, same source as the District-level data map -- see the
   # References tab) instead of the static ggplot one. Province names are
-  # simple, always-on labels (no leader lines); the SD reading only
+  # permanent labels, decluttered like region_map's ggrepel labels above
+  # (see draw_region_name_labels() near the top of this file) with a
+  # leader line back to the true point only where a label actually had
+  # to move -- redrawn on zoom change, not on hover. The SD reading only
   # appears in a plain hover tooltip, same as the District-level data
-  # map's tooltip. This is deliberately the simplest possible version --
-  # an earlier attempt kept the SD reading in a server-redrawn hover
-  # label (leafletProxy() + a Shiny shape_mouseover/_mouseout observer
-  # pair), which round-trips over the Shiny websocket on every single
-  # mouse-in/mouse-out across the map and made the connection struggle.
-  # A plain Leaflet `label=`/`labelOptions()` tooltip (below) is handled
-  # entirely client-side by the browser -- no server involvement at all.
+  # map's tooltip. An earlier attempt kept the SD reading in a
+  # server-redrawn hover label (leafletProxy() + a Shiny
+  # shape_mouseover/_mouseout observer pair), which round-tripped over
+  # the Shiny websocket on every single mouse-in/mouse-out across the map
+  # and made the connection struggle -- the plain Leaflet
+  # `label=`/`labelOptions()` tooltip below is handled entirely
+  # client-side by the browser, with no server involvement at all.
   PAK_MAP_DEFAULT_ZOOM <- 5
 
   # Data-only reactive (no drawing) -- computed once whenever the
@@ -3273,7 +3415,7 @@ server <- function(input, output, session) {
   output$region_map_leaflet <- renderLeaflet({
     d <- region_map_leaflet_data()
 
-    leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+    m <- leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
       addPolygons(
         fillColor = d$fill_col, fillOpacity = 0.85,
@@ -3283,24 +3425,40 @@ server <- function(input, output, session) {
         label = lapply(d$status_line, htmltools::HTML),
         labelOptions = labelOptions(direction = "auto", textsize = "12px"),
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
-      ) %>%
-      # Simple always-on labels -- just the province name, positioned at
-      # a guaranteed in-polygon point, no leader lines and no collision
-      # avoidance between them (any overlap at low zoom is an acceptable
-      # trade for keeping this map lightweight).
-      addLabelOnlyMarkers(
-        lng = d$coords[, 1], lat = d$coords[, 2],
-        label = d$name_lines,
-        labelOptions = labelOptions(
-          noHide = TRUE, direction = "center", textOnly = TRUE,
-          style = list(
-            "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
-            "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
-          )
-        )
-      ) %>%
-      setView(lng = 69.5, lat = 30.3, zoom = PAK_MAP_DEFAULT_ZOOM)
+      )
+
+    # Reads the zoom already reported by the browser (if this is a
+    # re-render, e.g. the disease/location/asof filters changed while
+    # zoomed in) via isolate() -- WITHOUT isolate(), simply reading
+    # input$..._zoom here would make this renderLeaflet() itself depend
+    # on it, so EVERY zoom change would re-run this whole block, which
+    # always ends by calling setView(zoom = PAK_MAP_DEFAULT_ZOOM) below,
+    # snapping the zoom straight back to the default on every zoom the
+    # user makes -- the "can't zoom at all" bug from an earlier version
+    # of this map.
+    zoom0 <- isolate({
+      if (!is.null(input$region_map_leaflet_zoom)) input$region_map_leaflet_zoom else PAK_MAP_DEFAULT_ZOOM
+    })
+    m <- draw_region_name_labels(m, d$coords, d$name_lines, zoom = zoom0, group = "region_name_labels")
+
+    m %>% setView(lng = 69.5, lat = 30.3, zoom = PAK_MAP_DEFAULT_ZOOM)
   })
+
+  # Re-declutter and redraw JUST the name labels/leader lines (not the
+  # coloured polygons) whenever the map's zoom changes -- decluttering
+  # computed once at a fixed reference zoom looks fine there but drifts
+  # back into overlapping labels at any other zoom, since the true points
+  # on the map get closer together on screen as you zoom out. leaflet's
+  # Shiny binding automatically exposes the live zoom level as
+  # input$<outputId>_zoom, so this needs no custom JS. This fires only on
+  # zoom (an infrequent, deliberate action), never on hover, so it
+  # doesn't have the per-hover round-trip problem described above.
+  observeEvent(input$region_map_leaflet_zoom, {
+    d <- region_map_leaflet_data()
+    proxy <- leafletProxy("region_map_leaflet") %>% clearGroup("region_name_labels")
+    draw_region_name_labels(proxy, d$coords, d$name_lines,
+                             zoom = input$region_map_leaflet_zoom, group = "region_name_labels")
+  }, ignoreInit = TRUE)
 
   # ---------------- Regional contribution stacked bar chart --------------
   output$stack_subtitle <- renderUI({
@@ -4403,9 +4561,10 @@ server <- function(input, output, session) {
   }, res = 96)
 
   # Same state-level SD-from-baseline data as region_map_som above, but on
-  # an interactive leaflet map. State names are simple, always-on labels;
-  # the SD reading only appears in a plain client-side hover tooltip --
-  # same as Pakistan's region_map_leaflet above.
+  # an interactive leaflet map. State names are decluttered permanent
+  # labels with a leader line where necessary; the SD reading only
+  # appears in a plain client-side hover tooltip -- same as Pakistan's
+  # region_map_leaflet above.
   SOM_MAP_DEFAULT_ZOOM <- 6
 
   # Data-only reactive (no drawing) -- see the matching Pakistan reactive
@@ -4450,7 +4609,7 @@ server <- function(input, output, session) {
   output$region_map_leaflet_som <- renderLeaflet({
     d <- region_map_leaflet_som_data()
 
-    leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
+    m <- leaflet(d$sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
       addPolygons(
         fillColor = d$fill_col, fillOpacity = 0.85,
@@ -4460,22 +4619,26 @@ server <- function(input, output, session) {
         label = lapply(d$status_line, htmltools::HTML),
         labelOptions = labelOptions(direction = "auto", textsize = "12px"),
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
-      ) %>%
-      # Simple always-on labels -- just the state name, see the matching
-      # comment on Pakistan's region_map_leaflet above.
-      addLabelOnlyMarkers(
-        lng = d$coords[, 1], lat = d$coords[, 2],
-        label = d$name_lines,
-        labelOptions = labelOptions(
-          noHide = TRUE, direction = "center", textOnly = TRUE,
-          style = list(
-            "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
-            "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
-          )
-        )
-      ) %>%
-      setView(lng = 46, lat = 5.5, zoom = SOM_MAP_DEFAULT_ZOOM)
+      )
+
+    # isolate() here for the same reason as Pakistan's region_map_leaflet
+    # above.
+    zoom0 <- isolate({
+      if (!is.null(input$region_map_leaflet_som_zoom)) input$region_map_leaflet_som_zoom else SOM_MAP_DEFAULT_ZOOM
+    })
+    m <- draw_region_name_labels(m, d$coords, d$name_lines, zoom = zoom0, group = "region_name_labels")
+
+    m %>% setView(lng = 46, lat = 5.5, zoom = SOM_MAP_DEFAULT_ZOOM)
   })
+
+  # Re-declutter and redraw the name labels/leader lines on zoom change --
+  # see the matching observer on Pakistan's region_map_leaflet above.
+  observeEvent(input$region_map_leaflet_som_zoom, {
+    d <- region_map_leaflet_som_data()
+    proxy <- leafletProxy("region_map_leaflet_som") %>% clearGroup("region_name_labels")
+    draw_region_name_labels(proxy, d$coords, d$name_lines,
+                             zoom = input$region_map_leaflet_som_zoom, group = "region_name_labels")
+  }, ignoreInit = TRUE)
 
   # ---------------- Somalia: Weekly summary table tab ----------------------
   tbl_nr_info_som <- reactive({
