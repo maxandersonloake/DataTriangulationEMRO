@@ -1774,7 +1774,21 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
   half_w <- pmax(nchar(name_lines), nchar(sub_lines)) * 3.4 + 6
   half_h <- rep(16, n)
 
-  pos <- px
+  # Seed every label with a small guaranteed offset from its anchor
+  # point, fanned out along a deterministic angle per region (the golden
+  # angle, so regions needing this fallback don't all point the same way
+  # and collide with each other) -- this guarantees every region gets a
+  # clearly visible leader line even when it doesn't overlap any other
+  # label and so would otherwise never move at all (previously producing
+  # a near/exactly-zero-length, invisible line -- the "some regions
+  # don't have lines"/"no lines for several regions" complaint: the
+  # lines were always being drawn, they were just imperceptibly short).
+  # Seeding this offset BEFORE the repulsion loop below, rather than
+  # forcing it on afterwards, means the loop still gets a chance to
+  # resolve any overlaps the seed itself introduces between neighbours.
+  min_len <- 16
+  angle <- (seq_len(n) - 1) * 2.399963
+  pos <- px + min_len * cbind(cos(angle), sin(angle))
   if (n > 1) {
     for (iter in seq_len(iterations)) {
       moved <- FALSE
@@ -1803,7 +1817,24 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
       if (!moved) break
     }
   }
-  pos - px
+
+  offsets <- pos - px
+
+  # Safety net: the seed offset above plus the repulsion loop should
+  # already keep every offset at or above min_len, but as a belt-and-
+  # braces check, scale up anything that still ends up shorter (e.g. two
+  # regions seeded on near-opposite angles that partly cancelled each
+  # other out) to min_len in its own current direction -- a small scale
+  # correction rather than an outright redirect, so it's very unlikely
+  # to reintroduce a collision with a neighbouring label.
+  mag <- sqrt(offsets[, 1]^2 + offsets[, 2]^2)
+  short <- mag < min_len & mag > 1e-6
+  if (any(short)) {
+    idx <- which(short)
+    offsets[idx, ] <- offsets[idx, , drop = FALSE] * (min_len / mag[idx])
+  }
+
+  offsets
 }
 
 # ---- Helper: draw one leader line + one permanent label per region onto
@@ -3410,11 +3441,18 @@ server <- function(input, output, session) {
     # top of this file, shared with Somalia's map below) is a small
     # hand-rolled stand-in that nudges any overlapping province labels
     # apart in pixel space (any direction) at a given zoom, then joins
-    # each to its true in-polygon point with a leader line. Uses the
-    # zoom already reported by the browser if this is a re-render (e.g.
-    # the disease/location/asof filters changed while zoomed in), so an
-    # existing zoom level doesn't reset back to the default on refresh.
-    zoom0 <- if (!is.null(input$region_map_leaflet_zoom)) input$region_map_leaflet_zoom else PAK_MAP_DEFAULT_ZOOM
+    # each to its true in-polygon point with a leader line. Reads the
+    # zoom already reported by the browser (if this is a re-render, e.g.
+    # the disease/location/asof filters changed while zoomed in) via
+    # isolate() -- WITHOUT isolate(), simply reading input$..._zoom here
+    # would make this renderLeaflet() itself depend on it, so EVERY zoom
+    # change would re-run this whole block, which always ends by calling
+    # setView(zoom = PAK_MAP_DEFAULT_ZOOM) below -- i.e. every zoom the
+    # user makes would immediately get snapped back to the default zoom.
+    # That reactive feedback loop was the "can't zoom at all" bug.
+    zoom0 <- isolate({
+      if (!is.null(input$region_map_leaflet_zoom)) input$region_map_leaflet_zoom else PAK_MAP_DEFAULT_ZOOM
+    })
     m <- draw_region_leader_labels(m, d$coords, d$name_lines, d$status_line, d$label_html,
                                     zoom = zoom0, group = "region_labels")
 
@@ -4584,8 +4622,14 @@ server <- function(input, output, session) {
       )
 
     # Decluttering (any direction) + leader lines -- see the matching
-    # comment on Pakistan's region_map_leaflet above.
-    zoom0 <- if (!is.null(input$region_map_leaflet_som_zoom)) input$region_map_leaflet_som_zoom else SOM_MAP_DEFAULT_ZOOM
+    # comment on Pakistan's region_map_leaflet above (isolate() here for
+    # the same reason: reading input$region_map_leaflet_som_zoom without
+    # it would make this renderLeaflet() re-run on every zoom change,
+    # and it always ends with setView(zoom = SOM_MAP_DEFAULT_ZOOM) below,
+    # which was snapping the zoom straight back -- the "can't zoom" bug).
+    zoom0 <- isolate({
+      if (!is.null(input$region_map_leaflet_som_zoom)) input$region_map_leaflet_som_zoom else SOM_MAP_DEFAULT_ZOOM
+    })
     m <- draw_region_leader_labels(m, d$coords, d$name_lines, d$status_line, d$label_html,
                                     zoom = zoom0, group = "region_labels")
 
