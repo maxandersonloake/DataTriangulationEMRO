@@ -1744,15 +1744,27 @@ lonlat_to_pixel <- function(lng, lat, zoom) {
 
 # ---- Helper: the inverse of lonlat_to_pixel() above -- global pixel
 # coordinates (at a given zoom) -> Web Mercator lng/lat. Used to turn a
-# label's fixed pixel offset back into a real map coordinate, so it can be
-# placed at an actual point and joined to its region's true location by a
-# straight leader line.
+# label's fixed pixel offset back into a real map coordinate.
 pixel_to_lonlat <- function(x, y, zoom) {
   lng <- (x / (256 * 2^zoom) - 0.5) * 360
   ny  <- y / (256 * 2^zoom)
   n   <- pi * (1 - 2 * ny)
   lat <- atan(sinh(n)) * 180 / pi
   cbind(lng, lat)
+}
+
+# ---- Helper: a single arrow character pointing from a fixed-offset
+# label back toward its region's true location -- used for the on-hover
+# clue in draw_region_labels() below (in place of a permanent leader
+# line). Picks whichever axis (dx vs dy) the offset moved further along,
+# then points the OPPOSITE way, since that's the direction back to the
+# true point -- e.g. a label pushed left (dx < 0) gets a right arrow.
+arrow_for_offset <- function(dx, dy) {
+  if (abs(dx) >= abs(dy)) {
+    if (dx < 0) "→" else "←"
+  } else {
+    if (dy < 0) "↓" else "↑"
+  }
 }
 
 # ---- Helper: draw the province/state name + SD-status labels onto a
@@ -1766,10 +1778,22 @@ pixel_to_lonlat <- function(x, y, zoom) {
 # (computed once at `zoom_ref` -- the country's default zoom -- then
 # converted to a real lng/lat and left alone) for the handful of regions
 # that need to move to clear the crowded parts of the map; any region not
-# listed keeps its label exactly on its true point. A leader line is only
-# drawn for regions that DO have an offset, back to their true point.
-# `group` lets the caller identify just these layers if it ever needs to
-# clear them (e.g. on a full re-render).
+# listed keeps its label exactly on its true point.
+#
+# Regions with an offset get no permanent leader line back to their true
+# point -- instead, a small bit of CLIENT-SIDE-ONLY JavaScript (via
+# htmlwidgets::onRender) briefly prepends a directional arrow to that
+# label's text whenever the mouse is over its true region's polygon, and
+# removes it again on mouseout. This is plain Leaflet layer events run
+# entirely in the browser (map.layerManager + marker.setTooltipContent) --
+# no Shiny input/output round trip -- so it doesn't reintroduce the
+# per-hover server redraw that caused the earlier "connection struggling"
+# slowdown. It relies on the caller giving each polygon the SAME layerId
+# as its `name_lines` entry (both region_map_leaflet's and
+# region_map_leaflet_som's addPolygons() calls do this).
+#
+# `group` lets the caller identify just these label layers if it ever
+# needs to clear them (e.g. on a full re-render).
 draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, group, offsets_px = list()) {
   anchor_px <- lonlat_to_pixel(coords[, 1], coords[, 2], zoom = zoom_ref)
 
@@ -1785,38 +1809,12 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
   label_pos <- pixel_to_lonlat(anchor_px[, 1] + offset_x, anchor_px[, 2] + offset_y, zoom = zoom_ref)
   label_lng <- label_pos[, 1]
   label_lat <- label_pos[, 2]
-  moved <- name_lines %in% names(offsets_px)
-
-  # Leader line only for the regions with a manual offset -- fully opaque
-  # and added to `group` after the polygons, so it always reads as a
-  # solid line sitting on top of the coloured regions rather than
-  # blending into whichever one is underneath it. The line stops
-  # LINE_GAP_PX short of the label's own anchor point (rather than
-  # running all the way to it) so it ends in the blank space just before
-  # the label starts, instead of passing behind/through the label text --
-  # this also reads as a visibly shorter connector rather than a long
-  # line running the whole offset distance.
-  LINE_GAP_PX <- 22
-  offset_len <- sqrt(offset_x^2 + offset_y^2)
-  shrink <- pmin(LINE_GAP_PX / pmax(offset_len, 1e-6), 1)
-  line_end_pos <- pixel_to_lonlat(
-    anchor_px[, 1] + offset_x * (1 - shrink),
-    anchor_px[, 2] + offset_y * (1 - shrink),
-    zoom = zoom_ref
-  )
-
-  for (i in seq_len(nrow(coords))) {
-    if (!moved[i]) next
-    map <- map %>% addPolylines(
-      lng = c(coords[i, 1], line_end_pos[i, 1]), lat = c(coords[i, 2], line_end_pos[i, 2]),
-      color = who_navy, weight = 1, opacity = 1, group = group
-    )
-  }
 
   for (i in seq_len(nrow(coords))) {
     map <- map %>% addLabelOnlyMarkers(
       lng = label_lng[i], lat = label_lat[i],
       label = label_html[[i]],
+      layerId = name_lines[i],
       group = group,
       labelOptions = labelOptions(
         noHide = TRUE, direction = "center", textOnly = TRUE,
@@ -1827,6 +1825,33 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
         )
       )
     )
+  }
+
+  if (length(offsets_px) > 0) {
+    moved_info <- lapply(names(offsets_px), function(nm) {
+      o <- offsets_px[[nm]]
+      list(name = nm, arrow = arrow_for_offset(o[1], o[2]))
+    })
+    js <- sprintf(
+      "function(el, x) {
+         var map = this;
+         var moved = %s;
+         moved.forEach(function(m) {
+           var poly = map.layerManager.getLayer('shape', m.name);
+           var label = map.layerManager.getLayer('marker', m.name);
+           if (!poly || !label || !label.getTooltip()) return;
+           var original = label.getTooltip().getContent();
+           poly.on('mouseover', function() {
+             label.setTooltipContent(m.arrow + ' ' + original);
+           });
+           poly.on('mouseout', function() {
+             label.setTooltipContent(original);
+           });
+         });
+       }",
+      jsonlite::toJSON(moved_info, auto_unbox = TRUE)
+    )
+    map <- htmlwidgets::onRender(map, js)
   }
 
   map
@@ -3325,9 +3350,12 @@ server <- function(input, output, session) {
   # -- most provinces sit right on their true point, but a few in the
   # crowded northern cluster (Khyber Pakhtunkhwa, Azad Kashmir, Islamabad)
   # are hand-shifted via PAK_LABEL_OFFSETS_PX below so the whole country
-  # reads cleanly at the default full-country view, with a leader line
-  # back to each one's true location. These positions are fixed once at
-  # render time and don't move as you zoom -- an earlier version
+  # reads cleanly at the default full-country view. There's no permanent
+  # leader line back to their true location any more -- instead, hovering
+  # over a province's shape briefly adds an arrow to its (possibly
+  # shifted) label so it's clear which label belongs to which shape (see
+  # the on-hover JS in draw_region_labels()). These positions are fixed
+  # once at render time and don't move as you zoom -- an earlier version
   # recomputed them on every zoom change, which made labels visibly
   # jump/resettle, not what was wanted here.
   PAK_MAP_DEFAULT_ZOOM <- 5
@@ -3342,9 +3370,9 @@ server <- function(input, output, session) {
   # south of it, so it's pushed straight down. Every other province keeps
   # its label on its true point (no entry needed here).
   PAK_LABEL_OFFSETS_PX <- list(
-    "Khyber Pakhtunkhwa" = c(-55, 0),
-    "Azad Kashmir"       = c(55, 0),
-    "Islamabad"          = c(0, 48)
+    "Khyber Pakhtunkhwa" = c(-38, 0),
+    "Azad Kashmir"       = c(38, 0),
+    "Islamabad"          = c(0, 34)
   )
 
   # Data-only reactive (no drawing) -- computed once whenever the
@@ -3399,6 +3427,7 @@ server <- function(input, output, session) {
       addPolygons(
         fillColor = d$fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
+        layerId = d$name_lines,
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       ) %>%
       draw_region_labels(d$coords, d$name_lines, d$label_html,
@@ -4568,6 +4597,7 @@ server <- function(input, output, session) {
       addPolygons(
         fillColor = d$fill_col, fillOpacity = 0.85,
         color = "#6B7280", weight = 0.8, opacity = 0.8,
+        layerId = d$name_lines,
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       ) %>%
       draw_region_labels(d$coords, d$name_lines, d$label_html,
