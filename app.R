@@ -1739,14 +1739,17 @@ lonlat_to_pixel <- function(lng, lat, zoom) {
   cbind(x, y)
 }
 
-# ---- Helper: a horizontal PIXEL distance (at a given zoom) -> the
-# longitude delta covering that many pixels, i.e. the inverse of the x
-# half of lonlat_to_pixel() above. Since declutter_label_offsets() now
-# only ever shifts labels horizontally, this is all that's needed to turn
-# a label's pixel offset back into an actual lng/lat point to draw its
-# leader line to and to place its marker at -- latitude is unchanged.
-pixel_dx_to_lng_delta <- function(dx, zoom) {
-  (dx / (256 * 2^zoom)) * 360
+# ---- Helper: the inverse of lonlat_to_pixel() above -- global pixel
+# coordinates (at a given zoom) -> Web Mercator lng/lat. Used to turn a
+# label's decluttered PIXEL position back into a real map coordinate, so
+# it can be placed at an actual point and joined to its region's true
+# location by a straight leader line (in any direction).
+pixel_to_lonlat <- function(x, y, zoom) {
+  lng <- (x / (256 * 2^zoom) - 0.5) * 360
+  ny  <- y / (256 * 2^zoom)
+  n   <- pi * (1 - 2 * ny)
+  lat <- atan(sinh(n)) * 180 / pi
+  cbind(lng, lat)
 }
 
 # ---- Helper: crude ggrepel-style label decluttering for leaflet markers -
@@ -1756,11 +1759,13 @@ pixel_dx_to_lng_delta <- function(dx, zoom) {
 # permanent on-map labels: project each label's lng/lat anchor to screen
 # pixels at a reference zoom, estimate each label's rough on-screen box
 # from its text length, and run a few iterations of simple pairwise
-# repulsion. Unlike a general 2D declutter, every push is HORIZONTAL ONLY
-# (labels never move vertically) -- this keeps every leader line drawn
-# from a region's true point to its (possibly shifted) label perfectly
-# horizontal, and keeps each label at its own region's latitude. Returns
-# one (dx, dy) PIXEL offset per point, with dy always 0.
+# repulsion -- any two overlapping boxes get pushed apart along whichever
+# axis has the smaller overlap (the standard cheap AABB-declutter
+# heuristic), same spirit as ggrepel's box-repulsion but computed by hand.
+# Labels can move in any direction. Returns one (dx, dy) PIXEL offset per
+# point, meant to be added to the point's own pixel position and converted
+# back to lng/lat via pixel_to_lonlat() for both the label marker and its
+# leader line.
 declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, iterations = 60) {
   px <- lonlat_to_pixel(lng, lat, zoom)
   n  <- nrow(px)
@@ -1769,32 +1774,36 @@ declutter_label_offsets <- function(lng, lat, name_lines, sub_lines, zoom = 5, i
   half_w <- pmax(nchar(name_lines), nchar(sub_lines)) * 3.4 + 6
   half_h <- rep(16, n)
 
-  pos_x <- px[, 1]
+  pos <- px
   if (n > 1) {
     for (iter in seq_len(iterations)) {
       moved <- FALSE
       for (i in seq_len(n - 1)) {
         for (j in (i + 1):n) {
-          dx <- pos_x[j] - pos_x[i]
-          dy <- px[j, 2] - px[i, 2]  # vertical position never changes
+          dx <- pos[j, 1] - pos[i, 1]
+          dy <- pos[j, 2] - pos[i, 2]
           overlap_x <- (half_w[i] + half_w[j]) - abs(dx)
           overlap_y <- (half_h[i] + half_h[j]) - abs(dy)
           if (overlap_x > 0 && overlap_y > 0) {
-            # Two labels only actually collide if their vertical extents
-            # also overlap -- but since neither can move vertically, the
-            # full horizontal overlap must be resolved by an x-only push.
             moved <- TRUE
-            shift <- overlap_x / 2 + 0.5
-            s <- if (dx == 0) 1 else sign(dx)
-            pos_x[i] <- pos_x[i] - s * shift
-            pos_x[j] <- pos_x[j] + s * shift
+            if (overlap_x < overlap_y) {
+              shift <- overlap_x / 2 + 0.5
+              s <- if (dx == 0) 1 else sign(dx)
+              pos[i, 1] <- pos[i, 1] - s * shift
+              pos[j, 1] <- pos[j, 1] + s * shift
+            } else {
+              shift <- overlap_y / 2 + 0.5
+              s <- if (dy == 0) 1 else sign(dy)
+              pos[i, 2] <- pos[i, 2] - s * shift
+              pos[j, 2] <- pos[j, 2] + s * shift
+            }
           }
         }
       }
       if (!moved) break
     }
   }
-  cbind(pos_x - px[, 1], 0)
+  pos - px
 }
 
 # =================================================================
@@ -3319,15 +3328,16 @@ server <- function(input, output, session) {
     # ggrepel only works on static ggplot2 output, not an interactive
     # leaflet htmlwidget -- declutter_label_offsets() (defined near the
     # top of this file) is a small hand-rolled stand-in that nudges any
-    # overlapping province labels apart, horizontally only, in pixel
-    # space. Converted back to an actual lng/lat point (pixel_dx_to_
-    # lng_delta(), also near the top of this file) so every label can be
-    # placed at a real map coordinate and joined to its true in-polygon
-    # point by a straight horizontal leader line -- latitude never
-    # changes, so every line is perfectly horizontal.
+    # overlapping province labels apart in pixel space (any direction).
+    # Converted back to an actual lng/lat point (pixel_to_lonlat(), also
+    # near the top of this file) so every label can be placed at a real
+    # map coordinate and joined to its true in-polygon point by a leader
+    # line.
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$adm1_name, status_line, zoom = 5)
-    label_lng <- coords[, 1] + pixel_dx_to_lng_delta(offsets[, 1], zoom = 5)
-    label_lat <- coords[, 2]
+    anchor_px <- lonlat_to_pixel(coords[, 1], coords[, 2], zoom = 5)
+    label_pos <- pixel_to_lonlat(anchor_px[, 1] + offsets[, 1], anchor_px[, 2] + offsets[, 2], zoom = 5)
+    label_lng <- label_pos[, 1]
+    label_lat <- label_pos[, 2]
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
@@ -3337,14 +3347,18 @@ server <- function(input, output, session) {
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       )
 
-    # One horizontal leader line per province, from its true in-polygon
-    # point to its (possibly shifted) label -- drawn for every province,
-    # not just the ones that needed to move, so every label has the same
-    # consistent visual anchor back to its region.
+    # One leader line per province, from its true in-polygon point to its
+    # (possibly shifted) label -- drawn for every province, not just the
+    # ones that needed to move, so every label has the same consistent
+    # visual anchor back to its region. Added AFTER addPolygons() (so it
+    # draws on top of the coloured regions, per Leaflet's normal
+    # added-later-drawn-on-top stacking) and fully opaque, so it always
+    # reads as a solid line rather than blending into whatever region
+    # colour is underneath it.
     for (i in seq_len(nrow(sf_map))) {
       m <- m %>% addPolylines(
         lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
-        color = who_navy, weight = 1, opacity = 0.6
+        color = who_navy, weight = 1, opacity = 1
       )
     }
 
@@ -4498,11 +4512,13 @@ server <- function(input, output, session) {
 
     label_pts <- suppressWarnings(sf::st_point_on_surface(sf_map))
     coords <- sf::st_coordinates(label_pts)
-    # Horizontal-only decluttering, converted back to a real lng/lat point
+    # Decluttering (any direction), converted back to a real lng/lat point
     # -- see the matching comment on Pakistan's region_map_leaflet above.
     offsets <- declutter_label_offsets(coords[, 1], coords[, 2], sf_map$State, status_line, zoom = 5)
-    label_lng <- coords[, 1] + pixel_dx_to_lng_delta(offsets[, 1], zoom = 5)
-    label_lat <- coords[, 2]
+    anchor_px <- lonlat_to_pixel(coords[, 1], coords[, 2], zoom = 5)
+    label_pos <- pixel_to_lonlat(anchor_px[, 1] + offsets[, 1], anchor_px[, 2] + offsets[, 2], zoom = 5)
+    label_lng <- label_pos[, 1]
+    label_lat <- label_pos[, 2]
 
     m <- leaflet(sf_map, options = leafletOptions(minZoom = 4, maxZoom = 9)) %>%
       add_basemap() %>%
@@ -4512,13 +4528,16 @@ server <- function(input, output, session) {
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       )
 
-    # One horizontal leader line per state, from its true in-polygon point
-    # to its (possibly shifted) label -- drawn for every state, not just
-    # the ones that needed to move (see Pakistan's map above).
+    # One leader line per state, from its true in-polygon point to its
+    # (possibly shifted) label -- drawn for every state, not just the
+    # ones that needed to move. Added after addPolygons() and fully
+    # opaque, so it draws as a solid line on top of the coloured regions
+    # rather than blending into whatever colour is underneath it (see
+    # Pakistan's map above).
     for (i in seq_len(nrow(sf_map))) {
       m <- m %>% addPolylines(
         lng = c(coords[i, 1], label_lng[i]), lat = c(coords[i, 2], label_lat[i]),
-        color = who_navy, weight = 1, opacity = 0.6
+        color = who_navy, weight = 1, opacity = 1
       )
     }
 
