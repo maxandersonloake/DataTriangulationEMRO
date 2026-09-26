@@ -1753,20 +1753,6 @@ pixel_to_lonlat <- function(x, y, zoom) {
   cbind(lng, lat)
 }
 
-# ---- Helper: a single arrow character pointing from a fixed-offset
-# label back toward its region's true location -- used for the on-hover
-# clue in draw_region_labels() below (in place of a permanent leader
-# line). Picks whichever axis (dx vs dy) the offset moved further along,
-# then points the OPPOSITE way, since that's the direction back to the
-# true point -- e.g. a label pushed left (dx < 0) gets a right arrow.
-arrow_for_offset <- function(dx, dy) {
-  if (abs(dx) >= abs(dy)) {
-    if (dx < 0) "→" else "←"
-  } else {
-    if (dy < 0) "↓" else "↑"
-  }
-}
-
 # ---- Helper: draw the province/state name + SD-status labels onto a
 # leaflet map, each at a FIXED position hand-picked to keep the whole
 # country readable at its default full-country view (no live decluttering
@@ -1782,14 +1768,14 @@ arrow_for_offset <- function(dx, dy) {
 #
 # Regions with an offset get no permanent leader line back to their true
 # point -- instead, a small bit of CLIENT-SIDE-ONLY JavaScript (via
-# htmlwidgets::onRender) briefly prepends a directional arrow to that
-# label's text whenever the mouse is over its true region's polygon, and
-# removes it again on mouseout. This is plain Leaflet layer events run
-# entirely in the browser (map.layerManager + marker.setTooltipContent) --
-# no Shiny input/output round trip -- so it doesn't reintroduce the
-# per-hover server redraw that caused the earlier "connection struggling"
-# slowdown. It relies on the caller giving each polygon the SAME layerId
-# as its `name_lines` entry (both region_map_leaflet's and
+# htmlwidgets::onRender) bumps that label's font size up slightly
+# whenever the mouse is over its true region's polygon, and reverts it on
+# mouseout. This is plain Leaflet layer events run entirely in the
+# browser (map.layerManager + directly setting the tooltip DOM element's
+# style) -- no Shiny input/output round trip -- so it doesn't reintroduce
+# the per-hover server redraw that caused the earlier "connection
+# struggling" slowdown. It relies on the caller giving each polygon the
+# SAME layerId as its `name_lines` entry (both region_map_leaflet's and
 # region_map_leaflet_som's addPolygons() calls do this).
 #
 # `group` lets the caller identify just these label layers if it ever
@@ -1810,6 +1796,9 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
   label_lng <- label_pos[, 1]
   label_lat <- label_pos[, 2]
 
+  LABEL_FONT_SIZE_NORMAL <- "12px"
+  LABEL_FONT_SIZE_HOVER  <- "14px"
+
   for (i in seq_len(nrow(coords))) {
     map <- map %>% addLabelOnlyMarkers(
       lng = label_lng[i], lat = label_lat[i],
@@ -1819,7 +1808,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
       labelOptions = labelOptions(
         noHide = TRUE, direction = "center", textOnly = TRUE,
         style = list(
-          "font-weight" = "600", "font-size" = "12px", color = who_navy, "text-align" = "center",
+          "font-weight" = "600", "font-size" = LABEL_FONT_SIZE_NORMAL, color = who_navy, "text-align" = "center",
           "line-height" = "1.15",
           "text-shadow" = "-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff"
         )
@@ -1828,28 +1817,24 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
   }
 
   if (length(offsets_px) > 0) {
-    moved_info <- lapply(names(offsets_px), function(nm) {
-      o <- offsets_px[[nm]]
-      list(name = nm, arrow = arrow_for_offset(o[1], o[2]))
-    })
     js <- sprintf(
       "function(el, x) {
          var map = this;
-         var moved = %s;
-         moved.forEach(function(m) {
-           var poly = map.layerManager.getLayer('shape', m.name);
-           var label = map.layerManager.getLayer('marker', m.name);
+         var NORMAL_SIZE = '%s';
+         var HOVER_SIZE = '%s';
+         var movedNames = %s;
+         movedNames.forEach(function(name) {
+           var poly = map.layerManager.getLayer('shape', name);
+           var label = map.layerManager.getLayer('marker', name);
            if (!poly || !label || !label.getTooltip()) return;
-           var original = label.getTooltip().getContent();
-           poly.on('mouseover', function() {
-             label.setTooltipContent(m.arrow + ' ' + original);
-           });
-           poly.on('mouseout', function() {
-             label.setTooltipContent(original);
-           });
+           var tipEl = label.getTooltip().getElement ? label.getTooltip().getElement() : label.getTooltip()._container;
+           if (!tipEl) return;
+           poly.on('mouseover', function() { tipEl.style.fontSize = HOVER_SIZE; });
+           poly.on('mouseout', function() { tipEl.style.fontSize = NORMAL_SIZE; });
          });
        }",
-      jsonlite::toJSON(moved_info, auto_unbox = TRUE)
+      LABEL_FONT_SIZE_NORMAL, LABEL_FONT_SIZE_HOVER,
+      jsonlite::toJSON(names(offsets_px))
     )
     map <- htmlwidgets::onRender(map, js)
   }
@@ -3352,8 +3337,8 @@ server <- function(input, output, session) {
   # are hand-shifted via PAK_LABEL_OFFSETS_PX below so the whole country
   # reads cleanly at the default full-country view. There's no permanent
   # leader line back to their true location any more -- instead, hovering
-  # over a province's shape briefly adds an arrow to its (possibly
-  # shifted) label so it's clear which label belongs to which shape (see
+  # over a province's shape briefly enlarges its (possibly shifted)
+  # label's text, so it's clear which label belongs to which shape (see
   # the on-hover JS in draw_region_labels()). These positions are fixed
   # once at render time and don't move as you zoom -- an earlier version
   # recomputed them on every zoom change, which made labels visibly
@@ -3372,7 +3357,7 @@ server <- function(input, output, session) {
   PAK_LABEL_OFFSETS_PX <- list(
     "Khyber Pakhtunkhwa" = c(-38, 0),
     "Azad Kashmir"       = c(38, 0),
-    "Islamabad"          = c(0, 34)
+    "Islamabad"          = c(0, 20)
   )
 
   # Data-only reactive (no drawing) -- computed once whenever the
