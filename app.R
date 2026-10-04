@@ -1786,16 +1786,30 @@ SOM_WORKBOOK_REGION_TO_ADMIN1 <- c(
   "South Mudug" = "Mudug"
 )
 raw_region_data_som <- NULL
+raw_state_region_data_som <- NULL
+som_state_region_lookup <- NULL
 if (somalia_data_available) {
-  raw_region_data_som <- raw_district_data_som %>%
+  raw_district_admin1_som <- raw_district_data_som %>%
     filter(!is.na(Region), nzchar(Region)) %>%
-    mutate(Region = dplyr::recode(Region, !!!SOM_WORKBOOK_REGION_TO_ADMIN1)) %>%
+    mutate(Workbook_Region = Region,
+           Region = dplyr::recode(Region, !!!SOM_WORKBOOK_REGION_TO_ADMIN1))
+  sum_cases <- function(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
+  raw_region_data_som <- raw_district_admin1_som %>%
     group_by(Province = Region, Disease, Year, Week) %>%
-    summarise(
-      Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
-      .groups = "drop"
-    )
+    summarise(Cases = sum_cases(Cases), .groups = "drop")
   region_choices_som <- sort(unique(raw_region_data_som$Province))
+
+  # The same, but kept within each state (Province = "State | Region"), for
+  # the trend box's State -> Region filter. A region name that the workbook
+  # reports under more than one state (Sool, Sanaag, Mudug...) is therefore
+  # split by state here, but combined on the map.
+  SOM_STATE_REGION_SEP <- " | "
+  raw_state_region_data_som <- raw_district_admin1_som %>%
+    group_by(Province = paste(Province, Region, sep = SOM_STATE_REGION_SEP), Disease, Year, Week) %>%
+    summarise(Cases = sum_cases(Cases), .groups = "drop")
+  som_state_region_lookup <- raw_district_admin1_som %>%
+    distinct(State = Province, Region, Workbook_Region) %>%
+    arrange(State, Region, Workbook_Region)
 } else {
   region_choices_som <- character(0)
 }
@@ -2003,7 +2017,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=16"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=17"),
     tags$title("WHO EMRO | IDSR Dashboard"),
     # Drives a hidden native Shiny tab (tabsetPanel/navbarPage both render
     # one under the hood) via Bootstrap's own tab('show') API, exactly as
@@ -2218,7 +2232,6 @@ ui <- tagList(
         div(
           style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
           div(style = "flex: 1 1 0;", selectInput("disease", "Disease", choices = disease_choices, selected = disease_choices[1], width = "100%")),
-          div(style = "flex: 1 1 0;", selectInput("location", "Location", choices = location_choices, selected = "National", width = "100%")),
           div(style = "flex: 1 1 0;", selectInput("asof_week_viz", "As of week", choices = WEEK_CHOICES, selected = LATEST_WEEK_CHOICE, width = "100%"))
         ),
         div(
@@ -2257,7 +2270,8 @@ ui <- tagList(
             div(
               class = "viz-panel",
               style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-              h4("Weekly case trend", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+              h4("Weekly case trend", style = "margin-top:0; margin-bottom:8px; font-size:17px;"),
+              selectInput("location", "Location", choices = location_choices, selected = "National", width = "100%"),
               uiOutput("trend_subtitle"),
               plotlyOutput("trend_plot", height = "420px"),
               div(
@@ -2497,7 +2511,7 @@ ui <- tagList(
               h4("District map"),
               uiOutput("district_map_subtitle"),
               leafletOutput("district_map", height = "360px"),
-              map_disclaimer_ui(show_disputed_key = FALSE),
+              map_disclaimer_ui(show_disputed_key = TRUE),
               div(
                 class = "viz-panel-controls",
                 style = "min-height: 60px;",
@@ -2782,7 +2796,6 @@ ui <- tagList(
             div(
               style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
               div(style = "flex: 1 1 0;", selectInput("disease_som", "Disease", choices = disease_choices_som, selected = disease_choices_som[1], width = "100%")),
-              div(style = "flex: 1 1 0;", selectInput("location_som", "Location", choices = location_choices_som, selected = "National", width = "100%")),
               div(style = "flex: 1 1 0;", selectInput("asof_week_viz_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM, width = "100%"))
             ),
             div(
@@ -2814,7 +2827,14 @@ ui <- tagList(
                 div(
                   class = "viz-panel",
                   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                  h4("Weekly case trend", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  h4("Weekly case trend", style = "margin-top:0; margin-bottom:8px; font-size:17px;"),
+                  # State, then (optionally) a region within it -- the region
+                  # list is refreshed from the chosen state on the server.
+                  div(
+                    style = "display:flex; gap:16px;",
+                    div(style = "flex: 1 1 0;", selectInput("location_som", "State", choices = location_choices_som, selected = "National", width = "100%")),
+                    div(style = "flex: 1 1 0;", selectInput("region_som", "Region", choices = "All regions", selected = "All regions", width = "100%"))
+                  ),
                   uiOutput("trend_subtitle_som"),
                   plotlyOutput("trend_plot_som", height = "420px"),
                   div(
@@ -2871,7 +2891,8 @@ ui <- tagList(
                       radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
                                    choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
                                    selected = "reported", inline = TRUE)
-                    }
+                    },
+                    uiOutput("region_map_boundary_note_som")
                   )
                 )
               )
@@ -2882,7 +2903,7 @@ ui <- tagList(
                 div(
                   class = "viz-panel",
                   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
-                  h4("Regional contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  h4("State contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
                   uiOutput("stack_subtitle_som"),
                   plotlyOutput("region_stack_plot_som", height = "380px"),
                   div(
@@ -4285,7 +4306,8 @@ server <- function(input, output, session) {
     if (!is.null(pak_district_admin1_sf)) {
       m <- m %>% addPolylines(data = pak_district_admin1_sf, color = who_navy, weight = 1.3, opacity = 0.7)
     }
-    m
+    # EMRO disputed boundaries (dashed, on top -- see add_disputed_boundaries)
+    m %>% add_disputed_boundaries()
   })
 
   # ---------------- Alerts tab (single list, grouped by disease) ---------
@@ -4481,9 +4503,34 @@ server <- function(input, output, session) {
   if (somalia_data_available) {
 
   # ---------------- Somalia: Data visualisation tab (trend) ---------------
+  # Keep the Region dropdown in step with the chosen State: "All regions" plus
+  # the (admin-1) regions that state reports on.
+  observeEvent(input$location_som, {
+    regs <- if (identical(input$location_som, "National")) character(0) else
+      sort(unique(som_state_region_lookup$Region[som_state_region_lookup$State == input$location_som]))
+    updateSelectInput(session, "region_som", choices = c("All regions", regs), selected = "All regions")
+  }, ignoreInit = FALSE)
+
+  # What the trend box is showing: a whole state (or National), or one region
+  # within a state.
+  trend_selection_som <- reactive({
+    req(input$location_som)
+    st <- input$location_som
+    rg <- input$region_som %||% "All regions"
+    valid_region <- !identical(st, "National") && !identical(rg, "All regions") &&
+      any(som_state_region_lookup$State == st & som_state_region_lookup$Region == rg)
+    if (valid_region) {
+      list(location = paste(st, rg, sep = SOM_STATE_REGION_SEP), data = raw_state_region_data_som,
+           label = paste0(st, ", ", rg))
+    } else {
+      list(location = st, data = raw_data_som, label = st)
+    }
+  })
+
   trend_data_base_som <- reactive({
     req(input$disease_som, input$location_som)
-    get_trend_data(input$disease_som, input$location_som, data = raw_data_som, compliance = compliance_data_som)
+    sel <- trend_selection_som()
+    get_trend_data(input$disease_som, sel$location, data = sel$data, compliance = compliance_data_som)
   })
 
   trend_window_som <- reactive({
@@ -4515,14 +4562,15 @@ server <- function(input, output, session) {
       get_national_trend_excluding(input$disease_som, excluded, data = raw_data_som, compliance = compliance_data_som,
                                     locations = location_choices_som)
     } else {
-      get_trend_data(input$disease_som, input$location_som, data = raw_data_som, compliance = compliance_data_som)
+      sel <- trend_selection_som()
+      get_trend_data(input$disease_som, sel$location, data = sel$data, compliance = compliance_data_som)
     }
   })
 
   output$trend_subtitle_som <- renderUI({
     req(input$disease_som, input$location_som)
     div(class = "viz-subtitle",
-        paste0("Disease: ", input$disease_som, ", Location: ", input$location_som))
+        paste0("Disease: ", input$disease_som, ", Location: ", trend_selection_som()$label))
   })
 
   output$year_selector_som <- renderUI({
@@ -4755,6 +4803,51 @@ server <- function(input, output, session) {
          # each region's fixed label offset by name (a named character
          # vector serializes to JSON as an object instead of a plain array).
          name_lines = unname(sf_map$adm1_name))
+  })
+
+  # ---- Dynamic boundary-adjustment note, below the Somalia region map -----
+  # Like the Pakistan district map's note: lists only the adjustments that
+  # matter for the disease/week on screen (the as-of week plus its 9-week
+  # CUSUM baseline) -- i.e. each region whose counts are built from more than
+  # one reported area (sub-regions the boundary file folds into a parent, or a
+  # region reported under several states).
+  region_map_boundary_note_som <- reactive({
+    req(input$disease_som, input$asof_week_viz_som)
+    asof      <- parse_asof(input$asof_week_viz_som)
+    weeks_cal <- weeks_up_to(asof, 9, calendar = week_calendar_som)
+
+    used <- raw_district_admin1_som %>%
+      filter(Disease == input$disease_som) %>%
+      semi_join(weeks_cal, by = c("Year", "Week")) %>%
+      distinct(State = Province, Workbook_Region, Region)
+    if (nrow(used) == 0) return(NULL)
+
+    items <- lapply(sort(unique(used$Region)), function(r) {
+      src <- used[used$Region == r, ]
+      if (nrow(src) == 1 && isTRUE(src$Workbook_Region[1] == r)) return(NULL)
+      dup <- duplicated(src$Workbook_Region) | duplicated(src$Workbook_Region, fromLast = TRUE)
+      lab <- ifelse(dup, paste0(src$Workbook_Region, " (", src$State, ")"), src$Workbook_Region)
+      lab <- lab[order(lab)]
+      joined <- if (length(lab) > 1) paste(paste(head(lab, -1), collapse = ", "), "and", tail(lab, 1)) else lab
+      sprintf("disease counts for %s are made up of the counts in %s", r, joined)
+    })
+    items <- unlist(items)
+    if (length(items) == 0) return(NULL)
+    items[1] <- paste0(toupper(substr(items[1], 1, 1)), substr(items[1], 2, nchar(items[1])))
+    items
+  })
+
+  output$region_map_boundary_note_som <- renderUI({
+    items <- region_map_boundary_note_som()
+    if (is.null(items)) return(NULL)
+    tags$p(
+      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+      "In some cases, the regions in the workbook do not align with the available boundaries for mapping. ",
+      "For this map, the following adjustments have been made: ",
+      paste0(paste(items, collapse = "; "), ". "),
+      "Where counts have been combined between reported areas, the region's figure is the sum of the ",
+      "reported case counts of the areas combined into it."
+    )
   })
 
   output$region_map_leaflet_som <- renderLeaflet({
