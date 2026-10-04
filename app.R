@@ -3100,7 +3100,7 @@ ui <- tagList(
                 h4("Primary data source"),
                 p("Weekly IDSR case counts for Somalia."),
                 h4("District-level admin boundaries", style = "margin-top: 20px;"),
-                p("The state and district outlines used on Somalia's maps come from the ",
+                p("The outlines used on Somalia's maps for the district-level data tab come from the ",
                   "UN OCHA Common Operational Datasets (COD) for Somalia administrative boundaries:"),
                 tags$a(href = "https://data.humdata.org/dataset/cod-ab-som#data-and-resources", target = "_blank",
                        "https://data.humdata.org/dataset/cod-ab-som#data-and-resources"),
@@ -3120,11 +3120,9 @@ ui <- tagList(
     )  # close tabPanel("Somalia")
   ),
 
-  div(
-    class = "who-footer",
-    style = "padding:16px 28px; font-size:12px; color:#555555; background-color:#FFFFFF; border-top:1px solid #C9DEF3;",
-    uiOutput("country_footer_text")
-  )
+  # The whole footer bar is rendered server-side so Somalia (which has no
+  # footer line) doesn't show an empty strip.
+  uiOutput("country_footer")
 )
 
 # =================================================================
@@ -3204,12 +3202,13 @@ server <- function(input, output, session) {
     )
   })
 
-  output$country_footer_text <- renderUI({
-    if (identical(input$who_nav, "Somalia")) {
-      "Data source: Somalia IDSR weekly case-count workbook (not publicly redistributed -- see the Somalia References tab)."
-    } else {
+  output$country_footer <- renderUI({
+    if (identical(input$who_nav, "Somalia")) return(NULL)
+    div(
+      class = "who-footer",
+      style = "padding:16px 28px; font-size:12px; color:#555555; background-color:#FFFFFF; border-top:1px solid #C9DEF3;",
       "Data source: National Institute of Health (NIH) Pakistan, IDSR weekly bulletins."
-    }
+    )
   })
 
   # ---------------- Trends tab ----------------
@@ -4529,7 +4528,7 @@ server <- function(input, output, session) {
     rg <- input$region_som
     no_region <- is.null(rg) || rg %in% c(SOM_ALL_REGIONS_NATIONAL, SOM_ALL_REGIONS_STATE)
     if (!no_region && identical(st, "National") && rg %in% region_choices_som) {
-      list(location = rg, data = raw_region_data_som, label = paste0(rg, " (all states)"),
+      list(location = rg, data = raw_region_data_som, label = rg,
            whole_country = FALSE)
     } else if (!no_region && !identical(st, "National") &&
                any(som_state_region_lookup$State == st & som_state_region_lookup$Region == rg)) {
