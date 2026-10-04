@@ -43,7 +43,7 @@ body { background-color: #FFFFFF; color: #222222; }
   background-color: #FFFFFF;
 }
 .who-logo {
-  height: 180px;
+  height: 135px;
   max-width: 100%;
   flex-shrink: 0;
   border: none;

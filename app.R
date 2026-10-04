@@ -2017,7 +2017,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=17"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=18"),
     tags$title("WHO EMRO | IDSR Dashboard"),
     # Drives a hidden native Shiny tab (tabsetPanel/navbarPage both render
     # one under the hood) via Bootstrap's own tab('show') API, exactly as
@@ -2833,7 +2833,7 @@ ui <- tagList(
                   div(
                     style = "display:flex; gap:16px;",
                     div(style = "flex: 1 1 0;", selectInput("location_som", "State", choices = location_choices_som, selected = "National", width = "100%")),
-                    div(style = "flex: 1 1 0;", selectInput("region_som", "Region", choices = "All regions", selected = "All regions", width = "100%"))
+                    div(style = "flex: 1 1 0;", selectInput("region_som", "Region", choices = c("All regions", region_choices_som), selected = "All regions", width = "100%"))
                   ),
                   uiOutput("trend_subtitle_som"),
                   plotlyOutput("trend_plot_som", height = "420px"),
@@ -4503,27 +4503,40 @@ server <- function(input, output, session) {
   if (somalia_data_available) {
 
   # ---------------- Somalia: Data visualisation tab (trend) ---------------
-  # Keep the Region dropdown in step with the chosen State: "All regions" plus
-  # the (admin-1) regions that state reports on.
+  # Keep the Region dropdown in step with the chosen State. With no state
+  # picked (National) it offers every region -- choosing one then sums that
+  # region across all the states reporting it; with a state picked it offers
+  # "All regions in state" plus that state's regions. A region already picked
+  # is kept if the new state also has it.
+  SOM_ALL_REGIONS_NATIONAL <- "All regions"
+  SOM_ALL_REGIONS_STATE    <- "All regions in state"
   observeEvent(input$location_som, {
-    regs <- if (identical(input$location_som, "National")) character(0) else
+    national <- identical(input$location_som, "National")
+    regs <- if (national) region_choices_som else
       sort(unique(som_state_region_lookup$Region[som_state_region_lookup$State == input$location_som]))
-    updateSelectInput(session, "region_som", choices = c("All regions", regs), selected = "All regions")
+    all_lab <- if (national) SOM_ALL_REGIONS_NATIONAL else SOM_ALL_REGIONS_STATE
+    cur <- input$region_som
+    updateSelectInput(session, "region_som", choices = c(all_lab, regs),
+                      selected = if (!is.null(cur) && cur %in% regs) cur else all_lab)
   }, ignoreInit = FALSE)
 
-  # What the trend box is showing: a whole state (or National), or one region
+  # What the trend box is showing: National / a whole state, one region summed
+  # across every state that reports it (state = National), or one region
   # within a state.
   trend_selection_som <- reactive({
     req(input$location_som)
     st <- input$location_som
-    rg <- input$region_som %||% "All regions"
-    valid_region <- !identical(st, "National") && !identical(rg, "All regions") &&
-      any(som_state_region_lookup$State == st & som_state_region_lookup$Region == rg)
-    if (valid_region) {
+    rg <- input$region_som
+    no_region <- is.null(rg) || rg %in% c(SOM_ALL_REGIONS_NATIONAL, SOM_ALL_REGIONS_STATE)
+    if (!no_region && identical(st, "National") && rg %in% region_choices_som) {
+      list(location = rg, data = raw_region_data_som, label = paste0(rg, " (all states)"),
+           whole_country = FALSE)
+    } else if (!no_region && !identical(st, "National") &&
+               any(som_state_region_lookup$State == st & som_state_region_lookup$Region == rg)) {
       list(location = paste(st, rg, sep = SOM_STATE_REGION_SEP), data = raw_state_region_data_som,
-           label = paste0(st, ", ", rg))
+           label = paste0(st, ", ", rg), whole_country = FALSE)
     } else {
-      list(location = st, data = raw_data_som, label = st)
+      list(location = st, data = raw_data_som, label = st, whole_country = identical(st, "National"))
     }
   })
 
@@ -4549,14 +4562,14 @@ server <- function(input, output, session) {
   })
 
   output$trend_nr_control_som <- renderUI({
-    if (!identical(input$location_som, "National")) return(NULL)
+    if (!isTRUE(trend_selection_som()$whole_country)) return(NULL)
     info <- trend_nr_info_som()
     nonreporting_control_ui("nr_mode_trend_som", "nr_excl_trend_som", info$provinces, info$summary)
   })
 
   trend_data_all_som <- reactive({
     req(input$disease_som, input$location_som)
-    if (identical(input$location_som, "National") && identical(input$nr_mode_trend_som, "remove")) {
+    if (isTRUE(trend_selection_som()$whole_country) && identical(input$nr_mode_trend_som, "remove")) {
       info     <- trend_nr_info_som()
       excluded <- resolve_nonreporting_excluded(input$nr_mode_trend_som, input$nr_excl_trend_som, info$provinces)
       get_national_trend_excluding(input$disease_som, excluded, data = raw_data_som, compliance = compliance_data_som,
@@ -4822,13 +4835,13 @@ server <- function(input, output, session) {
       distinct(State = Province, Workbook_Region, Region)
     if (nrow(used) == 0) return(NULL)
 
+    # Only regions built from DIFFERENTLY-named workbook regions are flagged;
+    # one region simply reported under two states (e.g. Sanaag, Sool) is a
+    # like-for-like sum and isn't an adjustment.
     items <- lapply(sort(unique(used$Region)), function(r) {
-      src <- used[used$Region == r, ]
-      if (nrow(src) == 1 && isTRUE(src$Workbook_Region[1] == r)) return(NULL)
-      dup <- duplicated(src$Workbook_Region) | duplicated(src$Workbook_Region, fromLast = TRUE)
-      lab <- ifelse(dup, paste0(src$Workbook_Region, " (", src$State, ")"), src$Workbook_Region)
-      lab <- lab[order(lab)]
-      joined <- if (length(lab) > 1) paste(paste(head(lab, -1), collapse = ", "), "and", tail(lab, 1)) else lab
+      src <- sort(unique(used$Workbook_Region[used$Region == r]))
+      if (length(src) == 1 && src == r) return(NULL)
+      joined <- if (length(src) > 1) paste(paste(head(src, -1), collapse = ", "), "and", tail(src, 1)) else src
       sprintf("disease counts for %s are made up of the counts in %s", r, joined)
     })
     items <- unlist(items)
@@ -4842,7 +4855,7 @@ server <- function(input, output, session) {
     if (is.null(items)) return(NULL)
     tags$p(
       style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
-      "In some cases, the regions in the workbook do not align with the available boundaries for mapping. ",
+      "In some cases, the regions of the reported data do not align with the available boundaries for mapping. ",
       "For this map, the following adjustments have been made: ",
       paste0(paste(items, collapse = "; "), ". "),
       "Where counts have been combined between reported areas, the region's figure is the sum of the ",
