@@ -27,37 +27,40 @@ body, .shiny-app, * {
 body { background-color: #FFFFFF; color: #222222; }
 
 /* ================================================================
-   Header, in 2 stacked rows -- modelled on the WHO Data platform
-   (apps.who.int/data), but with the navy banner brought right to the
-   very top of the page (no separate white logo row above it): a navy
-   title banner holding the title/subtitle text on the left, vertically
-   centred in line with the (transparent-background, large) logo on the
-   right, then a white sub-nav row holding the country picker (left) and
-   the current country's own tab strip (right).
+   Header, in 3 stacked rows -- modelled on the WHO Data platform
+   (apps.who.int/data): a plain white row holding the WHO EMRO logo at the
+   top left, then a navy title banner (title/subtitle text) beneath it, then
+   a white sub-nav row holding the country picker (left) and the current
+   country's own tab strip (right).
    ================================================================ */
 
-/* ---- Row 1: navy title banner -- title/subtitle (left), logo (right),
-   both vertically centred on the same row. Wraps to logo-under-text on
-   narrow screens (rather than overflowing) since the logo has a fixed
-   height and won't shrink to fit a phone-width row alongside the title
-   text. ---- */
-.who-banner {
+/* ---- Row 1: white logo row -- the logo sits at the left, above the title ---- */
+.who-logo-row {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px 20px;
-  padding: 16px 24px;
-  background-color: var(--who-navy);
+  justify-content: flex-start;
+  padding: 14px 24px 12px 24px;
+  background-color: #FFFFFF;
 }
-.who-banner-logo {
-  height: 93px;
+.who-logo {
+  height: 72px;
   max-width: 100%;
   flex-shrink: 0;
   border: none;
   outline: none;
   box-shadow: none;
+}
+
+/* ---- Row 2: navy title banner -- title/subtitle text, left-aligned ---- */
+.who-banner {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px 20px;
+  padding: 22px 24px;
+  background-color: var(--who-navy);
 }
 .who-banner-text {
   display: flex;
@@ -69,7 +72,7 @@ body { background-color: #FFFFFF; color: #222222; }
 .who-title { font-size: 26px; font-weight: 700; color: #FFFFFF; line-height: 1.2; margin: 0; }
 .who-subtitle { font-size: 14px; color: #C9DEF3; margin: 0; }
 
-/* ---- Row 2: white sub-nav row -- country picker (left) + the active
+/* ---- Row 3: white sub-nav row -- country picker (left) + the active
    country's own tab strip (right), replacing Shiny's default
    navbarPage tabs (hidden below) and each tabsetPanel's own auto
    nav-tabs strip (also hidden below, per country -- #pak_subtab /
@@ -307,3 +310,26 @@ table.dataTable thead th { color: var(--who-navy); font-weight: 700; }
   margin-bottom: 0;
 }
 .viz-toprow .form-group { margin-bottom: 0; min-width: 220px; }
+
+/* ---- Map disclaimer, shown directly beneath every map ---- */
+.map-disclaimer {
+  margin-top: 6px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: #6B7280;
+}
+.map-disputed-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: #374151;
+}
+.map-disputed-swatch {
+  display: inline-block;
+  width: 26px;
+  height: 0;
+  border-top: 2px dashed #9B1C1C;
+  flex-shrink: 0;
+}

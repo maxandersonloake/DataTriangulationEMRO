@@ -44,6 +44,18 @@ source("encryption_utils.R")
 
 REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
 
+# EMRO-approved admin-1 boundaries for the Data visualisation tab's interactive
+# region maps, plus the EMRO disputed-areas layer drawn on top of them as a
+# dashed line. All three are prepared by 2_2_PrepareBoundaries_EMRO.R from the
+# raw shapefiles supplied by WHO EMRO (Data/emro_boundaries_src/).
+#   - Pakistan: 7 provinces (the five EMRO provinces plus Azad Kashmir and
+#     Gilgit Baltistan, carried over from the older pak_admin1.geojson since
+#     the EMRO file treats that area as disputed rather than as provinces).
+#   - Somalia: the 18 official regions (NOT the 8 federal member states).
+PAK_ADMIN1_EMRO_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1_emro.geojson"
+SOM_ADMIN1_EMRO_GEOJSON <- "Data/som_admin_boundaries/som_admin1_emro.geojson"
+EMRO_DISPUTED_GEOJSON   <- "Data/emro_disputed_areas.geojson"
+
 # Admin boundary files used by the District-level data tab's map -- distinct
 # from REGIONS_GEOJSON above (which is a dissolved 7-province shape used by
 # the Data visualisation tab's static province map). These are more detailed
@@ -170,6 +182,28 @@ if (file.exists(LOGO_FULL_PATH)) {
     "\nPlace the official WHO logo PNG at www/logo.png (see WHO brand guidance)."
   )
   logo_uri <- NULL
+}
+
+# Standard WHO map disclaimer, shown directly beneath every map (see
+# map_disclaimer_ui() below). `show_disputed_key` adds a small dashed-line key
+# for the maps that draw the EMRO disputed boundaries.
+MAP_DISCLAIMER_TEXT <- paste0(
+  "The boundaries and names shown and the designations used on this map do not imply the expression of any ",
+  "opinion whatsoever on the part of the World Health Organization concerning the legal status of any country, ",
+  "territory, city or area or of its authorities, or concerning the delimitation of its frontiers or boundaries. ",
+  "Dotted and dashed lines on maps represent approximate border lines for which there may not yet be full agreement."
+)
+
+map_disclaimer_ui <- function(show_disputed_key = FALSE) {
+  div(
+    class = "map-disclaimer",
+    if (show_disputed_key) {
+      div(class = "map-disputed-key",
+          span(class = "map-disputed-swatch"),
+          "EMRO disputed boundaries")
+    },
+    MAP_DISCLAIMER_TEXT
+  )
 }
 
 # ---- Load disease data ----------------------------------------------------
@@ -1619,6 +1653,30 @@ if (!is.null(pak_district_admin1_sf)) {
   pak_district_admin1_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_district_admin1_sf$adm1_name])
 }
 
+# ---- EMRO admin-1 layers for the Data visualisation tab's region maps ------
+# Pakistan falls back to the older pak_admin1.geojson shapes if the EMRO file
+# is missing, so the map still renders rather than erroring.
+pak_admin1_emro_sf <- load_pak_boundary_file(PAK_ADMIN1_EMRO_GEOJSON)
+if (is.null(pak_admin1_emro_sf)) pak_admin1_emro_sf <- pak_district_admin1_sf
+if (!is.null(pak_admin1_emro_sf)) {
+  pak_admin1_emro_sf$adm1_name     <- unname(as.character(pak_admin1_emro_sf$adm1_name))
+  pak_admin1_emro_sf$province_code <- unname(ADM1_NAME_PROVINCE_MAP[pak_admin1_emro_sf$adm1_name])
+}
+
+som_admin1_emro_sf <- load_pak_boundary_file(SOM_ADMIN1_EMRO_GEOJSON)
+if (!is.null(som_admin1_emro_sf)) {
+  som_admin1_emro_sf$adm1_name <- unname(as.character(som_admin1_emro_sf$adm1_name))
+}
+
+# Disputed-area polygons -> just their outlines, as lines (drawn dashed).
+emro_disputed_lines_sf <- tryCatch({
+  d <- load_pak_boundary_file(EMRO_DISPUTED_GEOJSON)
+  if (is.null(d)) NULL else sf::st_cast(sf::st_boundary(sf::st_geometry(d)), "MULTILINESTRING")
+}, error = function(e) {
+  message("Could not build disputed-boundary lines: ", conditionMessage(e))
+  NULL
+})
+
 # ---- Somalia boundary file: district-level layer, plus a dissolved -------
 # state-level layer built from it at startup. Somalia's primary layer here
 # is the official UN OCHA/HDX COD-AB ADM2 layer (91 districts, see the
@@ -1707,6 +1765,41 @@ if (!is.null(som_district_sf) && somalia_data_available) {
   })
 }
 
+# ---- Somalia: weekly cases by the 18 official REGIONS (admin 1) -----------
+# The Data visualisation tab's region map colours Somalia's 18 official
+# regions (the EMRO admin-1 layer), not the workbook's 8 federal member
+# states, so it needs a case series per region. The workbook only reports
+# regions through its district rows, so each region's weekly cases are the
+# sum of its districts' -- in the same long format as raw_data_som (with the
+# region name in Province), so get_trend_data() can be pointed straight at it.
+# Like get_trend_data()'s own sums, a region-week is NA only when EVERY
+# district in it was non-reporting that week.
+#
+# The workbook also uses six newer sub-regions that the 18-region layer folds
+# back into their parent region; they are summed into it here.
+SOM_WORKBOOK_REGION_TO_ADMIN1 <- c(
+  "Marodi Jeh"  = "Woqooyi Galbeed",  # Hargeisa
+  "Sahil"       = "Woqooyi Galbeed",  # Berbera
+  "Ayn"         = "Togdheer",         # Buuhoodle area
+  "Karkaar"     = "Bari",
+  "Ras-Asayr"   = "Bari",
+  "South Mudug" = "Mudug"
+)
+raw_region_data_som <- NULL
+if (somalia_data_available) {
+  raw_region_data_som <- raw_district_data_som %>%
+    filter(!is.na(Region), nzchar(Region)) %>%
+    mutate(Region = dplyr::recode(Region, !!!SOM_WORKBOOK_REGION_TO_ADMIN1)) %>%
+    group_by(Province = Region, Disease, Year, Week) %>%
+    summarise(
+      Cases = if (all(is.na(Cases))) NA_real_ else sum(Cases, na.rm = TRUE),
+      .groups = "drop"
+    )
+  region_choices_som <- sort(unique(raw_region_data_som$Province))
+} else {
+  region_choices_som <- character(0)
+}
+
 # ---- Helper: the light, label-light basemap used under every choropleth --
 # leaflet map (Pakistan's and Somalia's alike). NOT any CartoDB/Carto tile
 # endpoint -- as of late 2026, Carto requires an API key/account for ALL of
@@ -1724,6 +1817,27 @@ add_basemap <- function(map) {
     map,
     urlTemplate = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     attribution = 'Esri, DeLorme, NAVTEQ'
+  )
+}
+
+# ---- Helper: EMRO disputed boundaries, drawn as a dashed dark-red line ----
+# on top of a choropleth (same convention as the EMRO reference maps' "EMRO
+# disputed boundaries" legend entry). Non-interactive, so it never steals
+# hover/click from the regions underneath it. A no-op if the disputed layer
+# couldn't be built, so a missing file never breaks the map.
+DISPUTED_LINE_COLOUR <- "#9B1C1C"
+add_disputed_boundaries <- function(map) {
+  if (is.null(emro_disputed_lines_sf)) return(map)
+  # Its own map pane, stacked just above the default overlay pane that holds
+  # the region polygons: a hovered polygon is brought to the front of ITS
+  # pane (highlightOptions bringToFront), which would otherwise bury the
+  # dashes beneath the polygon's fill while hovering.
+  map <- leaflet::addMapPane(map, "disputed_pane", zIndex = 410)
+  leaflet::addPolylines(
+    map, data = emro_disputed_lines_sf,
+    color = DISPUTED_LINE_COLOUR, weight = 1.3, opacity = 1, dashArray = "5,4",
+    options = leaflet::pathOptions(pane = "disputed_pane", interactive = FALSE, clickable = FALSE),
+    group = "disputed_boundaries"
   )
 }
 
@@ -1889,7 +2003,7 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
 # =================================================================
 ui <- tagList(
   tags$head(
-    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=15"),
+    tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=16"),
     tags$title("WHO EMRO | IDSR Dashboard"),
     # Drives a hidden native Shiny tab (tabsetPanel/navbarPage both render
     # one under the hood) via Bootstrap's own tab('show') API, exactly as
@@ -1906,14 +2020,23 @@ ui <- tagList(
     ))
   ),
 
-  # ---- WHO branded header, in 2 stacked rows -- the navy title banner now
-  # sits right at the very top of the page (no separate white logo row
-  # above it), with the title/subtitle text on the left and the large
-  # logo (transparent background, so it sits directly on the navy) on
-  # the right, both vertically centred in line with each other. See
-  # who_brand.css for the row styling and for how Shiny's own default
-  # navbarPage/tabsetPanel nav strips are hidden (not removed) in favour
-  # of the custom controls here.
+  # ---- WHO branded header: the EMRO logo on a plain white row at the top
+  # left, then the navy title banner (title/subtitle text) beneath it, then
+  # the white country-picker / tab-strip row -- modelled on the WHO Data
+  # platform's header. See who_brand.css for the row styling and for how
+  # Shiny's own default navbarPage/tabsetPanel nav strips are hidden (not
+  # removed) in favour of the custom controls here.
+  div(
+    class = "who-logo-row",
+    if (!is.null(logo_uri)) {
+      tags$img(src = logo_uri, alt = "World Health Organization, Eastern Mediterranean Region", class = "who-logo")
+    } else {
+      div(
+        style = "color:#EF3842; border:2px dashed #EF3842; padding:6px 10px; font-size:12px;",
+        paste0("LOGO NOT FOUND at www/", LOGO_FILENAME, " -- add the official WHO logo PNG there.")
+      )
+    }
+  ),
   div(
     class = "who-banner",
     div(
@@ -1922,15 +2045,7 @@ ui <- tagList(
       # which top-level country tab is selected (input$who_nav) -- see
       # output$country_header_text in the server.
       uiOutput("country_header_text")
-    ),
-    if (!is.null(logo_uri)) {
-      tags$img(src = logo_uri, alt = "World Health Organization", class = "who-banner-logo")
-    } else {
-      div(
-        style = "color:#EF3842; border:2px dashed #EF3842; padding:6px 10px; font-size:12px;",
-        paste0("LOGO NOT FOUND at www/", LOGO_FILENAME, " -- add the official WHO logo PNG there.")
-      )
-    }
+    )
   ),
   div(
     class = "who-subnav",
@@ -2132,7 +2247,11 @@ ui <- tagList(
               "See the ", strong("Home"), " tab for full details.")
           )
         ),
+        # display:flex on the row stretches both viz-panel cards (height:100%)
+        # to the taller one, so the trend and map boxes share a bottom border
+        # even though the map card also carries the disclaimer and legend.
         fluidRow(
+          style = "display:flex; flex-wrap:wrap;",
           column(
             width = 6,
             div(
@@ -2185,6 +2304,7 @@ ui <- tagList(
               h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
               uiOutput("map_subtitle_leaflet"),
               leafletOutput("region_map_leaflet", height = "420px"),
+              map_disclaimer_ui(show_disputed_key = TRUE),
               div(
                 class = "viz-panel-controls",
                 style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
@@ -2377,6 +2497,7 @@ ui <- tagList(
               h4("District map"),
               uiOutput("district_map_subtitle"),
               leafletOutput("district_map", height = "360px"),
+              map_disclaimer_ui(show_disputed_key = FALSE),
               div(
                 class = "viz-panel-controls",
                 style = "min-height: 60px;",
@@ -2685,7 +2806,9 @@ ui <- tagList(
                 p(style = "margin-bottom: 0;", "See the ", strong("Home"), " tab for full details.")
               )
             ),
+            # Flex row: same bottom-border alignment as Pakistan's trend + map row.
             fluidRow(
+              style = "display:flex; flex-wrap:wrap;",
               column(
                 width = 6,
                 div(
@@ -2736,9 +2859,10 @@ ui <- tagList(
                 div(
                   class = "viz-panel",
                   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                  h4("Deviation from expected baseline (SD), by state: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
                   uiOutput("map_subtitle_leaflet_som"),
-                  leafletOutput("region_map_leaflet_som", height = "420px"),
+                  leafletOutput("region_map_leaflet_som", height = "540px"),
+                  map_disclaimer_ui(show_disputed_key = FALSE),
                   div(
                     class = "viz-panel-controls",
                     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
@@ -2894,6 +3018,7 @@ ui <- tagList(
                   h4("District map"),
                   uiOutput("district_map_subtitle_som"),
                   leafletOutput("district_map_som", height = "360px"),
+                  map_disclaimer_ui(show_disputed_key = FALSE),
                   div(
                     class = "viz-panel-controls",
                     style = "min-height: 60px;",
@@ -3410,10 +3535,10 @@ server <- function(input, output, session) {
   # disease/location/asof/case-type filters change, then reused by
   # renderLeaflet() below.
   region_map_leaflet_data <- reactive({
-    validate(need(!is.null(pak_district_admin1_sf), "Map unavailable: district boundary file could not be read."))
+    validate(need(!is.null(pak_admin1_emro_sf), "Map unavailable: province boundary file could not be read."))
 
     rc <- region_change_data_leaflet()
-    sf_map <- pak_district_admin1_sf %>% left_join(rc, by = c("province_code" = "region"))
+    sf_map <- pak_admin1_emro_sf %>% left_join(rc, by = c("province_code" = "region"))
 
     matched_ok <- !is.na(sf_map$status) & sf_map$status == "ok"
     fill_col <- rep(DISTRICT_NO_DATA_COLOUR, nrow(sf_map))
@@ -3461,6 +3586,7 @@ server <- function(input, output, session) {
         layerId = d$name_lines,
         highlightOptions = highlightOptions(weight = 2.5, color = who_navy, bringToFront = TRUE)
       ) %>%
+      add_disputed_boundaries() %>%
       draw_region_labels(d$coords, d$name_lines, d$label_html,
                           zoom_ref = PAK_MAP_DEFAULT_ZOOM, group = "region_labels",
                           offsets_px = PAK_LABEL_OFFSETS_PX) %>%
@@ -4465,16 +4591,17 @@ server <- function(input, output, session) {
   })
 
   # ---------------- Somalia: Data visualisation tab (SD-by-state map) -----
-  # Both panels below colour Somalia's 8 states by the same CUSUM SD-from-
-  # baseline statistic as Pakistan's region_map/region_map_leaflet, using
-  # the ONE dissolved state-level layer built at startup (som_regions_sf --
-  # see its construction, and the district-to-state crosswalk it relies on,
-  # near the top of this file), since Somalia has no separately-shipped
-  # dissolved state file the way Pakistan does.
+  # The interactive map below colours Somalia's 18 official REGIONS (the
+  # EMRO admin-1 layer, som_admin1_emro_sf) by the same CUSUM SD-from-
+  # baseline statistic as Pakistan's region_map_leaflet. The case series
+  # behind it is raw_region_data_som (each region's districts summed -- see
+  # its construction near the top of this file). The static ggplot version
+  # (region_map_som) is no longer shown and still uses the older 8-state
+  # layer (som_regions_sf).
   compute_region_change_data_som <- function(dis, asof, metric) {
-    locs <- location_choices_som[location_choices_som != "National"]
+    locs <- region_choices_som
     region_list <- lapply(locs, function(loc) {
-      s <- get_trend_data(dis, loc, data = raw_data_som, compliance = compliance_data_som)
+      s <- get_trend_data(dis, loc, data = raw_region_data_som, compliance = compliance_data_som)
       if (nrow(s) == 0) return(data.frame(region = loc, z = NA_real_, status = "absent"))
       stats <- compute_cusum_stats_at(s, asof$year, asof$week, value_col = metric, calendar = week_calendar_som)
       data.frame(
@@ -4567,28 +4694,39 @@ server <- function(input, output, session) {
     p
   }, res = 96)
 
-  # Same state-level SD-from-baseline data as region_map_som above, but on
-  # an interactive leaflet map. Each state gets a permanent label with its
-  # name + SD reading at a fixed position -- see the matching comment on
-  # Pakistan's region_map_leaflet above. No states here currently need a
-  # manual offset (SOM_LABEL_OFFSETS_PX is empty -- every label sits on
-  # its true point), but the mechanism is the same if one ever does.
+  # Region-level SD-from-baseline data on an interactive leaflet map. Each
+  # of the 18 regions gets a permanent label with its name + SD reading at
+  # a fixed position -- see the matching comment on Pakistan's
+  # region_map_leaflet above. Hand-picked label offsets (if any are needed
+  # to untangle the crowded north / Shabelle area) go in
+  # SOM_LABEL_OFFSETS_PX below.
   # A fractional default zoom (needs zoomSnap/zoomDelta = 0.5 below, since
   # Leaflet's default snaps to whole zoom levels only) -- whole zoom 6 cut
   # off the southern tip of the country, but whole zoom 5 was noticeably
   # wider than needed. 5.5 is the in-between step that fits the full
   # country without the extra surrounding whitespace of zoom 5.
   SOM_MAP_DEFAULT_ZOOM <- 5.5
-  SOM_LABEL_OFFSETS_PX <- list()
+  # Hand-picked (dx, dy) pixel offsets from each label's true point at the
+  # default zoom (+x right, +y down), untangling the crowded north-west
+  # (Awdal / Woqooyi Galbeed / Togdheer) and the Shabelle coast (Banadir is
+  # tiny, so its label sits out in the ocean). As on Pakistan's map, they
+  # shrink back to zero as you zoom in.
+  SOM_LABEL_OFFSETS_PX <- list(
+    "Awdal"           = c(-30, -16),
+    "Woqooyi Galbeed" = c(-54, 8),
+    "Togdheer"        = c(-4, 24),
+    "Banadir"         = c(72, 0),
+    "Lower Shabelle"  = c(32, 24)
+  )
 
   # Data-only reactive (no drawing) -- see the matching Pakistan reactive
   # (region_map_leaflet_data) above for why this is split out from the
   # render function.
   region_map_leaflet_som_data <- reactive({
-    validate(need(!is.null(som_regions_sf), "Map unavailable: Somalia boundary file could not be read."))
+    validate(need(!is.null(som_admin1_emro_sf), "Map unavailable: Somalia region boundary file could not be read."))
 
     rc <- region_change_data_leaflet_som()
-    sf_map <- som_regions_sf %>% left_join(rc, by = c("State" = "region"))
+    sf_map <- som_admin1_emro_sf %>% left_join(rc, by = c("adm1_name" = "region"))
 
     matched_ok <- !is.na(sf_map$status) & sf_map$status == "ok"
     fill_col <- rep(DISTRICT_NO_DATA_COLOUR, nrow(sf_map))
@@ -4602,7 +4740,7 @@ server <- function(input, output, session) {
              "Insufficient baseline data")))
     )
     label_html <- lapply(
-      paste0("<strong>", sf_map$State, "</strong><br>", status_line),
+      paste0("<strong>", sf_map$adm1_name, "</strong><br>", status_line),
       htmltools::HTML
     )
 
@@ -4612,12 +4750,11 @@ server <- function(input, output, session) {
     list(sf_map = sf_map, fill_col = fill_col, status_line = status_line,
          label_html = label_html, coords = coords,
          # unname() -- see the matching comment on Pakistan's
-         # region_map_leaflet_data above: State carries a stray
-         # self-referential names() attribute, which breaks this
-         # vector's use below to look up each state's fixed label offset
-         # by name (a named character vector serializes to JSON as an
-         # object instead of a plain array).
-         name_lines = unname(sf_map$State))
+         # region_map_leaflet_data above: guards against a stray names()
+         # attribute, which would break this vector's use below to look up
+         # each region's fixed label offset by name (a named character
+         # vector serializes to JSON as an object instead of a plain array).
+         name_lines = unname(sf_map$adm1_name))
   })
 
   output$region_map_leaflet_som <- renderLeaflet({
@@ -4634,7 +4771,7 @@ server <- function(input, output, session) {
       draw_region_labels(d$coords, d$name_lines, d$label_html,
                           zoom_ref = SOM_MAP_DEFAULT_ZOOM, group = "region_labels",
                           offsets_px = SOM_LABEL_OFFSETS_PX) %>%
-      setView(lng = 46, lat = 5.5, zoom = SOM_MAP_DEFAULT_ZOOM)
+      setView(lng = 46, lat = 5.2, zoom = SOM_MAP_DEFAULT_ZOOM)
   })
 
   # ---------------- Somalia: Weekly summary table tab ----------------------
