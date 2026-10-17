@@ -4,7 +4,7 @@
 .Ruserdata
 
 # Raw Somalia IDSR workbook -- never commit this. The dashboard only ever
-# reads the encrypted, pre-processed Data/SOM_IDSR_Data.enc (built from it
+# reads the encrypted, pre-processed Data/disease/somalia/SOM_IDSR_Data.enc (built from it
 # by scripts/somalia_process_workbook.R), which IS committed -- see that script's header
 # comment.
 Somalia_Raw/

@@ -1476,7 +1476,7 @@ convert_cases_table <- function(extracted){
   return(cases_table)
 }
 
-write_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/PAK_IDSR_Data.csv'){
+write_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/disease/pakistan/PAK_IDSR_Data.csv'){
   
   # ---- Compute the date corresponding to the last day of the epi week ----
   # Assumes week 1 = days 1-7 of the year, week 2 = days 8-14, etc.
@@ -1871,7 +1871,7 @@ convert_compliance_table <- function(extracted){
     ))
 }
 
-write_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data/PAK_IDSR_Compliance.csv'){
+write_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data/disease/pakistan/PAK_IDSR_Compliance.csv'){
   
   out <- compliance_table |>
     mutate(
@@ -2854,7 +2854,7 @@ convert_district_cases_table <- function(extracted, year = NA_integer_, week = N
   cases_table
 }
 
-write_district_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/PAK_IDSR_Data_District.csv'){
+write_district_cases_to_csv <- function(cases_table, metadata, file_loc = 'Data/disease/pakistan/PAK_IDSR_Data_District.csv'){
   
   week_end_date <- as.Date(paste0(metadata$year, "-01-01")) + (metadata$week * 7) - 1
   
@@ -3062,7 +3062,7 @@ aggregate_district_compliance_to_national <- function(district_compliance_table)
     mutate(`Compliance (%)` = round(100 * `Received Reports` / `Expected Reports`))
 }
 
-write_district_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data/PAK_IDSR_Compliance_District.csv'){
+write_district_compliance_to_csv <- function(compliance_table, metadata, file_loc = 'Data/disease/pakistan/PAK_IDSR_Compliance_District.csv'){
   
   out <- compliance_table |>
     mutate(
@@ -3083,11 +3083,11 @@ write_district_compliance_to_csv <- function(compliance_table, metadata, file_lo
 # ---- Per-bulletin processing (shared by both extraction modes) ---------
 
 process_one_bulletin <- function(week, year, link, title,
-                                 cases_file               = 'Data/PAK_IDSR_Data.csv',
-                                 compliance_file          = 'Data/PAK_IDSR_Compliance.csv',
-                                 district_cases_file      = 'Data/PAK_IDSR_Data_District.csv',
-                                 district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
-                                 failed_log      = 'Data/failed_reports.txt',
+                                 cases_file               = 'Data/disease/pakistan/PAK_IDSR_Data.csv',
+                                 compliance_file          = 'Data/disease/pakistan/PAK_IDSR_Compliance.csv',
+                                 district_cases_file      = 'Data/disease/pakistan/PAK_IDSR_Data_District.csv',
+                                 district_compliance_file = 'Data/disease/pakistan/PAK_IDSR_Compliance_District.csv',
+                                 failed_log      = 'Data/disease/pakistan/failed_reports.txt',
                                  include_district = TRUE){
   
   # Shared line-writer for failed_log -- used both for genuine failures
@@ -3263,10 +3263,10 @@ remove_existing_week <- function(file_loc, year, week){
 # what it did, even when there's nothing to do -- this is what the CI driver
 # script (scripts/pakistan_run_pipeline.R) uses to build its run summary.
 extract_PAK_data_main <- function(extract_all = FALSE,
-                                  cases_file               = 'Data/PAK_IDSR_Data.csv',
-                                  compliance_file          = 'Data/PAK_IDSR_Compliance.csv',
-                                  district_cases_file      = 'Data/PAK_IDSR_Data_District.csv',
-                                  district_compliance_file = 'Data/PAK_IDSR_Compliance_District.csv',
+                                  cases_file               = 'Data/disease/pakistan/PAK_IDSR_Data.csv',
+                                  compliance_file          = 'Data/disease/pakistan/PAK_IDSR_Compliance.csv',
+                                  district_cases_file      = 'Data/disease/pakistan/PAK_IDSR_Data_District.csv',
+                                  district_compliance_file = 'Data/disease/pakistan/PAK_IDSR_Compliance_District.csv',
                                   include_district = TRUE){
 
   bulletin_url <-

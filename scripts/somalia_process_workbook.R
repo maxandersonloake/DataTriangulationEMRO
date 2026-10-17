@@ -5,7 +5,7 @@
 # long-format schema the dashboard already expects from the Pakistan
 # pipeline (raw_data / compliance_data / raw_district_data /
 # district_compliance_data -- see app.R's own header comment), then
-# encrypts the result into Data/SOM_IDSR_Data.enc so it can be committed to
+# encrypts the result into Data/disease/somalia/SOM_IDSR_Data.enc so it can be committed to
 # the (public) GitHub repo without the underlying case data being readable
 # there. app.R decrypts this file at startup using the SAME
 # SOMALIA_DATA_KEY passphrase, supplied on Posit Connect Cloud as a secret
@@ -15,7 +15,7 @@
 # workbook -- it is NOT part of app.R's own startup (unlike Pakistan's
 # pipeline, this isn't wired up to a scheduled GitHub Action, since the
 # source file isn't a public download). After running it:
-#   1. `git add Data/SOM_IDSR_Data.enc` (this is the only new file that
+#   1. `git add Data/disease/somalia/SOM_IDSR_Data.enc` (this is the only new file that
 #      needs to be committed -- never commit the raw workbook itself).
 #   2. Push/redeploy as normal.
 #
@@ -34,7 +34,7 @@
 #   - Set the SOMALIA_DATA_KEY environment variable (e.g. in your
 #     ~/.Renviron) to whatever passphrase you've also set as a Posit
 #     Connect Cloud secret for this app. Anyone without that exact
-#     passphrase cannot decrypt Data/SOM_IDSR_Data.enc, even with full
+#     passphrase cannot decrypt Data/disease/somalia/SOM_IDSR_Data.enc, even with full
 #     read access to the public repo.
 # ================================================================
 
@@ -49,7 +49,7 @@ if (!requireNamespace("stringdist", quietly = TRUE)) {
 source("encryption_utils.R")
 
 SOM_RAW_XLSX  <- "Somalia_Raw/IDSR_data.xlsx"
-SOM_OUT_PATH  <- "Data/SOM_IDSR_Data.enc"
+SOM_OUT_PATH  <- "Data/disease/somalia/SOM_IDSR_Data.enc"
 SOM_SHEET     <- "IDSR data"
 
 passphrase <- Sys.getenv("SOMALIA_DATA_KEY")
@@ -227,7 +227,7 @@ SOM_STATE_LOOKUP <- list(
 
 # ---- Base Region lookup ---------------------------------------------------
 # Canonical spelling matched against the official boundary file's
-# adm1_name (Data/som_admin_boundaries/som_admin1.geojson) where one of the
+# adm1_name (Data/boundaries/somalia/som_admin1.geojson) where one of the
 # 18 exists; a handful of raw Region values are local/historical
 # sub-region names with no single corresponding official ADM1 region
 # (Karkaar, Ras-Asayr, Sahil, South Mudug, Ayn) and are kept as their own

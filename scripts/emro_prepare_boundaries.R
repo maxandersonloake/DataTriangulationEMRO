@@ -3,7 +3,7 @@
 #
 # One-off preparation of the EMRO-approved admin-1 boundary layers used by the
 # Data visualisation tab's maps, from the raw shapefiles supplied by WHO EMRO
-# (kept in Data/emro_boundaries_src/):
+# (kept in Data/boundaries/emro/):
 #
 #   pak_admbnda_adm1_ocha_pco_gaul_20171122.shp  Pakistan provinces (6 features)
 #   som_admin1_em.shp                            Somalia's 18 regions (EMRO version)
@@ -18,15 +18,15 @@
 # Pakistan: the EMRO file has no Azad Kashmir or Gilgit Baltistan polygons
 # (the EMRO convention treats that area as disputed -- it is covered by the
 # disputed-areas layer instead), but the dashboard still reports data for
-# both, so they are carried over from the existing Data/pak_admin_boundaries/
+# both, so they are carried over from the existing Data/boundaries/pakistan/
 # pak_admin1.geojson, clipped so they don't overlap the new provinces. FATA is
 # merged into Khyber Pakhtunkhwa (the two have been one province since 2018,
 # and the dashboard's "KP" already means both).
 #
 # Outputs (committed; read at app start-up by app.R):
-#   Data/pak_admin_boundaries/pak_admin1_emro.geojson   7 provinces (adm1_name)
-#   Data/som_admin_boundaries/som_admin1_emro.geojson   18 regions  (adm1_name)
-#   Data/emro_disputed_areas.geojson                    6 disputed polygons
+#   Data/boundaries/pakistan/pak_admin1_emro.geojson    7 provinces (adm1_name)
+#   Data/boundaries/somalia/som_admin1_emro.geojson     18 regions  (adm1_name)
+#   Data/boundaries/emro/emro_disputed_areas.geojson    6 disputed polygons
 #
 # Run from the project root:  Rscript scripts/emro_prepare_boundaries.R
 # =============================================================================
@@ -41,7 +41,7 @@ sf_use_s2(FALSE)
 # GDAL can rebuild the index on the fly, but only if told it may.
 Sys.setenv(SHAPE_RESTORE_SHX = "YES")
 
-SRC_DIR <- "Data/emro_boundaries_src"
+SRC_DIR <- "Data/boundaries/emro"
 
 read_shp <- function(name) {
   x <- sf::st_read(file.path(SRC_DIR, name), quiet = TRUE)
@@ -62,7 +62,7 @@ name_by_overlap <- function(new, ref, name_col) {
 
 # ---- Pakistan -------------------------------------------------------------
 pak_new <- read_shp("pak_admbnda_adm1_ocha_pco_gaul_20171122.shp")
-pak_old <- sf::st_make_valid(sf::st_read("Data/pak_admin_boundaries/pak_admin1.geojson", quiet = TRUE))
+pak_old <- sf::st_make_valid(sf::st_read("Data/boundaries/pakistan/pak_admin1.geojson", quiet = TRUE))
 
 pak_new$adm1_name <- name_by_overlap(pak_new, pak_old, "adm1_name")
 message("Pakistan features named by overlap: ", paste(pak_new$adm1_name, collapse = ", "))
@@ -88,7 +88,7 @@ stopifnot(nrow(pak_out) == 7, !anyDuplicated(pak_out$adm1_name))
 
 # ---- Somalia --------------------------------------------------------------
 som_new <- read_shp("som_admin1_em.shp")
-som_ref <- sf::st_make_valid(sf::st_read("Data/som_admin_boundaries/som_admin1.geojson", quiet = TRUE))
+som_ref <- sf::st_make_valid(sf::st_read("Data/boundaries/somalia/som_admin1.geojson", quiet = TRUE))
 som_new$adm1_name <- name_by_overlap(som_new, som_ref, "adm1_name")
 message("Somalia regions named by overlap: ", paste(som_new$adm1_name, collapse = ", "))
 stopifnot(!anyNA(som_new$adm1_name), !anyDuplicated(som_new$adm1_name), nrow(som_new) == 18)
@@ -130,6 +130,6 @@ write_geojson <- function(x, path) {
                layer_options = "COORDINATE_PRECISION=5")
   message("Wrote ", path, " (", round(file.size(path) / 1024), " KB, ", nrow(x), " features)")
 }
-write_geojson(pak_out, "Data/pak_admin_boundaries/pak_admin1_emro.geojson")
-write_geojson(som_out, "Data/som_admin_boundaries/som_admin1_emro.geojson")
-write_geojson(dis_out, "Data/emro_disputed_areas.geojson")
+write_geojson(pak_out, "Data/boundaries/pakistan/pak_admin1_emro.geojson")
+write_geojson(som_out, "Data/boundaries/somalia/som_admin1_emro.geojson")
+write_geojson(dis_out, "Data/boundaries/emro/emro_disputed_areas.geojson")

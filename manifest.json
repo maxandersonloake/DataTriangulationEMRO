@@ -536,6 +536,41 @@
         "RemoteSha": "1.1.0"
       }
     },
+    "cellranger": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "cellranger",
+        "Title": "Translate Spreadsheet Cell Ranges to Rows and Columns",
+        "Version": "1.1.0",
+        "Authors@R": "c(\n    person(\"Jennifer\", \"Bryan\", , \"jenny@stat.ubc.ca\", c(\"cre\", \"aut\")),\n    person(\"Hadley\", \"Wickham\", , \"hadley@rstudio.com\", \"ctb\")\n  )",
+        "Description": "Helper functions to work with spreadsheets and the \"A1:D10\" style\n    of cell range specification.",
+        "Depends": "R (>= 3.0.0)",
+        "License": "MIT + file LICENSE",
+        "LazyData": "true",
+        "URL": "https://github.com/rsheets/cellranger",
+        "BugReports": "https://github.com/rsheets/cellranger/issues",
+        "Suggests": "covr, testthat (>= 1.0.0), knitr, rmarkdown",
+        "RoxygenNote": "5.0.1.9000",
+        "VignetteBuilder": "knitr",
+        "Imports": "rematch, tibble",
+        "NeedsCompilation": "no",
+        "Packaged": "2016-07-26 06:50:00 UTC; jenny",
+        "Author": "Jennifer Bryan [cre, aut],\n  Hadley Wickham [ctb]",
+        "Maintainer": "Jennifer Bryan <jenny@stat.ubc.ca>",
+        "Repository": "RSPM",
+        "Date/Publication": "2016-07-27 03:17:48",
+        "Encoding": "UTF-8",
+        "Built": "R 4.5.0; ; 2025-12-02 12:41:29 UTC; windows",
+        "RemoteType": "standard",
+        "RemoteRef": "cellranger",
+        "RemotePkgRef": "cellranger",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "x86_64-w64-mingw32",
+        "RemoteSha": "1.1.0"
+      }
+    },
     "class": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -2746,6 +2781,76 @@
         "RemoteSha": "2.2.0"
       }
     },
+    "readxl": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "readxl",
+        "Title": "Read Excel Files",
+        "Version": "1.5.0.1",
+        "Authors@R": "c(\n    person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\",\n           comment = c(ORCID = \"0000-0003-4757-117X\")),\n    person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"),\n           comment = c(ORCID = \"0000-0002-6983-2759\")),\n    person(\"Posit, PBC\", role = c(\"cph\", \"fnd\"),\n           comment = \"Copyright holder of all R code and all C/C++ code without explicit copyright attribution\"),\n    person(\"Marcin\", \"Kalicinski\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included RapidXML code\"),\n    person(\"Komarov Valery\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included libxls code\"),\n    person(\"Christophe Leitienne\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included libxls code\"),\n    person(\"Bob Colbert\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included libxls code\"),\n    person(\"David Hoerl\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included libxls code\"),\n    person(\"Evan Miller\", role = c(\"ctb\", \"cph\"),\n           comment = \"Author of included libxls code\")\n  )",
+        "Description": "Import excel files into R. Supports '.xls' via the embedded\n    'libxls' C library <https://github.com/libxls/libxls> and '.xlsx' via\n    the embedded 'RapidXML' C++ library\n    <https://rapidxml.sourceforge.net/>.  Works on Windows, Mac and Linux\n    without external dependencies.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://readxl.tidyverse.org, https://github.com/tidyverse/readxl",
+        "BugReports": "https://github.com/tidyverse/readxl/issues",
+        "Depends": "R (>= 4.1)",
+        "Imports": "cellranger, tibble (>= 2.0.1), utils",
+        "Suggests": "covr, knitr, rmarkdown, testthat (>= 3.1.6), withr",
+        "LinkingTo": "cpp11 (>= 0.5.5), progress",
+        "VignetteBuilder": "knitr",
+        "Config/build/compilation-database": "true",
+        "Config/Needs/website": "tidyverse/tidytemplate, tidyverse",
+        "Config/roxygen2/version": "8.0.0",
+        "Config/testthat/edition": "3",
+        "Encoding": "UTF-8",
+        "Note": "libxls v1.6.3 c199d13",
+        "NeedsCompilation": "yes",
+        "Packaged": "2026-09-16 07:49:42 UTC; ripley",
+        "Author": "Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>),\n  Jennifer Bryan [aut, cre] (ORCID:\n    <https://orcid.org/0000-0002-6983-2759>),\n  Posit, PBC [cph, fnd] (Copyright holder of all R code and all C/C++\n    code without explicit copyright attribution),\n  Marcin Kalicinski [ctb, cph] (Author of included RapidXML code),\n  Komarov Valery [ctb, cph] (Author of included libxls code),\n  Christophe Leitienne [ctb, cph] (Author of included libxls code),\n  Bob Colbert [ctb, cph] (Author of included libxls code),\n  David Hoerl [ctb, cph] (Author of included libxls code),\n  Evan Miller [ctb, cph] (Author of included libxls code)",
+        "Maintainer": "Jennifer Bryan <jenny@posit.co>",
+        "Repository": "RSPM",
+        "Date/Publication": "2026-09-16 07:53:07 UTC",
+        "Built": "R 4.5.0; x86_64-w64-mingw32; 2026-09-17 04:33:33 UTC; windows",
+        "Archs": "x64",
+        "RemoteType": "standard",
+        "RemoteRef": "readxl",
+        "RemotePkgRef": "readxl",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "x86_64-w64-mingw32",
+        "RemoteSha": "1.5.0.1"
+      }
+    },
+    "rematch": {
+      "Source": "CRAN",
+      "Repository": "https://packagemanager.posit.co/cran/latest",
+      "description": {
+        "Package": "rematch",
+        "Title": "Match Regular Expressions with a Nicer 'API'",
+        "Version": "2.0.0",
+        "Author": "Gabor Csardi",
+        "Maintainer": "Gabor Csardi <csardi.gabor@gmail.com>",
+        "Description": "A small wrapper on 'regexpr' to extract the matches and\n    captured groups from the match of a regular expression to a character\n    vector.",
+        "License": "MIT + file LICENSE",
+        "URL": "https://github.com/gaborcsardi/rematch",
+        "BugReports": "https://github.com/gaborcsardi/rematch/issues",
+        "RoxygenNote": "5.0.1.9000",
+        "Suggests": "covr, testthat",
+        "Encoding": "UTF-8",
+        "NeedsCompilation": "no",
+        "Packaged": "2023-08-30 12:10:51 UTC; gaborcsardi",
+        "Repository": "RSPM",
+        "Date/Publication": "2023-08-30 16:50:02 UTC",
+        "Built": "R 4.5.0; ; 2025-12-02 12:32:57 UTC; windows",
+        "RemoteType": "standard",
+        "RemoteRef": "rematch",
+        "RemotePkgRef": "rematch",
+        "RemoteRepos": "https://packagemanager.posit.co/cran/latest",
+        "RemoteReposName": "CRAN",
+        "RemotePkgPlatform": "x86_64-w64-mingw32",
+        "RemoteSha": "2.0.0"
+      }
+    },
     "renv": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -4069,157 +4174,124 @@
       "checksum": "a4504d32f0ed4e99907c0180c8d0da59"
     },
     ".Rbuildignore": {
-      "checksum": "7f3003188f3a78fd085feca239edcc60"
+      "checksum": "17f847933966777e7397760158d3dc05"
+    },
+    ".Renviron": {
+      "checksum": "d9ce77c2052fa09d9ffe4fd4151ec6aa"
     },
     ".Rprofile": {
-      "checksum": "d491530f7bbac4be225a9ae1f78e577a"
-    },
-    "1_1_DownloadData_PAK_v3.R": {
-      "checksum": "d031b9a7ab29821a1766e9bc8d4e4bf5"
-    },
-    "1_1_DownloadData_PAK_v4.R": {
-      "checksum": "90b82a3980fcdcf072de7b0a44b18f7c"
+      "checksum": "6c1104422dcef9a914c1f1af5db84444"
     },
     "app.R": {
-      "checksum": "9784a793807021a28bc3a6cbbe0988b6"
+      "checksum": "406cb0403751d3a028c9e8fd6cf24f35"
     },
-    "Data/failed_reports.txt": {
-      "checksum": "e4181b11fd420106a61041d9c94ef88e"
+    "Data/boundaries/emro/emro_disputed_areas.geojson": {
+      "checksum": "a6106bc7017201f1f3465d8347c3a2d6"
     },
-    "Data/pak_admin_boundaries/pak_admin0.geojson": {
-      "checksum": "4a947c2db0b008f85c8561e214ce7b91"
+    "Data/boundaries/emro/EMRO_Disputed_areas.shp": {
+      "checksum": "f8dddfdd17551e4a343e9aaa33aaa099"
     },
-    "Data/pak_admin_boundaries/pak_admin0_em.geojson": {
-      "checksum": "927cce0fc9bdd8cee39297df328df5f0"
+    "Data/boundaries/emro/pak_admbnda_adm1_ocha_pco_gaul_20171122.shp": {
+      "checksum": "5c950106a9207a5a819989ca65826b85"
     },
-    "Data/pak_admin_boundaries/pak_admin1.geojson": {
+    "Data/boundaries/emro/som_admin1_em.shp": {
+      "checksum": "fbba29ea7c839ea843343a15b065b015"
+    },
+    "Data/boundaries/pakistan/pak_admin1.geojson": {
       "checksum": "35980dee5fc39fc71e9e60638d379cc7"
     },
-    "Data/pak_admin_boundaries/pak_admin1_em.geojson": {
-      "checksum": "820a7e40ff7bb32729de6e72a51cf51c"
+    "Data/boundaries/pakistan/pak_admin1_emro.geojson": {
+      "checksum": "7277a55f5dfabebd26bd1179c3f8a21d"
     },
-    "Data/pak_admin_boundaries/pak_admin2.geojson": {
+    "Data/boundaries/pakistan/pak_admin2.geojson": {
       "checksum": "618ceac33aa444cf310e0eae464332f5"
     },
-    "Data/pak_admin_boundaries/pak_admin2_em.geojson": {
-      "checksum": "9ef32a205e5cee08039854519c34f9db"
+    "Data/boundaries/pakistan/pak_admin2_jaffarabad_split.geojson": {
+      "checksum": "4f716b225ecbb5f393dd865dc984b209"
     },
-    "Data/pak_admin_boundaries/pak_admin3.geojson": {
+    "Data/boundaries/pakistan/pak_admin3.geojson": {
       "checksum": "626cf899a1768c6e8247af5c99c94c33"
     },
-    "Data/pak_admin_boundaries/pak_admin3_em.geojson": {
-      "checksum": "9d2ba574136cb6e09829d127d9aa03f6"
-    },
-    "Data/pak_admin_boundaries/pak_admincapitals.geojson": {
-      "checksum": "623508a6a26e1995f9bef1379e0bd4c7"
-    },
-    "Data/pak_admin_boundaries/pak_adminlines.geojson": {
-      "checksum": "2a255da5aa23d1a56cd8cb3a7d7d4380"
-    },
-    "Data/pak_admin_boundaries/pak_adminlines_em.geojson": {
-      "checksum": "edd5262732d16c357ce2e3e7b93c9216"
-    },
-    "Data/pak_admin_boundaries/pak_adminpoints.geojson": {
-      "checksum": "230b6802ab91f6a721a21fc7ece04ff2"
-    },
-    "Data/PAK_IDSR_Compliance.csv": {
-      "checksum": "dcbfe020b361a3b5b856c10b09ccaae6"
-    },
-    "Data/PAK_IDSR_Compliance_District.csv": {
-      "checksum": "c569db46e4f11ff8e46b97a53319f8b2"
-    },
-    "Data/PAK_IDSR_Data.csv": {
-      "checksum": "4b3dcd1d4b64d604969d351d641b95d1"
-    },
-    "Data/PAK_IDSR_Data_District.csv": {
-      "checksum": "acb03500873ca8dc17a3a9467cb36425"
-    },
-    "Data/pakistan_admin1.geojson": {
+    "Data/boundaries/pakistan/pakistan_admin1_dissolved.geojson": {
       "checksum": "37034ddcc1e6af7bdedc469963f6fe33"
     },
-    "Data/run_log.txt": {
-      "checksum": "707636c9b019090171bee4555c169f60"
+    "Data/boundaries/somalia/som_admin1.geojson": {
+      "checksum": "247005af99ce284a6703876cb85090f9"
     },
-    "Data_preAug13/failed_reports.txt": {
-      "checksum": "3c7b2bb0e0eebe0792e43a2597216cfd"
+    "Data/boundaries/somalia/som_admin1_emro.geojson": {
+      "checksum": "b26d6040439b91d92d1392f04aa8ad96"
     },
-    "Data_preAug13/failed_reports_Extracted_2026_07_19.txt": {
-      "checksum": "607a7140c607808c3a1a4b2072ae0a30"
+    "Data/boundaries/somalia/som_admin2.geojson": {
+      "checksum": "23865f4a81d46d6c00c3303ad0e924c4"
     },
-    "Data_preAug13/failed_reports_Extracted_2026_07_26.txt": {
-      "checksum": "5c04e3caa283a57a780f60abb2e96df2"
+    "Data/disease/pakistan/failed_reports.txt": {
+      "checksum": "121281e3229c937a89e896f6cd2b132f"
     },
-    "Data_preAug13/PAK_IDSR_Compliance_Extracted_2026_07_26.csv": {
-      "checksum": "0ae9cd80ec895ef2a369c53be074d0b3"
+    "Data/disease/pakistan/PAK_IDSR_Compliance.csv": {
+      "checksum": "56d33b8eba2f5ef36ca81a808fe69d65"
     },
-    "Data_preAug13/PAK_IDSR_Data_Extracted_2026_07_19.csv": {
-      "checksum": "357e806d51343c051ccae2565b75a5c1"
+    "Data/disease/pakistan/PAK_IDSR_Compliance_District.csv": {
+      "checksum": "915f7b61eb1fa92d91024b94bf210c2c"
     },
-    "Data_preAug13/PAK_IDSR_Data_Extracted_2026_07_26.csv": {
-      "checksum": "b4468f33b391da541aff5e75ade1171f"
+    "Data/disease/pakistan/PAK_IDSR_Data.csv": {
+      "checksum": "9a7eaf718eff8602022e205674803603"
     },
-    "Data_preAug13/pakistan_admin1.geojson": {
-      "checksum": "a3b0f7d40f3af5a13e0f5078f057c6b5"
+    "Data/disease/pakistan/PAK_IDSR_Data_District.csv": {
+      "checksum": "944000e11f5db130f04ce1621c70b2f2"
     },
-    "Data_preAug13/run_log.txt": {
-      "checksum": "d6beae58b25567756eaf3fb1c64d66c8"
+    "Data/disease/pakistan/run_log.txt": {
+      "checksum": "78cc47d2d418d76f2c7a590ba85d4f04"
     },
-    "Data_PreAug22/failed_reports.txt": {
-      "checksum": "f0a688bff015ad6b1d256c69c4e775a1"
-    },
-    "Data_PreAug22/PAK_IDSR_Compliance.csv": {
-      "checksum": "20283af973cf1a97e7946bcd1187a4a2"
-    },
-    "Data_PreAug22/PAK_IDSR_Compliance_District.csv": {
-      "checksum": "ed6a9139bdc0345e68b65aaec97074ad"
-    },
-    "Data_PreAug22/PAK_IDSR_Data.csv": {
-      "checksum": "f806cec16af6adaeb408857fb4b08c64"
-    },
-    "Data_PreAug22/PAK_IDSR_Data_District.csv": {
-      "checksum": "28c7c16f0324327b85ba1ed4e9d0c736"
-    },
-    "Data_PreAug22/pakistan_admin1.geojson": {
-      "checksum": "37034ddcc1e6af7bdedc469963f6fe33"
-    },
-    "Data_PreAug22/run_log.txt": {
-      "checksum": "14ab3825a3c66eefe2fbd6c2dbb89b2f"
+    "Data/disease/somalia/SOM_IDSR_Data.enc": {
+      "checksum": "652ee2cd666aa91650dcaf7d8ba4406f"
     },
     "DESCRIPTION": {
       "checksum": "3da34d46a95442991b6c7e837be611a6"
     },
-    "main.R": {
-      "checksum": "e0a5a7e6d963a89fb0eb565a74227397"
-    },
-    "pipeline/1.1_DownloadData_PAK.R": {
-      "checksum": "b9bac480a8c4e86f62c8d22710bcf390"
-    },
-    "pipeline/1.1_DownloadData_PAK_v2.R": {
-      "checksum": "aff82498f56229091f2e9592d85265bf"
-    },
-    "pipeline/1.1_DownloadData_PAK_v3.R": {
-      "checksum": "4d11900f075f941aa73d64d9382e9920"
+    "encryption_utils.R": {
+      "checksum": "1635ba79aa2ed6b3a0f2055cdeec755d"
     },
     "README.md": {
-      "checksum": "c82463ee2aa1319ea6136508ece563d4"
+      "checksum": "1295cde62162eb02cd01492e5313b2c8"
     },
     "README_dashboard.md": {
-      "checksum": "64f88780984a303f016989f27f9062d3"
+      "checksum": "7802e1bf856ca862adb299aee4c52e0e"
     },
     "renv.lock": {
-      "checksum": "77fa5a7fd4a3ff5f8b515b13693dae04"
+      "checksum": "69e6d90ca1c6a72b613de882c0af57f8"
     },
-    "run_pipeline.R": {
-      "checksum": "6ce8718195b71a9d11519e0c6f6233f2"
+    "Reports/som_unmatched_districts.txt": {
+      "checksum": "98670c5ceda634c5977cc2dca5d87ab8"
     },
-    "run_pipeline_v3.R": {
-      "checksum": "1deefce9ff3196a4424842e297daab08"
+    "Reports/som_unmatched_regions.txt": {
+      "checksum": "fd7bde4ce59652a6994d0aa78e8e18cf"
+    },
+    "Reports/som_unmatched_states.txt": {
+      "checksum": "56ea0104d1f4b76d2c41cdf92bd9332a"
+    },
+    "scripts/emro_prepare_boundaries.R": {
+      "checksum": "c730c06c505b33a957238e9978ab9962"
+    },
+    "scripts/pakistan_extract_bulletins.R": {
+      "checksum": "df8e70c4b667ed815b016d2b96e8f37b"
+    },
+    "scripts/pakistan_run_pipeline.R": {
+      "checksum": "b2ff0cbbf8c14e5a7acecf1cbf01640a"
+    },
+    "scripts/somalia_process_workbook.R": {
+      "checksum": "ed160a232df5b2923df9f2f4d79bd67d"
+    },
+    "scripts/update_renv_manifest.R": {
+      "checksum": "2cf85adf345cbdbdae35f15a1bf553c0"
+    },
+    "Somalia_Raw/IDSR_data.xlsx": {
+      "checksum": "f61cb491379515e2425d81f4b92eb98d"
     },
     "www/logo.png": {
-      "checksum": "e5142f9c9544447ffbd73fe1368a05f9"
+      "checksum": "77178dca843e3826d9d1dcd7bb479bd5"
     },
     "www/who_brand.css": {
-      "checksum": "27e147758713d594fa568871550484d1"
+      "checksum": "8d038b1f311445e849697263218fb1b4"
     }
   },
   "users": null

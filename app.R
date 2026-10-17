@@ -13,15 +13,15 @@
 #   app.R
 #   www/who_brand.css
 #   www/logo.png          
-#   Data/PAK_IDSR_Data.csv
-#   Data/PAK_IDSR_Compliance.csv
-#   Data/PAK_IDSR_Data_District.csv
-#   Data/PAK_IDSR_Compliance_District.csv
-#   Data/pakistan_admin1.geojson             <- dissolved province boundaries (Data visualisation tab's map)
-#   Data/pak_admin_boundaries/pak_admin1.geojson  <- province boundaries (District-level data tab's map outline)
-#   Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson  <- district boundaries (District-level
+#   Data/disease/pakistan/PAK_IDSR_Data.csv
+#   Data/disease/pakistan/PAK_IDSR_Compliance.csv
+#   Data/disease/pakistan/PAK_IDSR_Data_District.csv
+#   Data/disease/pakistan/PAK_IDSR_Compliance_District.csv
+#   Data/boundaries/pakistan/pak_admin1_dissolved.geojson             <- dissolved province boundaries (Data visualisation tab's map)
+#   Data/boundaries/pakistan/pak_admin1.geojson  <- province boundaries (District-level data tab's map outline)
+#   Data/boundaries/pakistan/pak_admin2_jaffarabad_split.geojson  <- district boundaries (District-level
 #     data tab's map fill). This is pak_admin2.geojson with its single "Jaffarabad" polygon split into two,
-#     built from the admin3 (tehsil) boundaries in Data/pak_admin_boundaries/pak_admin3.geojson: "Usta
+#     built from the admin3 (tehsil) boundaries in Data/boundaries/pakistan/pak_admin3.geojson: "Usta
 #     Muhammad" (union of the Gandakha + Usta Mohammad tehsils) and "Jaffarabad" (the remaining Jhat Pat
 #     tehsil). This lets IDSR district data reported separately for Jaffarabad and Usta Muhammad each match
 #     their own polygon, instead of both only ever being able to match the old single combined polygon.
@@ -50,19 +50,19 @@ SOMALIA_PAGE_PW_SALT <- "429e60872a0131abd96906f16287113d"
 SOMALIA_PAGE_PW_HASH <- "0dfe79052cd103ced020e0e0beb98847f9ea7f80e6969657a4f693d2baa5a2c7"
 SOMALIA_LOGIN_MAX_ATTEMPTS <- 5   # wrong tries allowed per browser session
 
-REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
+REGIONS_GEOJSON <- "Data/boundaries/pakistan/pak_admin1_dissolved.geojson"
 
 # EMRO-approved admin-1 boundaries for the Data visualisation tab's interactive
 # region maps, plus the EMRO disputed-areas layer drawn on top of them as a
 # dashed line. All three are prepared by scripts/emro_prepare_boundaries.R from the
-# raw shapefiles supplied by WHO EMRO (Data/emro_boundaries_src/).
+# raw shapefiles supplied by WHO EMRO (Data/boundaries/emro/).
 #   - Pakistan: 7 provinces (the five EMRO provinces plus Azad Kashmir and
 #     Gilgit Baltistan, carried over from the older pak_admin1.geojson since
 #     the EMRO file treats that area as disputed rather than as provinces).
 #   - Somalia: the 18 official regions (NOT the 8 federal member states).
-PAK_ADMIN1_EMRO_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1_emro.geojson"
-SOM_ADMIN1_EMRO_GEOJSON <- "Data/som_admin_boundaries/som_admin1_emro.geojson"
-EMRO_DISPUTED_GEOJSON   <- "Data/emro_disputed_areas.geojson"
+PAK_ADMIN1_EMRO_GEOJSON <- "Data/boundaries/pakistan/pak_admin1_emro.geojson"
+SOM_ADMIN1_EMRO_GEOJSON <- "Data/boundaries/somalia/som_admin1_emro.geojson"
+EMRO_DISPUTED_GEOJSON   <- "Data/boundaries/emro/emro_disputed_areas.geojson"
 
 # Admin boundary files used by the District-level data tab's map -- distinct
 # from REGIONS_GEOJSON above (which is a dissolved 7-province shape used by
@@ -70,12 +70,12 @@ EMRO_DISPUTED_GEOJSON   <- "Data/emro_disputed_areas.geojson"
 # administrative boundary files, used at their adm2 ("district") level so
 # every individual district can be coloured and hovered on the map; adm1 is
 # used only to draw a thin province outline on top for visual clarity.
-DISTRICT_ADMIN1_GEOJSON <- "Data/pak_admin_boundaries/pak_admin1.geojson"
+DISTRICT_ADMIN1_GEOJSON <- "Data/boundaries/pakistan/pak_admin1.geojson"
 # pak_admin2_jaffarabad_split.geojson is pak_admin2.geojson with the single "Jaffarabad" polygon replaced by
 # two polygons -- "Usta Muhammad" (Gandakha + Usta Mohammad tehsils) and "Jaffarabad" (the remaining Jhat Pat
-# tehsil) -- built from Data/pak_admin_boundaries/pak_admin3.geojson so that CSV rows for each district match
+# tehsil) -- built from Data/boundaries/pakistan/pak_admin3.geojson so that CSV rows for each district match
 # their own polygon. See the file-inventory comment near the top of this file for how it was derived.
-DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_split.geojson"
+DISTRICT_ADMIN2_GEOJSON <- "Data/boundaries/pakistan/pak_admin2_jaffarabad_split.geojson"
 
 # Somalia's boundary file: the official UN OCHA / HDX Common Operational
 # Dataset for Administrative Boundaries (COD-AB) Somalia ADM2 layer (91
@@ -92,7 +92,7 @@ DISTRICT_ADMIN2_GEOJSON <- "Data/pak_admin_boundaries/pak_admin2_jaffarabad_spli
 # authoritative, currently-maintained official source, which was the point
 # of switching to it -- match rate against the workbook is 122/177 after
 # crosswalking.
-SOMALIA_DISTRICT_GEOJSON <- "Data/som_admin_boundaries/som_admin2.geojson"
+SOMALIA_DISTRICT_GEOJSON <- "Data/boundaries/somalia/som_admin2.geojson"
 
 # ---- WHO brand colours -----------------------------------------
 who_navy   <- "#00205C"
@@ -106,8 +106,8 @@ who_yellow <- "#F4A81D"
 who_purple <- "#5B2C86"
 who_magenta <- "#A6228C"
 
-DATA_PATH       <- "Data/PAK_IDSR_Data.csv"
-COMPLIANCE_PATH <- "Data/PAK_IDSR_Compliance.csv"
+DATA_PATH       <- "Data/disease/pakistan/PAK_IDSR_Data.csv"
+COMPLIANCE_PATH <- "Data/disease/pakistan/PAK_IDSR_Compliance.csv"
 
 # ---- Alert detection method ------------------------------------
 # Modified CDC EARS-style CUSUM/C2 aberration detection method (Hutwagner
@@ -278,8 +278,8 @@ location_choices <- c("National", sort(unique(raw_data$Province[raw_data$Provinc
 # currently only published/extracted for a subset of provinces (whichever
 # ones the source bulletin breaks down by district that week) -- the tab
 # naturally only shows whichever provinces/districts are present.
-DISTRICT_DATA_PATH       <- "Data/PAK_IDSR_Data_District.csv"
-DISTRICT_COMPLIANCE_PATH <- "Data/PAK_IDSR_Compliance_District.csv"
+DISTRICT_DATA_PATH       <- "Data/disease/pakistan/PAK_IDSR_Data_District.csv"
+DISTRICT_COMPLIANCE_PATH <- "Data/disease/pakistan/PAK_IDSR_Compliance_District.csv"
 
 raw_district_data <- read_csv(DISTRICT_DATA_PATH, show_col_types = FALSE) %>%
   mutate(
@@ -354,7 +354,7 @@ provinces_without_district_data <- setdiff(location_choices[location_choices != 
 # ----------------------------------------------------------------
 # Unlike Pakistan's data (public NIH bulletins, so the CSVs above are
 # committed to the repo in plain readable form), the Somalia workbook isn't
-# public -- so only an ENCRYPTED bundle (Data/SOM_IDSR_Data.enc, built by
+# public -- so only an ENCRYPTED bundle (Data/disease/somalia/SOM_IDSR_Data.enc, built by
 # scripts/somalia_process_workbook.R) is committed. It's decrypted here at app start-up
 # using the SOMALIA_DATA_KEY secret environment variable (set on Posit
 # Connect Cloud's "Environment variables" panel for this app -- never
@@ -362,7 +362,7 @@ provinces_without_district_data <- setdiff(location_choices[location_choices != 
 # missing, `somalia_data_available` is FALSE and every Somalia UI element
 # shows a "not available" message instead of erroring -- the Pakistan tab
 # is entirely unaffected either way.
-SOMALIA_DATA_PATH <- "Data/SOM_IDSR_Data.enc"
+SOMALIA_DATA_PATH <- "Data/disease/somalia/SOM_IDSR_Data.enc"
 somalia_bundle <- decrypt_object_from_file(SOMALIA_DATA_PATH, Sys.getenv("SOMALIA_DATA_KEY"))
 somalia_data_available <- !is.null(somalia_bundle)
 
@@ -418,7 +418,7 @@ if (somalia_data_available) {
 }
 
 # ---- Matching CSV district names onto admin-boundary polygons ------------
-# Data/pak_admin_boundaries/pak_admin2.geojson is an independently-sourced
+# Data/boundaries/pakistan/pak_admin2.geojson is an independently-sourced
 # boundary file, so a district's name there doesn't always spell/order
 # identically to how it appears in the IDSR bulletins (which is what
 # PAK_IDSR_Data_District.csv's District column preserves verbatim). This
@@ -478,7 +478,7 @@ resolve_dist_key <- function(x, table = DISTRICT_NAME_ALIASES) {
 }
 
 # ---- Somalia's own district-name crosswalk ---------------------------------
-# Somalia's boundary file (Data/som_admin_boundaries/som_admin2.geojson --
+# Somalia's boundary file (Data/boundaries/somalia/som_admin2.geojson --
 # the official UN OCHA/HDX COD-AB Somalia ADM2 layer, 91 districts, see the
 # References tab) uses standard Somali-language spellings ("Cabudwaaq",
 # "Buuhoodle", "Diinsoor"); the IDSR workbook's District column uses much
@@ -1610,7 +1610,7 @@ if (somalia_data_available) {
 }
 
 # ---- Helper: Pakistan admin-1 boundaries (bundled, static) -----------------
-# Shipped as Data/pakistan_admin1.geojson: 7 provinces/territories dissolved
+# Shipped as Data/boundaries/pakistan/pak_admin1_dissolved.geojson: 7 provinces/territories dissolved
 # from district-level polygons (source: click_that_hood, CC-licensed OSM-
 # derived data), with a `province` field already matching our region codes
 # (Balochistan, GB, ICT, KP, Sindh, AJK, Punjab). No internet access is
@@ -2034,7 +2034,7 @@ somalia_page_ui <- if (!somalia_data_available) {
           icon("triangle-exclamation", style = "font-size:28px; color:#F4A81D; margin-bottom:12px;"),
           h3("Somalia data not available"),
           p(style = "max-width:520px; margin:0 auto;",
-            "The encrypted Somalia dataset (Data/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
+            "The encrypted Somalia dataset (Data/disease/somalia/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
             code("SOMALIA_DATA_KEY"), " environment variable isn't set (or doesn't match) on this deployment. ",
             "See scripts/somalia_process_workbook.R's header comment for how to build and configure it.")
         )
@@ -3124,7 +3124,7 @@ ui <- tagList(
     # SOMALIA
     # ----------------------------------------------------------------
     # Whole tab degrades to a single message if somalia_data_available is
-    # FALSE (missing/wrong SOMALIA_DATA_KEY, or Data/SOM_IDSR_Data.enc not
+    # FALSE (missing/wrong SOMALIA_DATA_KEY, or Data/disease/somalia/SOM_IDSR_Data.enc not
     # yet committed) -- every selectInput/radioButtons below assumes real
     # choices exist, so none of it is safe to render against the empty
     # placeholders somalia_data_available's FALSE branch sets up.
@@ -3523,7 +3523,7 @@ server <- function(input, output, session) {
     if (is.null(pak_regions_sf)) {
       return(
         ggplot() +
-          annotate("text", x = 0, y = 0, label = "Map unavailable: Data/pakistan_admin1.geojson could not be read.",
+          annotate("text", x = 0, y = 0, label = "Map unavailable: Data/boundaries/pakistan/pak_admin1_dissolved.geojson could not be read.",
                    color = who_red, size = 5) +
           theme_void()
       )

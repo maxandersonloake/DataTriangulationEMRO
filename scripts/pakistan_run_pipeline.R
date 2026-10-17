@@ -4,9 +4,9 @@
 # Sources the main extraction script and runs extract_PAK_data_main(),
 # capturing every message()/warning() raised along the way (fuzzy-match
 # notices, unresolved-name errors, header-parsing notes, etc.) plus any
-# NEW lines written to Data/failed_reports.txt during this run.
+# NEW lines written to Data/disease/pakistan/failed_reports.txt during this run.
 #
-# Writes a plain-text summary to Data/run_log.txt. This file is what the
+# Writes a plain-text summary to Data/disease/pakistan/run_log.txt. This file is what the
 # GitHub Actions workflow emails out -- see .github/workflows/update_data.yml.
 #
 # Run from the repo root: Rscript scripts/pakistan_run_pipeline.R
@@ -23,10 +23,10 @@
 
 source("scripts/pakistan_extract_bulletins.R")
 
-cases_file      <- "Data/PAK_IDSR_Data.csv"
-compliance_file <- "Data/PAK_IDSR_Compliance.csv"
-failed_log      <- "Data/failed_reports.txt"
-run_log         <- "Data/run_log.txt"
+cases_file      <- "Data/disease/pakistan/PAK_IDSR_Data.csv"
+compliance_file <- "Data/disease/pakistan/PAK_IDSR_Compliance.csv"
+failed_log      <- "Data/disease/pakistan/failed_reports.txt"
+run_log         <- "Data/disease/pakistan/run_log.txt"
 
 # Province-level (Table 1 + national compliance) is always extracted.
 # District-level tables are extracted too unless INCLUDE_DISTRICT is

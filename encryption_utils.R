@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------
 # Used to keep Somalia's IDSR data out of the (public) GitHub repo in
 # readable form, while still letting it live inside the repo as an
-# ordinary committed file (Data/SOM_IDSR_Data.enc) so Posit Connect Cloud's
+# ordinary committed file (Data/disease/somalia/SOM_IDSR_Data.enc) so Posit Connect Cloud's
 # normal "deploy straight from the repo" flow needs no extra infrastructure
 # and no runtime network call.
 #

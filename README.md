@@ -51,7 +51,7 @@ DataTriangulationEMRO/
 ├── encryption_utils.R                 Encrypt/decrypt helpers, and the Somalia page-password helpers
 ├── scripts/                           Data and deployment scripts (run from the project root)
 │   ├── pakistan_extract_bulletins.R   Downloads and parses the NIH bulletins (Pakistan)
-│   ├── pakistan_run_pipeline.R        Driver for the Pakistan pipeline; writes Data/run_log.txt
+│   ├── pakistan_run_pipeline.R        Driver for the Pakistan pipeline; writes Data/disease/pakistan/run_log.txt
 │   ├── somalia_process_workbook.R     Processes the Somalia workbook into an encrypted bundle
 │   ├── emro_prepare_boundaries.R      Builds the EMRO boundary layers from the raw shapefiles
 │   └── update_renv_manifest.R         Records package versions (renv.lock) and refreshes manifest.json
@@ -62,25 +62,30 @@ DataTriangulationEMRO/
 ├── Somalia_Raw/                       Raw Somalia workbook (git-ignored, never committed)
 ├── Reports/                           Name-matching diagnostics written by the Somalia pipeline
 └── Data/
-    ├── PAK_IDSR_Data.csv                          Pakistan case counts, province level
-    ├── PAK_IDSR_Compliance.csv                    Pakistan reporting compliance, province level
-    ├── PAK_IDSR_Data_District.csv                 Pakistan case counts, district level
-    ├── PAK_IDSR_Compliance_District.csv           Pakistan reporting compliance, district level
-    ├── failed_reports.txt, run_log.txt            Pakistan pipeline logs
-    ├── SOM_IDSR_Data.enc                          Somalia data (encrypted)
-    ├── pakistan_admin1.geojson                    Dissolved province shapes
-    ├── emro_disputed_areas.geojson                EMRO disputed areas (dashed lines)
-    ├── emro_boundaries_src/                       Raw EMRO shapefiles (input to 2_2)
-    ├── pak_admin_boundaries/
-    │   ├── pak_admin1.geojson                     Province outlines (OCHA COD)
-    │   ├── pak_admin1_emro.geojson                EMRO provinces (output of 2_2)
-    │   ├── pak_admin2.geojson                     District boundaries (OCHA COD)
-    │   ├── pak_admin3.geojson                     Tehsil boundaries (OCHA COD)
-    │   └── pak_admin2_jaffarabad_split.geojson    Districts with Jaffarabad split in two
-    └── som_admin_boundaries/
-        ├── som_admin1.geojson                     Regions (OCHA COD)
-        ├── som_admin1_emro.geojson                EMRO regions (output of 2_2)
-        └── som_admin2.geojson                     Districts (OCHA COD)
+    ├── disease/
+    │   ├── pakistan/
+    │   │   ├── PAK_IDSR_Data.csv                  Case counts, province level
+    │   │   ├── PAK_IDSR_Compliance.csv            Reporting compliance, province level
+    │   │   ├── PAK_IDSR_Data_District.csv         Case counts, district level
+    │   │   ├── PAK_IDSR_Compliance_District.csv   Reporting compliance, district level
+    │   │   └── failed_reports.txt, run_log.txt    Pipeline logs
+    │   └── somalia/
+    │       └── SOM_IDSR_Data.enc                  Somalia case counts (encrypted)
+    └── boundaries/
+        ├── emro/
+        │   ├── *.shp                              Raw EMRO shapefiles (input to emro_prepare_boundaries.R)
+        │   └── emro_disputed_areas.geojson        EMRO disputed areas (dashed lines)
+        ├── pakistan/
+        │   ├── pak_admin1_emro.geojson            EMRO provinces (output of emro_prepare_boundaries.R)
+        │   ├── pak_admin1_dissolved.geojson       Dissolved province shapes
+        │   ├── pak_admin1.geojson                 Province outlines (OCHA COD)
+        │   ├── pak_admin2.geojson                 District boundaries (OCHA COD)
+        │   ├── pak_admin3.geojson                 Tehsil boundaries (OCHA COD)
+        │   └── pak_admin2_jaffarabad_split.geojson  Districts with Jaffarabad split in two
+        └── somalia/
+            ├── som_admin1_emro.geojson            EMRO regions (output of emro_prepare_boundaries.R)
+            ├── som_admin1.geojson                 Regions (OCHA COD)
+            └── som_admin2.geojson                 Districts (OCHA COD)
 ```
 
 `pak_admin2.geojson` and `pak_admin3.geojson` are not read by the app; they are the source of `pak_admin2_jaffarabad_split.geojson`. In that file the single Jaffarabad district polygon is split into "Usta Muhammad" (the Gandakha and Usta Mohammad tehsils) and "Jaffarabad" (the remaining Jhat Pat tehsil), so the district data reported separately for each matches its own polygon.
@@ -105,7 +110,7 @@ The Somalia page needs the `SOMALIA_DATA_KEY` environment variable (see below). 
 
 ### Pakistan data (automatic)
 
-`.github/workflows/update_data.yml` runs every day at 05:00 UTC. It checks the NIH bulletin page, extracts any new or changed weeks with `scripts/pakistan_run_pipeline.R` (which sources `scripts/pakistan_extract_bulletins.R`), and commits the updated CSVs in `Data/` back to the repository. A summary of the run (new weeks, fuzzy name matches, unmatched districts, parsing warnings) is written to `Data/run_log.txt` and emailed when there is something worth reading; a separate email is sent if the run fails outright.
+`.github/workflows/update_data.yml` runs every day at 05:00 UTC. It checks the NIH bulletin page, extracts any new or changed weeks with `scripts/pakistan_run_pipeline.R` (which sources `scripts/pakistan_extract_bulletins.R`), and commits the updated CSVs in `Data/disease/pakistan/` back to the repository. A summary of the run (new weeks, fuzzy name matches, unmatched districts, parsing warnings) is written to `Data/disease/pakistan/run_log.txt` and emailed when there is something worth reading; a separate email is sent if the run fails outright.
 
 The workflow can also be started by hand from the Actions tab, with an option to skip the district-level tables. To do the same locally:
 
@@ -122,8 +127,8 @@ The Somalia workbook is not a public download, so this step is run by hand whene
 
 1. Save the workbook as `Somalia_Raw/IDSR_data.xlsx`. This folder is git-ignored, so the raw data is never committed.
 2. Set `SOMALIA_DATA_KEY` in a `.Renviron` file (the project's own `.Renviron` is git-ignored) to the passphrase that is also set as a secret environment variable on Posit Connect Cloud. The two must match exactly.
-3. Run `Rscript scripts/somalia_process_workbook.R`. It tidies and fuzzy-matches the State, Region and District names, rebuilds the case series, and writes the encrypted `Data/SOM_IDSR_Data.enc`. Any names it could not match are listed in `Reports/`.
-4. Commit and push `Data/SOM_IDSR_Data.enc` only.
+3. Run `Rscript scripts/somalia_process_workbook.R`. It tidies and fuzzy-matches the State, Region and District names, rebuilds the case series, and writes the encrypted `Data/disease/somalia/SOM_IDSR_Data.enc`. Any names it could not match are listed in `Reports/`.
+4. Commit and push `Data/disease/somalia/SOM_IDSR_Data.enc` only.
 
 `scripts/somalia_process_workbook.R` also needs `readxl` and `stringdist`, which are not dependencies of the app itself.
 
@@ -140,12 +145,12 @@ then paste the two lines it prints over those constants near the top of `app.R`.
 
 ### Boundaries
 
-The EMRO admin-1 layers and the disputed-area lines are built from the raw shapefiles in `Data/emro_boundaries_src/` by `scripts/emro_prepare_boundaries.R`. Re-run it (`Rscript scripts/emro_prepare_boundaries.R` from the project root) if any of those shapefiles are replaced. The shapefiles are stored as `.shp` files only, without attribute tables, so the script names each shape by finding which shape in the older OCHA layers it overlaps most, assumes WGS84 coordinates, and asserts 7 Pakistan provinces and 18 Somalia regions. It also:
+The EMRO admin-1 layers and the disputed-area lines are built from the raw shapefiles in `Data/boundaries/emro/` by `scripts/emro_prepare_boundaries.R`. Re-run it (`Rscript scripts/emro_prepare_boundaries.R` from the project root) if any of those shapefiles are replaced. The shapefiles are stored as `.shp` files only, without attribute tables, so the script names each shape by finding which shape in the older OCHA layers it overlaps most, assumes WGS84 coordinates, and asserts 7 Pakistan provinces and 18 Somalia regions. It also:
 
 * merges FATA into Khyber Pakhtunkhwa;
-* carries Azad Kashmir and Gilgit-Baltistan over from `pak_admin1.geojson`, because the EMRO file treats that area as disputed (it is covered by the disputed-areas layer instead), while the dashboard still reports data for both.
+* carries Azad Kashmir and Gilgit-Baltistan over from `Data/boundaries/pakistan/pak_admin1.geojson`, because the EMRO file treats that area as disputed (it is covered by the disputed-areas layer instead), while the dashboard still reports data for both.
 
-The district-level maps (OCHA COD) are unchanged by this and use `pak_admin2_jaffarabad_split.geojson` and `som_admin2.geojson`. District names in the data do not always match the boundary files exactly; `app.R` matches them through a normalisation function and a small alias table (`resolve_dist_key()` and `SOM_DISTRICT_NAME_ALIASES`), and lists any it cannot match under the district map.
+The district-level maps (OCHA COD) are unchanged by this and use `pak_admin2_jaffarabad_split.geojson` and `som_admin2.geojson` (in `Data/boundaries/pakistan/` and `Data/boundaries/somalia/`). District names in the data do not always match the boundary files exactly; `app.R` matches them through a normalisation function and a small alias table (`resolve_dist_key()` and `SOM_DISTRICT_NAME_ALIASES`), and lists any it cannot match under the district map.
 
 ### Logo, styling and text
 
