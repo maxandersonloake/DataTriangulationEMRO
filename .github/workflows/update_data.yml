@@ -49,7 +49,7 @@ jobs:
           # `|| 'true'` fallback kicks in -- district-level extraction stays
           # on by default for the automated runs.
           INCLUDE_DISTRICT: ${{ github.event.inputs.include_district || 'true' }}
-        run: Rscript scripts/run_pipeline.R
+        run: Rscript scripts/pakistan_run_pipeline.R
 
       - name: Check whether any data changed
         id: git_status
