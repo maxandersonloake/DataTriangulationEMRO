@@ -3097,7 +3097,7 @@ process_one_bulletin <- function(week, year, link, title,
   # notices, blank-cell repairs, unresolved names, header-splitting notes,
   # etc.) -- so a persistent, on-disk record of these exists regardless of
   # how/where process_one_bulletin() is called from, not just when it happens
-  # to be run under a caller (like run_pipeline.R) that sets up its own
+  # to be run under a caller (like scripts/pakistan_run_pipeline.R) that sets up its own
   # message/warning capture.
   log_line <- function(kind, text){
     dir_create(path_dir(failed_log))
@@ -3216,7 +3216,7 @@ process_one_bulletin <- function(week, year, link, title,
   },
   # Non-exiting handlers: log the condition, then let it keep propagating
   # (no invokeRestart) so console printing and any caller-level handler --
-  # e.g. run_pipeline.R's own withCallingHandlers that builds run_log.txt --
+  # e.g. scripts/pakistan_run_pipeline.R's own withCallingHandlers that builds run_log.txt --
   # still see it and behave exactly as before.
   warning = function(w) log_line("WARNING", trimws(conditionMessage(w))),
   message = function(m) log_line("MESSAGE", trimws(conditionMessage(m)))
@@ -3261,7 +3261,7 @@ remove_existing_week <- function(file_loc, year, week){
 # ---- Main entry point ----------------------------------------------------
 # Always returns (invisibly) a list(new = <n>, changed = <n>) summarising
 # what it did, even when there's nothing to do -- this is what the CI driver
-# script (run_pipeline.R) uses to build its run summary.
+# script (scripts/pakistan_run_pipeline.R) uses to build its run summary.
 extract_PAK_data_main <- function(extract_all = FALSE,
                                   cases_file               = 'Data/PAK_IDSR_Data.csv',
                                   compliance_file          = 'Data/PAK_IDSR_Compliance.csv',

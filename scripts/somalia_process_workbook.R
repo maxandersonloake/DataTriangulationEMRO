@@ -26,7 +26,7 @@
 #     already be in renv.lock -- that's fine, this script never runs on
 #     Posit Connect Cloud). stringdist powers the fuzzy State/Region/
 #     District name matching below, mirroring Pakistan's own
-#     1_1_DownloadData_PAK_v4.R ingestion pipeline.
+#     scripts/pakistan_extract_bulletins.R ingestion pipeline.
 #   - Put the raw workbook somewhere OUTSIDE the repo, or inside the
 #     Somalia_Raw/ folder (already listed in .gitignore so it's never
 #     accidentally committed even if you drop it there), and point
@@ -81,7 +81,7 @@ raw <- readxl::read_excel(SOM_RAW_XLSX, sheet = SOM_SHEET)
 # ----------------------------------------------------------------
 # Ports the region_lookup / district_region_lookup + build_matcher() /
 # fuzzy_match() / is_subsequence() system from Pakistan's own
-# 1_1_DownloadData_PAK_v4.R ingestion pipeline. Rather than a short manual
+# scripts/pakistan_extract_bulletins.R ingestion pipeline. Rather than a short manual
 # alias table covering only the handful of misspellings someone happened
 # to notice, every place name we know about lives in one of the three
 # lookups below as a canonical spelling plus a list of known variant
@@ -108,7 +108,7 @@ raw <- readxl::read_excel(SOM_RAW_XLSX, sheet = SOM_SHEET)
 # like Pakistan's own district_region_lookup.
 # ================================================================
 
-# ---- Generic helpers (ported from 1_1_DownloadData_PAK_v4.R) ------------
+# ---- Generic helpers (ported from scripts/pakistan_extract_bulletins.R) ------------
 
 # TRUE if every character of `needle` appears in `haystack`, in the same
 # order (not necessarily contiguously). Used only as fuzzy_match()'s

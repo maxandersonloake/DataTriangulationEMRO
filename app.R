@@ -54,7 +54,7 @@ REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
 
 # EMRO-approved admin-1 boundaries for the Data visualisation tab's interactive
 # region maps, plus the EMRO disputed-areas layer drawn on top of them as a
-# dashed line. All three are prepared by 2_2_PrepareBoundaries_EMRO.R from the
+# dashed line. All three are prepared by scripts/emro_prepare_boundaries.R from the
 # raw shapefiles supplied by WHO EMRO (Data/emro_boundaries_src/).
 #   - Pakistan: 7 provinces (the five EMRO provinces plus Azad Kashmir and
 #     Gilgit Baltistan, carried over from the older pak_admin1.geojson since
@@ -217,7 +217,7 @@ map_disclaimer_ui <- function(show_disputed_key = FALSE) {
 # ---- Load disease data ----------------------------------------------------
 # A row's Cases can legitimately be NA for exactly one reason: an explicit
 # "NR" cell in the source bulletin (Status == "NR", added by
-# 1_1_DownloadData_PAK_v3.R). That's kept as a real row rather than
+# scripts/pakistan_extract_bulletins.R). That's kept as a real row rather than
 # dropped, so it can be distinguished downstream from a disease that
 # simply never appeared as a row in a given week's table at all (which has
 # no CSV row to begin with, and so is naturally absent here too -- see the
@@ -301,7 +301,7 @@ raw_district_data <- read_csv(DISTRICT_DATA_PATH, show_col_types = FALSE) %>%
 # The extraction pipeline appends the source bulletin's own printed
 # province "Total" row alongside the real district rows, as a pseudo-row
 # with District == "Total" (see convert_district_cases_table() in
-# 1_1_DownloadData_PAK_v4.R). It's split out here into its own table --
+# scripts/pakistan_extract_bulletins.R). It's split out here into its own table --
 # used by get_province_disease_series() below as the authoritative
 # province-level figure -- and removed from raw_district_data so it never
 # shows up as a fake "district" in the per-district rows/choices built from
@@ -355,7 +355,7 @@ provinces_without_district_data <- setdiff(location_choices[location_choices != 
 # Unlike Pakistan's data (public NIH bulletins, so the CSVs above are
 # committed to the repo in plain readable form), the Somalia workbook isn't
 # public -- so only an ENCRYPTED bundle (Data/SOM_IDSR_Data.enc, built by
-# 2_1_ProcessData_SOM.R) is committed. It's decrypted here at app start-up
+# scripts/somalia_process_workbook.R) is committed. It's decrypted here at app start-up
 # using the SOMALIA_DATA_KEY secret environment variable (set on Posit
 # Connect Cloud's "Environment variables" panel for this app -- never
 # committed to git). If that variable is unset/wrong, or the file is
@@ -382,7 +382,7 @@ if (somalia_data_available) {
 
   # Whether there's any real compliance/completeness data to divide by at
   # all -- both compliance_data_som and district_compliance_data_som are
-  # currently ALWAYS shipped empty (see 2_1_ProcessData_SOM.R's own
+  # currently ALWAYS shipped empty (see scripts/somalia_process_workbook.R's own
   # comment), so every "Reported vs Projected total cases" control for
   # Somalia is hidden below rather than offered with nothing behind it.
   # This flips on its own, with no further app.R changes, the moment a
@@ -1043,7 +1043,7 @@ get_district_map_data <- function(disease, asof, value_col = "Reported") {
 # usable both as a current value and as a baseline contributor -- this
 # distinction is preserved end-to-end from the extraction pipeline through
 # to here:
-#   - the extraction pipeline (1_1_DownloadData_PAK_v3.R, convert_cases_table)
+#   - the extraction pipeline (scripts/pakistan_extract_bulletins.R, convert_cases_table)
 #     converts the literal token "NR" to NA but KEEPS that row (Status =
 #     "NR"), so the CSV has a row whenever the disease was in that week's
 #     table -- whether the reported value was a real count (including 0)
@@ -2036,7 +2036,7 @@ somalia_page_ui <- if (!somalia_data_available) {
           p(style = "max-width:520px; margin:0 auto;",
             "The encrypted Somalia dataset (Data/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
             code("SOMALIA_DATA_KEY"), " environment variable isn't set (or doesn't match) on this deployment. ",
-            "See 2_1_ProcessData_SOM.R's header comment for how to build and configure it.")
+            "See scripts/somalia_process_workbook.R's header comment for how to build and configure it.")
         )
       } else {
       tabsetPanel(
@@ -5383,7 +5383,7 @@ server <- function(input, output, session) {
       # The State's own row, from raw_data_som's State-grain rollup (via
       # get_all_disease_series(), which keeps IsNR) -- rather than summing
       # district_series itself, so a state that's explicitly NR (every one of
-      # its districts NR that week -- see 2_1_ProcessData_SOM.R's rollup
+      # its districts NR that week -- see scripts/somalia_process_workbook.R's rollup
       # rule) still displays as "NR" here, exactly like a Pakistan province
       # row.
       state_series <- get_all_disease_series(st, data = raw_data_som, compliance = compliance_data_som) %>%

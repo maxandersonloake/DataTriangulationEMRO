@@ -9,7 +9,7 @@
 #
 # The encryption key is never committed. It's a single passphrase, read
 # from the SOMALIA_DATA_KEY environment variable at both ends:
-#   - Locally, when you (re-)run 2_1_ProcessData_SOM.R to refresh the
+#   - Locally, when you (re-)run scripts/somalia_process_workbook.R to refresh the
 #     encrypted bundle -- set it in your own .Renviron.
 #   - On Posit Connect Cloud, as a secret "environment variable" attached
 #     to the deployed app (Publish settings -> Environment variables).
@@ -20,7 +20,7 @@
 # of the Somalia tab's content, so a missing/wrong key never takes the
 # whole dashboard down.
 #
-# Sourced by both app.R and 2_1_ProcessData_SOM.R.
+# Sourced by both app.R and scripts/somalia_process_workbook.R.
 # ================================================================
 
 # openssl is already a transitive dependency in renv.lock (via rsconnect/

@@ -1,5 +1,5 @@
 # =============================================================================
-# 2_2_PrepareBoundaries_EMRO.R
+# scripts/emro_prepare_boundaries.R
 #
 # One-off preparation of the EMRO-approved admin-1 boundary layers used by the
 # Data visualisation tab's maps, from the raw shapefiles supplied by WHO EMRO
@@ -28,7 +28,7 @@
 #   Data/som_admin_boundaries/som_admin1_emro.geojson   18 regions  (adm1_name)
 #   Data/emro_disputed_areas.geojson                    6 disputed polygons
 #
-# Run from the project root:  Rscript 2_2_PrepareBoundaries_EMRO.R
+# Run from the project root:  Rscript scripts/emro_prepare_boundaries.R
 # =============================================================================
 
 suppressPackageStartupMessages({

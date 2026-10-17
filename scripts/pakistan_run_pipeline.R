@@ -9,19 +9,19 @@
 # Writes a plain-text summary to Data/run_log.txt. This file is what the
 # GitHub Actions workflow emails out -- see .github/workflows/update_data.yml.
 #
-# Run from the repo root: Rscript run_pipeline.R
+# Run from the repo root: Rscript scripts/pakistan_run_pipeline.R
 #
 # By default this extracts BOTH province-level (Table 1) and district-level
 # data. To run province-level only (faster, skips the district case/
 # compliance tables entirely), set the INCLUDE_DISTRICT environment
 # variable to "false"/"0"/"no" before invoking Rscript, e.g.:
-#   INCLUDE_DISTRICT=false Rscript run_pipeline.R
+#   INCLUDE_DISTRICT=false Rscript scripts/pakistan_run_pipeline.R
 # In GitHub Actions, set it via `env: INCLUDE_DISTRICT: "false"` on the step,
 # or as a workflow_dispatch input passed through the same way -- no need to
 # edit this file to change it per-run.
 # ================================================================
 
-source("1_1_DownloadData_PAK_v4.R")
+source("scripts/pakistan_extract_bulletins.R")
 
 cases_file      <- "Data/PAK_IDSR_Data.csv"
 compliance_file <- "Data/PAK_IDSR_Compliance.csv"

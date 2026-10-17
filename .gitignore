@@ -5,7 +5,7 @@
 
 # Raw Somalia IDSR workbook -- never commit this. The dashboard only ever
 # reads the encrypted, pre-processed Data/SOM_IDSR_Data.enc (built from it
-# by 2_1_ProcessData_SOM.R), which IS committed -- see that script's header
+# by scripts/somalia_process_workbook.R), which IS committed -- see that script's header
 # comment.
 Somalia_Raw/
 .Renviron
