@@ -49,7 +49,7 @@ jobs:
           # `|| 'true'` fallback kicks in -- district-level extraction stays
           # on by default for the automated runs.
           INCLUDE_DISTRICT: ${{ github.event.inputs.include_district || 'true' }}
-        run: Rscript run_pipeline.R
+        run: Rscript scripts/pakistan_run_pipeline.R
 
       - name: Check whether any data changed
         id: git_status
@@ -75,7 +75,7 @@ jobs:
           # Send if there's anything worth reading: new/changed data, or
           # any ERROR/WARNING section in today's run log. Stays silent on
           # an ordinary day where the bulletin page simply has nothing new.
-          if grep -qE "^=== (ERROR|WARNING)" Data/run_log.txt || [ "${{ steps.git_status.outputs.changed }}" = "true" ]; then
+          if grep -qE "^=== (ERROR|WARNING)" Data/disease/pakistan/run_log.txt || [ "${{ steps.git_status.outputs.changed }}" = "true" ]; then
             echo "send=true" >> "$GITHUB_OUTPUT"
           else
             echo "send=false" >> "$GITHUB_OUTPUT"
@@ -92,7 +92,7 @@ jobs:
           subject: "PAK IDSR data pipeline update — ${{ github.run_id }}"
           to: ${{ secrets.MAIL_TO }}
           from: PAK IDSR Pipeline
-          body: file://Data/run_log.txt
+          body: file://Data/disease/pakistan/run_log.txt
 
       - name: Email failure alert
         # Fires only if an earlier step in this job failed outright (e.g.
