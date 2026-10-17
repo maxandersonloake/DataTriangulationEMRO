@@ -1,7 +1,7 @@
 # DataTriangulationEMRO
 Automated collection and presentation of public health data to support the World Health Organization (WHO) Health Emergency Department (WHE) Regional Office for the Eastern Mediterranean Region (EMRO). 
 
-**Disclaimer:** This project is an independent volunteer contribution created as part of the UN volunteers progrram, and the author is not employed by the World Health Organization (WHO). This repository is provided for research and software development purposes only and should not be interpreted as an official WHO product or endorsement.
+**Disclaimer:** This project is an independent volunteer contribution created as part of the UN volunteers program, and the author is not employed by the World Health Organization (WHO). This repository is provided for research and software development purposes only and should not be interpreted as an official WHO product or endorsement.
 
 **Contact:** Max Anderson Loake, mandersonloake@gmail.com
 

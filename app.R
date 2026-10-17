@@ -42,6 +42,14 @@ library(leaflet)
 
 source("encryption_utils.R")
 
+# ---- Somalia page password ----------------------------------------------
+# The repo is public, so only a salted slow hash is stored here, never the
+# password itself. To change it: source("encryption_utils.R") and run
+# make_page_password_hash("new password"), then paste its two lines over these.
+SOMALIA_PAGE_PW_SALT <- "429e60872a0131abd96906f16287113d"
+SOMALIA_PAGE_PW_HASH <- "0dfe79052cd103ced020e0e0beb98847f9ea7f80e6969657a4f693d2baa5a2c7"
+SOMALIA_LOGIN_MAX_ATTEMPTS <- 5   # wrong tries allowed per browser session
+
 REGIONS_GEOJSON <- "Data/pakistan_admin1.geojson"
 
 # EMRO-approved admin-1 boundaries for the Data visualisation tab's interactive
@@ -2015,6 +2023,461 @@ draw_region_labels <- function(map, coords, name_lines, label_html, zoom_ref, gr
 # =================================================================
 # UI
 # =================================================================
+# =================================================================
+# The Somalia page's content (all its sub-tabs), kept as its own object so the
+# server can hand it to the browser only AFTER the password gate is passed --
+# see output$somalia_gated. Until then none of it is rendered or sent.
+# =================================================================
+somalia_page_ui <- if (!somalia_data_available) {
+        div(
+          style = "padding:60px 24px; text-align:center; color:#777;",
+          icon("triangle-exclamation", style = "font-size:28px; color:#F4A81D; margin-bottom:12px;"),
+          h3("Somalia data not available"),
+          p(style = "max-width:520px; margin:0 auto;",
+            "The encrypted Somalia dataset (Data/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
+            code("SOMALIA_DATA_KEY"), " environment variable isn't set (or doesn't match) on this deployment. ",
+            "See 2_1_ProcessData_SOM.R's header comment for how to build and configure it.")
+        )
+      } else {
+      tabsetPanel(
+        id = "som_subtab",
+        type = "tabs",
+
+        tabPanel(
+          "Home",
+          div(
+            class = "page-plain-bg",
+            div(
+              style = "max-width: 1200px; margin: 0; padding-left: 24px;",
+              h4("About this dashboard"),
+              p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern ",
+                "Mediterranean (EMRO) in monitoring disease case reporting from Somalia, provided by the ",
+                "Integrated Disease Surveillance and Response (IDSR) weekly workbook."),
+              p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
+                "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, ",
+                "and ", strong("Weekly summary table"), " for the full week-by-week breakdown."),
+              h4("Data sources and limitations", style = "margin-top: 20px;"),
+              tags$ul(
+                tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are mostly ",
+                        "suspected cases, not laboratory-confirmed diagnoses. Treat them as an early-warning signal, ",
+                        "not a confirmed count of cases."),
+                tags$li(strong("Reporting compliance not yet available: "), "Unlike the Pakistan dashboard, there is ",
+                        "currently no reporting-compliance (expected vs received reports) data for Somalia, so the ",
+                        strong("Projected total cases"), " option will show no data until a compliance file is ",
+                        "added -- the underlying case counts (", strong("Reported cases"), ") are complete and ",
+                        "unaffected."),
+                tags$li(strong("Geographic coverage: "), "Regions match Somalia's State-level administrative ",
+                        "divisions: ", paste(location_choices_som[location_choices_som != "National"], collapse = ", "), "."),
+                tags$li(strong("Missing data: "), "A district/week with no submitted report at all is treated as ",
+                        "non-reported (NR) for every disease that week. A district that submitted a report, but ",
+                        "left a specific disease's count blank, is treated as NR for that disease only -- not as ",
+                        "zero cases.")
+              ),
+              h4("Methodology", style = "margin-top: 20px;"),
+              h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
+              p("Using the number of reported cases and the compliance percentage, we can estimate the true number ",
+                "of cases for a given week and region. We use a simple projection: reported cases ÷ (compliance ",
+                "% / 100). This assumes non-reporting sites have a similar case rate to reporting sites, which may ",
+                "not hold -- particularly during active outbreaks or access constraints -- so treat projected ",
+                "figures as a rough estimate, not a precise count. ", strong("A compliance file for Somalia hasn't ",
+                "been added yet"), " -- this calculation is already wired up dashboard-wide and will start ",
+                "producing projected figures the moment one is."),
+              h5("Handling non-reported provinces", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
+                "data comparison between total case counts. ", strong("Keep province for reported weeks"), " (the ",
+                "default) allows the region to contribute to total case counts during its reported weeks, while ",
+                "contributing 0 when there is non-reporting. ", strong("Remove province entirely"), " instead drops ",
+                "that region from the calculation for every week being shown, therefore enabling a like-to-like ",
+                "comparison. Under this setting, by default, regions with any non-reported weeks over the ",
+                "visualised window are removed. These removed regions are listed as tick boxes (ticked = removed), ",
+                "so any of them can be added back in by hand."),
+              h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+              p("Alerts are generated using the same CUSUM/C2 aberration detection method as the Pakistan ",
+                "dashboard. For a given disease and location, we look at the 9 weeks immediately before the week ",
+                "being evaluated. We drop the 2 most recent of those weeks (a “guard band”), so an ",
+                "emerging outbreak can't inflate its own baseline. The mean (μ) and standard deviation (σ) ",
+                "of the remaining 7 baseline weeks set three thresholds: T1 = μ + 2σ (yellow), ",
+                "T2 = μ + 3σ (medium red), and T3 = μ + 4σ (dark red)."),
+              div(
+                class = "info-card",
+                style = "border-left: 6px solid #B0121A; background-color: #FDF2F2; margin-top: 24px;",
+                h4("Disclaimer", style = "color:#B0121A;"),
+                p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support ",
+                  "the exploratory review and interpretation of surveillance data. Its outputs, including ",
+                  "statistical signals and projected estimates, are preliminary and require validation. They do ",
+                  "not constitute official WHO epidemiological assessments, alerts, or recommendations and do not ",
+                  "replace established Public Health Intelligence (PHI) processes, expert epidemiological review, ",
+                  "verification by national authorities, or formal WHO information products. The underlying case ",
+                  "data is not publicly redistributed through this dashboard -- see the ", strong("References"),
+                  " tab.")
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "Alerts",
+          div(
+            style = "padding-top: 16px; padding-bottom: 28px;",
+            sidebarLayout(
+              sidebarPanel(
+                width = 3,
+                selectInput("asof_week_alerts_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
+                if (somalia_has_compliance) {
+                  tagList(
+                    radioButtons("case_type_alerts_som", "Case counts to evaluate",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported"),
+                    tags$p(
+                      style = "font-size: 12px; color: #555;",
+                      strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
+                      "cases by the compliance percentage. See the ", strong("Home"), " tab for full details."
+                    )
+                  )
+                },
+                tags$hr(),
+                uiOutput("alerts_nr_control_som"),
+                tags$p(
+                  style = "font-size: 12px; color: #555;",
+                  "When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
+                  "data comparison between total case counts. Removing these regions entirely enables like-to-like ",
+                  "comparison between weeks. See the ", strong("Home"), " tab for full details."
+                )
+              ),
+              mainPanel(width = 9, uiOutput("alerts_output_som"))
+            )
+          )
+        ),
+
+        tabPanel(
+          "Data visualisation",
+          div(
+            style = "padding: 14px 24px;",
+            div(
+              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
+              div(style = "flex: 1 1 0;", selectInput("disease_som", "Disease", choices = disease_choices_som, selected = disease_choices_som[1], width = "100%")),
+              div(style = "flex: 1 1 0;", selectInput("asof_week_viz_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM, width = "100%"))
+            ),
+            div(
+              class = "info-disclosure",
+              div(
+                style = "font-size: 12.5px; color: #555;",
+                p(style = "margin-bottom: 6px;", strong("Calculations:")),
+                if (somalia_has_compliance) {
+                  p(style = "margin-bottom: 6px;",
+                    strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                    "cases by the compliance percentage.")
+                },
+                p(style = "margin-bottom: 6px;",
+                  strong("Handling non-reported provinces:"), " choose whether a region that is non-reported for ",
+                  "some visualised weeks just contributes 0 for those weeks, or is also excluded from every other ",
+                  "week to enable a like-to-like comparison."),
+                p(style = "margin-bottom: 6px;",
+                  strong("SD"), " shows how many standard deviations a week's case count is from its expected ",
+                  "baseline, using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 ",
+                  "weeks dropped)."),
+                p(style = "margin-bottom: 0;", "See the ", strong("Home"), " tab for full details.")
+              )
+            ),
+            # Flex row: same bottom-border alignment as Pakistan's trend + map row.
+            fluidRow(
+              style = "display:flex; flex-wrap:wrap;",
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                  h4("Weekly case trend", style = "margin-top:0; margin-bottom:8px; font-size:17px;"),
+                  # State, then (optionally) a region within it -- the region
+                  # list is refreshed from the chosen state on the server.
+                  div(
+                    style = "display:flex; gap:16px;",
+                    div(style = "flex: 1 1 0;", selectInput("location_som", "State", choices = location_choices_som, selected = "National", width = "100%")),
+                    div(style = "flex: 1 1 0;", selectInput("region_som", "Region", choices = c("All regions", region_choices_som), selected = "All regions", width = "100%"))
+                  ),
+                  uiOutput("trend_subtitle_som"),
+                  plotlyOutput("trend_plot_som", height = "420px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                    uiOutput("year_selector_som"),
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_som", "Case counts to show",
+                                   choices = c("Reported cases only" = "reported",
+                                               "Projected total cases" = "projected",
+                                               "Both" = "both"),
+                                   selected = "reported", inline = TRUE)
+                    },
+                    uiOutput("trend_nr_control_som")
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                # ---- Static ggplot version of this map (region_map_som) --
+                # commented out in favour of the interactive leaflet version
+                # below. Left intact (not deleted) so it can be swapped back
+                # in later if needed; its server-side output
+                # (output$region_map_som) and inputs (case_type_map_som) are
+                # untouched. ----
+                # div(
+                #   class = "viz-panel",
+                #   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                #   h4("Deviation from expected baseline (SD), by state", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                #   uiOutput("map_subtitle_som"),
+                #   plotOutput("region_map_som", height = "420px"),
+                #   div(
+                #     class = "viz-panel-controls",
+                #     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                #     if (somalia_has_compliance) {
+                #       radioButtons("case_type_map_som", "Case counts to colour the map by",
+                #                    choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                #                    selected = "reported", inline = TRUE)
+                #     }
+                #   )
+                # ),
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+                  h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("map_subtitle_leaflet_som"),
+                  leafletOutput("region_map_leaflet_som", height = "540px"),
+                  map_disclaimer_ui(show_disputed_key = FALSE),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                    sd_gradient_legend_ui(show_no_data = TRUE),
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
+                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                   selected = "reported", inline = TRUE)
+                    },
+                    uiOutput("region_map_boundary_note_som")
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                width = 12,
+                div(
+                  class = "viz-panel",
+                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
+                  h4("State contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
+                  uiOutput("stack_subtitle_som"),
+                  plotlyOutput("region_stack_plot_som", height = "380px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                    if (somalia_has_compliance) {
+                      radioButtons("case_type_stack_som", "Case counts to show",
+                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                   selected = "reported", inline = TRUE)
+                    },
+                    uiOutput("stack_nr_control_som")
+                  )
+                )
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "Weekly summary table",
+          div(
+            style = "padding-top: 16px;",
+            sidebarLayout(
+              sidebarPanel(
+                width = 3,
+                selectInput("location_tbl_som", "Location", choices = location_choices_som, selected = "National"),
+                selectInput("asof_week_tbl_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
+                numericInput("n_weeks_tbl_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+                if (somalia_has_compliance) {
+                  tagList(
+                    radioButtons("case_type_tbl_som", "Case counts to display",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported"),
+                    tags$p(
+                      style = "font-size: 12px; color: #555;",
+                      strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
+                      "cases by the compliance percentage."
+                    )
+                  )
+                },
+                conditionalPanel(
+                  condition = "input.location_tbl_som == 'National'",
+                  tags$p(
+                    style = "font-size: 12px; color: #555;",
+                    "When exploring national data, this can be addressed using the ",
+                    strong("handling non-reported provinces"), " settings. See the ", strong("Home"), " tab for full details."
+                  )
+                ),
+                tags$hr(),
+                uiOutput("tbl_nr_control_som"),
+                conditionalPanel(
+                  condition = "input.location_tbl_som == 'National'",
+                  tags$p(
+                    style = "font-size: 12px; color: #555;",
+                    "When exploring National data, inconsistent non-reporting in some regions results in ",
+                    "inconsistent data comparison between total case counts. Removing these regions entirely ",
+                    "enables like-to-like comparison between weeks. See the ", strong("Home"), " tab for full details."
+                  )
+                ),
+                tags$hr(),
+                div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
+                sd_gradient_legend_ui(show_no_data = FALSE),
+                tags$p(
+                  style = "font-size: 12px; color: #555; margin-top: 8px;",
+                  "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+                )
+              ),
+              mainPanel(
+                width = 9,
+                p(style = "font-size: 13px; color:#555;",
+                  icon("triangle-exclamation"), " Looking for a scan across ", strong("all"), " regions and diseases at once? ",
+                  "See the ", strong("Alerts"), " tab."),
+                DTOutput("weekly_table_som")
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "District-level data",
+          div(
+            style = "padding: 14px 24px;",
+            div(
+              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
+              div(style = "flex: 1 1 0;",
+                  selectInput("disease_district_tbl_som", "Disease", choices = district_disease_choices_som,
+                              selected = district_disease_choices_som[1], width = "100%")),
+              div(style = "flex: 1 1 0;",
+                  selectInput("asof_week_district_tbl_som", "As of week", choices = WEEK_CHOICES_SOM,
+                              selected = LATEST_WEEK_CHOICE_SOM, width = "100%")),
+              if (somalia_has_compliance) {
+                div(style = "flex: 1 1 0;",
+                    radioButtons("case_type_district_tbl_som", "Case counts to display",
+                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
+                                 selected = "reported", inline = TRUE))
+              }
+            ),
+
+            # ---- Weekly case trend (left) + map (right) -----------------------
+            # Mirrors Pakistan's own district tab exactly: a State + District
+            # selector row on the trend panel (State plain, District cascading
+            # off it), and no state selector anywhere else -- the map always
+            # shows every state/district at once, and the table below lists
+            # every state with its districts nested underneath, expandable.
+            fluidRow(
+              style = "display:flex; flex-wrap:wrap;",
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  h4("Weekly case trend"),
+                  uiOutput("district_trend_subtitle_som"),
+                  div(
+                    style = "display:flex; gap:16px; margin-bottom:10px;",
+                    div(style = "flex:1;",
+                        selectInput("district_curve_state_som", "State",
+                                    choices = provinces_with_district_data_som,
+                                    selected = provinces_with_district_data_som[1], width = "100%")),
+                    div(style = "flex:1;", uiOutput("district_curve_district_ui_som"))
+                  ),
+                  plotlyOutput("district_trend_plot_som", height = "360px"),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "min-height: 60px;",
+                    uiOutput("district_year_selector_som")
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                div(
+                  class = "viz-panel",
+                  h4("District map"),
+                  uiOutput("district_map_subtitle_som"),
+                  leafletOutput("district_map_som", height = "360px"),
+                  map_disclaimer_ui(show_disputed_key = FALSE),
+                  div(
+                    class = "viz-panel-controls",
+                    style = "min-height: 60px;",
+                    sd_gradient_legend_ui(show_no_data = TRUE),
+                    tags$p(
+                      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
+                      "SD shows how many standard deviations a week's case count is from its expected baseline, ",
+                      "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). ",
+                      "See the ", strong("Home"), " tab for full details."
+                    ),
+                    uiOutput("district_map_boundary_note_som")
+                  )
+                )
+              )
+            ),
+
+            div(
+              class = "viz-panel",
+              style = "margin-top:16px;",
+              fluidRow(
+                column(
+                  width = 3,
+                  numericInput("n_weeks_district_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
+                  tags$hr(),
+                  div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
+                  sd_gradient_legend_ui(show_no_data = FALSE),
+                  tags$p(
+                    style = "font-size: 12px; color: #555; margin-top: 8px;",
+                    "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
+                  ),
+                  tags$p(
+                    style = "font-size: 12px; color: #555; margin-top: 8px;",
+                    strong(style = "color:inherit;", "NR"), " means the district submitted no report at all that ",
+                    "week. A blank cell means the district reported, but left this specific disease's count blank."
+                  )
+                ),
+                column(
+                  width = 9,
+                  p(
+                    style = "font-size: 13px; color:#555;",
+                    icon("circle-info"), " Click the arrow on a state row to expand district-level case counts within it."
+                  ),
+                  DTOutput("district_table_som")
+                )
+              )
+            )
+          )
+        ),
+
+        tabPanel(
+          "References",
+          div(
+            class = "page-tint-bg",
+            div(
+              style = "max-width: 1000px; margin: 0; padding-left: 24px;",
+              div(
+                style = "padding-top: 18px;",
+                h4("Primary data source"),
+                p("Weekly IDSR case counts for Somalia."),
+                h4("District-level admin boundaries", style = "margin-top: 20px;"),
+                p("The outlines used on Somalia's maps for the district-level data tab come from the ",
+                  "UN OCHA Common Operational Datasets (COD) for Somalia administrative boundaries:"),
+                tags$a(href = "https://data.humdata.org/dataset/cod-ab-som#data-and-resources", target = "_blank",
+                       "https://data.humdata.org/dataset/cod-ab-som#data-and-resources"),
+                h4("Alert detection methodology", style = "margin-top: 20px;"),
+                p("The Alerts tab and the SD-based shading on the weekly summary table use the same modified ",
+                  "CUSUM/C2 aberration detection method as the Pakistan dashboard (rolling 9-week baseline, most ",
+                  "recent 2 weeks dropped as a guard band). See the ", strong("Home"), " tab for a full explanation ",
+                  "of how it's calculated."),
+                h4("Contact", style = "margin-top: 20px;"),
+                p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
+              )
+            )
+          )
+        )
+      )
+      }  # close somalia_data_available else-branch
+
 ui <- tagList(
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "who_brand.css?v=18"),
@@ -2668,455 +3131,9 @@ ui <- tagList(
     # =========================================================
     tabPanel(
       "Somalia",
-      if (!somalia_data_available) {
-        div(
-          style = "padding:60px 24px; text-align:center; color:#777;",
-          icon("triangle-exclamation", style = "font-size:28px; color:#F4A81D; margin-bottom:12px;"),
-          h3("Somalia data not available"),
-          p(style = "max-width:520px; margin:0 auto;",
-            "The encrypted Somalia dataset (Data/SOM_IDSR_Data.enc) either hasn't been generated yet, or the ",
-            code("SOMALIA_DATA_KEY"), " environment variable isn't set (or doesn't match) on this deployment. ",
-            "See 2_1_ProcessData_SOM.R's header comment for how to build and configure it.")
-        )
-      } else {
-      tabsetPanel(
-        id = "som_subtab",
-        type = "tabs",
-
-        tabPanel(
-          "Home",
-          div(
-            class = "page-plain-bg",
-            div(
-              style = "max-width: 1200px; margin: 0; padding-left: 24px;",
-              h4("About this dashboard"),
-              p("This dashboard supports the World Health Organisation (WHO) Regional Office for the Eastern ",
-                "Mediterranean (EMRO) in monitoring disease case reporting from Somalia, provided by the ",
-                "Integrated Disease Surveillance and Response (IDSR) weekly workbook."),
-              p("Check the ", strong("Alerts"), " tab for a scan of every region and disease for unusually large ",
-                "increases, use ", strong("Data visualisation"), " to explore weekly trends by disease and region, ",
-                "and ", strong("Weekly summary table"), " for the full week-by-week breakdown."),
-              h4("Data sources and limitations", style = "margin-top: 20px;"),
-              tags$ul(
-                tags$li(strong("Suspected vs confirmed cases: "), "Case counts reported through IDSR are mostly ",
-                        "suspected cases, not laboratory-confirmed diagnoses. Treat them as an early-warning signal, ",
-                        "not a confirmed count of cases."),
-                tags$li(strong("Reporting compliance not yet available: "), "Unlike the Pakistan dashboard, there is ",
-                        "currently no reporting-compliance (expected vs received reports) data for Somalia, so the ",
-                        strong("Projected total cases"), " option will show no data until a compliance file is ",
-                        "added -- the underlying case counts (", strong("Reported cases"), ") are complete and ",
-                        "unaffected."),
-                tags$li(strong("Geographic coverage: "), "Regions match Somalia's State-level administrative ",
-                        "divisions: ", paste(location_choices_som[location_choices_som != "National"], collapse = ", "), "."),
-                tags$li(strong("Missing data: "), "A district/week with no submitted report at all is treated as ",
-                        "non-reported (NR) for every disease that week. A district that submitted a report, but ",
-                        "left a specific disease's count blank, is treated as NR for that disease only -- not as ",
-                        "zero cases.")
-              ),
-              h4("Methodology", style = "margin-top: 20px;"),
-              h5("Projected total cases", style = "margin-bottom: 4px; color: var(--who-navy); font-size: 14px;"),
-              p("Using the number of reported cases and the compliance percentage, we can estimate the true number ",
-                "of cases for a given week and region. We use a simple projection: reported cases ÷ (compliance ",
-                "% / 100). This assumes non-reporting sites have a similar case rate to reporting sites, which may ",
-                "not hold -- particularly during active outbreaks or access constraints -- so treat projected ",
-                "figures as a rough estimate, not a precise count. ", strong("A compliance file for Somalia hasn't ",
-                "been added yet"), " -- this calculation is already wired up dashboard-wide and will start ",
-                "producing projected figures the moment one is."),
-              h5("Handling non-reported provinces", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
-              p("When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
-                "data comparison between total case counts. ", strong("Keep province for reported weeks"), " (the ",
-                "default) allows the region to contribute to total case counts during its reported weeks, while ",
-                "contributing 0 when there is non-reporting. ", strong("Remove province entirely"), " instead drops ",
-                "that region from the calculation for every week being shown, therefore enabling a like-to-like ",
-                "comparison. Under this setting, by default, regions with any non-reported weeks over the ",
-                "visualised window are removed. These removed regions are listed as tick boxes (ticked = removed), ",
-                "so any of them can be added back in by hand."),
-              h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
-              p("Alerts are generated using the same CUSUM/C2 aberration detection method as the Pakistan ",
-                "dashboard. For a given disease and location, we look at the 9 weeks immediately before the week ",
-                "being evaluated. We drop the 2 most recent of those weeks (a “guard band”), so an ",
-                "emerging outbreak can't inflate its own baseline. The mean (μ) and standard deviation (σ) ",
-                "of the remaining 7 baseline weeks set three thresholds: T1 = μ + 2σ (yellow), ",
-                "T2 = μ + 3σ (medium red), and T3 = μ + 4σ (dark red)."),
-              div(
-                class = "info-card",
-                style = "border-left: 6px solid #B0121A; background-color: #FDF2F2; margin-top: 24px;",
-                h4("Disclaimer", style = "color:#B0121A;"),
-                p(strong("Disclaimer:"), " This dashboard is an internal WHO analytical tool developed to support ",
-                  "the exploratory review and interpretation of surveillance data. Its outputs, including ",
-                  "statistical signals and projected estimates, are preliminary and require validation. They do ",
-                  "not constitute official WHO epidemiological assessments, alerts, or recommendations and do not ",
-                  "replace established Public Health Intelligence (PHI) processes, expert epidemiological review, ",
-                  "verification by national authorities, or formal WHO information products. The underlying case ",
-                  "data is not publicly redistributed through this dashboard -- see the ", strong("References"),
-                  " tab.")
-              )
-            )
-          )
-        ),
-
-        tabPanel(
-          "Alerts",
-          div(
-            style = "padding-top: 16px; padding-bottom: 28px;",
-            sidebarLayout(
-              sidebarPanel(
-                width = 3,
-                selectInput("asof_week_alerts_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
-                if (somalia_has_compliance) {
-                  tagList(
-                    radioButtons("case_type_alerts_som", "Case counts to evaluate",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported"),
-                    tags$p(
-                      style = "font-size: 12px; color: #555;",
-                      strong("Projected total cases"), "estimates total cases by dividing the number of reported ",
-                      "cases by the compliance percentage. See the ", strong("Home"), " tab for full details."
-                    )
-                  )
-                },
-                tags$hr(),
-                uiOutput("alerts_nr_control_som"),
-                tags$p(
-                  style = "font-size: 12px; color: #555;",
-                  "When exploring National data, inconsistent non-reporting in some regions results in inconsistent ",
-                  "data comparison between total case counts. Removing these regions entirely enables like-to-like ",
-                  "comparison between weeks. See the ", strong("Home"), " tab for full details."
-                )
-              ),
-              mainPanel(width = 9, uiOutput("alerts_output_som"))
-            )
-          )
-        ),
-
-        tabPanel(
-          "Data visualisation",
-          div(
-            style = "padding: 14px 24px;",
-            div(
-              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
-              div(style = "flex: 1 1 0;", selectInput("disease_som", "Disease", choices = disease_choices_som, selected = disease_choices_som[1], width = "100%")),
-              div(style = "flex: 1 1 0;", selectInput("asof_week_viz_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM, width = "100%"))
-            ),
-            div(
-              class = "info-disclosure",
-              div(
-                style = "font-size: 12.5px; color: #555;",
-                p(style = "margin-bottom: 6px;", strong("Calculations:")),
-                if (somalia_has_compliance) {
-                  p(style = "margin-bottom: 6px;",
-                    strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
-                    "cases by the compliance percentage.")
-                },
-                p(style = "margin-bottom: 6px;",
-                  strong("Handling non-reported provinces:"), " choose whether a region that is non-reported for ",
-                  "some visualised weeks just contributes 0 for those weeks, or is also excluded from every other ",
-                  "week to enable a like-to-like comparison."),
-                p(style = "margin-bottom: 6px;",
-                  strong("SD"), " shows how many standard deviations a week's case count is from its expected ",
-                  "baseline, using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 ",
-                  "weeks dropped)."),
-                p(style = "margin-bottom: 0;", "See the ", strong("Home"), " tab for full details.")
-              )
-            ),
-            # Flex row: same bottom-border alignment as Pakistan's trend + map row.
-            fluidRow(
-              style = "display:flex; flex-wrap:wrap;",
-              column(
-                width = 6,
-                div(
-                  class = "viz-panel",
-                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                  h4("Weekly case trend", style = "margin-top:0; margin-bottom:8px; font-size:17px;"),
-                  # State, then (optionally) a region within it -- the region
-                  # list is refreshed from the chosen state on the server.
-                  div(
-                    style = "display:flex; gap:16px;",
-                    div(style = "flex: 1 1 0;", selectInput("location_som", "State", choices = location_choices_som, selected = "National", width = "100%")),
-                    div(style = "flex: 1 1 0;", selectInput("region_som", "Region", choices = c("All regions", region_choices_som), selected = "All regions", width = "100%"))
-                  ),
-                  uiOutput("trend_subtitle_som"),
-                  plotlyOutput("trend_plot_som", height = "420px"),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
-                    uiOutput("year_selector_som"),
-                    if (somalia_has_compliance) {
-                      radioButtons("case_type_som", "Case counts to show",
-                                   choices = c("Reported cases only" = "reported",
-                                               "Projected total cases" = "projected",
-                                               "Both" = "both"),
-                                   selected = "reported", inline = TRUE)
-                    },
-                    uiOutput("trend_nr_control_som")
-                  )
-                )
-              ),
-              column(
-                width = 6,
-                # ---- Static ggplot version of this map (region_map_som) --
-                # commented out in favour of the interactive leaflet version
-                # below. Left intact (not deleted) so it can be swapped back
-                # in later if needed; its server-side output
-                # (output$region_map_som) and inputs (case_type_map_som) are
-                # untouched. ----
-                # div(
-                #   class = "viz-panel",
-                #   style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                #   h4("Deviation from expected baseline (SD), by state", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                #   uiOutput("map_subtitle_som"),
-                #   plotOutput("region_map_som", height = "420px"),
-                #   div(
-                #     class = "viz-panel-controls",
-                #     style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
-                #     if (somalia_has_compliance) {
-                #       radioButtons("case_type_map_som", "Case counts to colour the map by",
-                #                    choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                #                    selected = "reported", inline = TRUE)
-                #     }
-                #   )
-                # ),
-                div(
-                  class = "viz-panel",
-                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
-                  h4("Deviation from expected baseline (SD), by region: interactive map", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                  uiOutput("map_subtitle_leaflet_som"),
-                  leafletOutput("region_map_leaflet_som", height = "540px"),
-                  map_disclaimer_ui(show_disputed_key = FALSE),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
-                    sd_gradient_legend_ui(show_no_data = TRUE),
-                    if (somalia_has_compliance) {
-                      radioButtons("case_type_map_leaflet_som", "Case counts to colour the map by",
-                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                   selected = "reported", inline = TRUE)
-                    },
-                    uiOutput("region_map_boundary_note_som")
-                  )
-                )
-              )
-            ),
-            fluidRow(
-              column(
-                width = 12,
-                div(
-                  class = "viz-panel",
-                  style = "background-color:#FFFFFF; border:1px solid #E0E4E8; border-radius:8px; padding:16px 18px 12px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.06); margin-top:16px;",
-                  h4("State contribution to total cases", style = "margin-top:0; margin-bottom:2px; font-size:17px;"),
-                  uiOutput("stack_subtitle_som"),
-                  plotlyOutput("region_stack_plot_som", height = "380px"),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
-                    if (somalia_has_compliance) {
-                      radioButtons("case_type_stack_som", "Case counts to show",
-                                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                   selected = "reported", inline = TRUE)
-                    },
-                    uiOutput("stack_nr_control_som")
-                  )
-                )
-              )
-            )
-          )
-        ),
-
-        tabPanel(
-          "Weekly summary table",
-          div(
-            style = "padding-top: 16px;",
-            sidebarLayout(
-              sidebarPanel(
-                width = 3,
-                selectInput("location_tbl_som", "Location", choices = location_choices_som, selected = "National"),
-                selectInput("asof_week_tbl_som", "As of week", choices = WEEK_CHOICES_SOM, selected = LATEST_WEEK_CHOICE_SOM),
-                numericInput("n_weeks_tbl_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
-                if (somalia_has_compliance) {
-                  tagList(
-                    radioButtons("case_type_tbl_som", "Case counts to display",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported"),
-                    tags$p(
-                      style = "font-size: 12px; color: #555;",
-                      strong("Projected total cases"), " estimates total cases by dividing the number of reported ",
-                      "cases by the compliance percentage."
-                    )
-                  )
-                },
-                conditionalPanel(
-                  condition = "input.location_tbl_som == 'National'",
-                  tags$p(
-                    style = "font-size: 12px; color: #555;",
-                    "When exploring national data, this can be addressed using the ",
-                    strong("handling non-reported provinces"), " settings. See the ", strong("Home"), " tab for full details."
-                  )
-                ),
-                tags$hr(),
-                uiOutput("tbl_nr_control_som"),
-                conditionalPanel(
-                  condition = "input.location_tbl_som == 'National'",
-                  tags$p(
-                    style = "font-size: 12px; color: #555;",
-                    "When exploring National data, inconsistent non-reporting in some regions results in ",
-                    "inconsistent data comparison between total case counts. Removing these regions entirely ",
-                    "enables like-to-like comparison between weeks. See the ", strong("Home"), " tab for full details."
-                  )
-                ),
-                tags$hr(),
-                div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
-                sd_gradient_legend_ui(show_no_data = FALSE),
-                tags$p(
-                  style = "font-size: 12px; color: #555; margin-top: 8px;",
-                  "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
-                )
-              ),
-              mainPanel(
-                width = 9,
-                p(style = "font-size: 13px; color:#555;",
-                  icon("triangle-exclamation"), " Looking for a scan across ", strong("all"), " regions and diseases at once? ",
-                  "See the ", strong("Alerts"), " tab."),
-                DTOutput("weekly_table_som")
-              )
-            )
-          )
-        ),
-
-        tabPanel(
-          "District-level data",
-          div(
-            style = "padding: 14px 24px;",
-            div(
-              style = "background-color:#F4F5F6; border:1px solid #DDE1E4; border-radius:6px; padding:8px 18px; margin-bottom:10px; display:flex; gap:24px; align-items:flex-end;",
-              div(style = "flex: 1 1 0;",
-                  selectInput("disease_district_tbl_som", "Disease", choices = district_disease_choices_som,
-                              selected = district_disease_choices_som[1], width = "100%")),
-              div(style = "flex: 1 1 0;",
-                  selectInput("asof_week_district_tbl_som", "As of week", choices = WEEK_CHOICES_SOM,
-                              selected = LATEST_WEEK_CHOICE_SOM, width = "100%")),
-              if (somalia_has_compliance) {
-                div(style = "flex: 1 1 0;",
-                    radioButtons("case_type_district_tbl_som", "Case counts to display",
-                                 choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
-                                 selected = "reported", inline = TRUE))
-              }
-            ),
-
-            # ---- Weekly case trend (left) + map (right) -----------------------
-            # Mirrors Pakistan's own district tab exactly: a State + District
-            # selector row on the trend panel (State plain, District cascading
-            # off it), and no state selector anywhere else -- the map always
-            # shows every state/district at once, and the table below lists
-            # every state with its districts nested underneath, expandable.
-            fluidRow(
-              style = "display:flex; flex-wrap:wrap;",
-              column(
-                width = 6,
-                div(
-                  class = "viz-panel",
-                  h4("Weekly case trend"),
-                  uiOutput("district_trend_subtitle_som"),
-                  div(
-                    style = "display:flex; gap:16px; margin-bottom:10px;",
-                    div(style = "flex:1;",
-                        selectInput("district_curve_state_som", "State",
-                                    choices = provinces_with_district_data_som,
-                                    selected = provinces_with_district_data_som[1], width = "100%")),
-                    div(style = "flex:1;", uiOutput("district_curve_district_ui_som"))
-                  ),
-                  plotlyOutput("district_trend_plot_som", height = "360px"),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "min-height: 60px;",
-                    uiOutput("district_year_selector_som")
-                  )
-                )
-              ),
-              column(
-                width = 6,
-                div(
-                  class = "viz-panel",
-                  h4("District map"),
-                  uiOutput("district_map_subtitle_som"),
-                  leafletOutput("district_map_som", height = "360px"),
-                  map_disclaimer_ui(show_disputed_key = FALSE),
-                  div(
-                    class = "viz-panel-controls",
-                    style = "min-height: 60px;",
-                    sd_gradient_legend_ui(show_no_data = TRUE),
-                    tags$p(
-                      style = "font-size: 12px; color: #555; margin: 8px 0 0 0;",
-                      "SD shows how many standard deviations a week's case count is from its expected baseline, ",
-                      "using a CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). ",
-                      "See the ", strong("Home"), " tab for full details."
-                    ),
-                    uiOutput("district_map_boundary_note_som")
-                  )
-                )
-              )
-            ),
-
-            div(
-              class = "viz-panel",
-              style = "margin-top:16px;",
-              fluidRow(
-                column(
-                  width = 3,
-                  numericInput("n_weeks_district_som", "Number of recent weeks to show", value = 8, min = 4, max = 20, step = 1),
-                  tags$hr(),
-                  div(style = "font-weight:600; color:var(--who-navy); font-size:13px; margin-bottom:8px;", "Cell shading"),
-                  sd_gradient_legend_ui(show_no_data = FALSE),
-                  tags$p(
-                    style = "font-size: 12px; color: #555; margin-top: 8px;",
-                    "Standard deviations are based on the CUSUM aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped). See the ", strong("Home"), " tab for details."
-                  ),
-                  tags$p(
-                    style = "font-size: 12px; color: #555; margin-top: 8px;",
-                    strong(style = "color:inherit;", "NR"), " means the district submitted no report at all that ",
-                    "week. A blank cell means the district reported, but left this specific disease's count blank."
-                  )
-                ),
-                column(
-                  width = 9,
-                  p(
-                    style = "font-size: 13px; color:#555;",
-                    icon("circle-info"), " Click the arrow on a state row to expand district-level case counts within it."
-                  ),
-                  DTOutput("district_table_som")
-                )
-              )
-            )
-          )
-        ),
-
-        tabPanel(
-          "References",
-          div(
-            class = "page-tint-bg",
-            div(
-              style = "max-width: 1000px; margin: 0; padding-left: 24px;",
-              div(
-                style = "padding-top: 18px;",
-                h4("Primary data source"),
-                p("Weekly IDSR case counts for Somalia."),
-                h4("District-level admin boundaries", style = "margin-top: 20px;"),
-                p("The outlines used on Somalia's maps for the district-level data tab come from the ",
-                  "UN OCHA Common Operational Datasets (COD) for Somalia administrative boundaries:"),
-                tags$a(href = "https://data.humdata.org/dataset/cod-ab-som#data-and-resources", target = "_blank",
-                       "https://data.humdata.org/dataset/cod-ab-som#data-and-resources"),
-                h4("Alert detection methodology", style = "margin-top: 20px;"),
-                p("The Alerts tab and the SD-based shading on the weekly summary table use the same modified ",
-                  "CUSUM/C2 aberration detection method as the Pakistan dashboard (rolling 9-week baseline, most ",
-                  "recent 2 weeks dropped as a guard band). See the ", strong("Home"), " tab for a full explanation ",
-                  "of how it's calculated."),
-                h4("Contact", style = "margin-top: 20px;"),
-                p("For questions about this dashboard or its data pipeline, contact mandersonloake@gmail.com.")
-              )
-            )
-          )
-        )
-      )
-      }  # close somalia_data_available else-branch
+      # Password-gated: the page's content is only built and sent to the browser
+      # once the right password has been entered (see output$somalia_gated).
+      uiOutput("somalia_gated")
     )  # close tabPanel("Somalia")
   ),
 
@@ -3170,6 +3187,51 @@ server <- function(input, output, session) {
     updateSelectInput(session, "country_select", selected = input$who_nav)
   }, ignoreInit = TRUE)
 
+  # ---------------- Somalia password gate ----------------------------------
+  # Per browser session: a fresh page load asks for the password again. The
+  # Somalia page itself (somalia_page_ui) is only rendered once unlocked, so a
+  # locked session never receives any of its markup, inputs or outputs.
+  somalia_authed        <- reactiveVal(FALSE)
+  somalia_login_fails   <- reactiveVal(0L)
+  somalia_login_message <- reactiveVal(NULL)
+
+  output$somalia_gated <- renderUI({
+    if (somalia_authed()) return(somalia_page_ui)
+    div(
+      style = "max-width:420px; margin:70px auto; padding:28px 30px; background:#FFFFFF; border:1px solid #DDE1E4; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.06);",
+      h4("Somalia IDSR dashboard", style = "margin-top:0; color:#00205C;"),
+      p(style = "color:#555; font-size:13.5px;", "This page is restricted. Enter the password to continue."),
+      passwordInput("som_pw", NULL, width = "100%", placeholder = "Password"),
+      actionButton("som_login_btn", "Unlock", class = "btn-primary", style = "background-color:#00205C; border-color:#00205C;"),
+      uiOutput("som_login_msg"),
+      # Pressing Enter in the box submits too.
+      tags$script(HTML("$(document).off('keyup.somlogin').on('keyup.somlogin', '#som_pw', function(e) { if (e.key === 'Enter') { $('#som_login_btn').click(); } });"))
+    )
+  })
+
+  output$som_login_msg <- renderUI({
+    msg <- somalia_login_message()
+    if (is.null(msg)) return(NULL)
+    p(style = "color:#B0121A; font-size:13px; margin:12px 0 0 0;", msg)
+  })
+
+  observeEvent(input$som_login_btn, {
+    if (somalia_authed()) return()
+    if (somalia_login_fails() >= SOMALIA_LOGIN_MAX_ATTEMPTS) {
+      somalia_login_message("Too many incorrect attempts. Reload the page to try again.")
+      return()
+    }
+    if (check_page_password(input$som_pw, SOMALIA_PAGE_PW_SALT, SOMALIA_PAGE_PW_HASH)) {
+      somalia_login_message(NULL)
+      somalia_authed(TRUE)
+    } else {
+      somalia_login_fails(somalia_login_fails() + 1L)
+      somalia_login_message(if (somalia_login_fails() >= SOMALIA_LOGIN_MAX_ATTEMPTS)
+        "Too many incorrect attempts. Reload the page to try again." else "Incorrect password.")
+      updateTextInput(session, "som_pw", value = "")
+    }
+  })
+
   # ---------------- Country sub-tab strip (Home / Alerts / ...) -----------
   # Renders the who-subnav row's right-hand tab links for whichever
   # country is currently active, bolding/underlining whichever one is
@@ -3180,6 +3242,8 @@ server <- function(input, output, session) {
   # underlying input$pak_subtab/input$som_subtab values, and everything
   # that already depends on them, are completely unchanged.
   output$country_subtabs_ui <- renderUI({
+    # Nothing to navigate while the Somalia page is still locked.
+    if (identical(input$who_nav, "Somalia") && !somalia_authed()) return(NULL)
     if (identical(input$who_nav, "Somalia")) {
       tabset_id <- "som_subtab"
       active    <- if (is.null(input$som_subtab)) "Home" else input$som_subtab

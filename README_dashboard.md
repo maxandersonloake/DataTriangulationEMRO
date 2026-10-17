@@ -94,6 +94,10 @@ their docs: https://docs.posit.co/connect-cloud/how-to/r/renv.html).
 4. Connect Cloud will read your `renv.lock` to install the right package
    versions automatically.
 
+### Somalia page password
+
+The Somalia page sits behind a password prompt. The Somalia content is only built and sent to the browser after the password is entered (per browser session; five wrong tries lock that session until the page is reloaded). The repo is public, so the password itself is not stored anywhere -- `app.R` holds only a random salt and a slow bcrypt-pbkdf hash (`SOMALIA_PAGE_PW_SALT` / `SOMALIA_PAGE_PW_HASH`). To change the password, run `source("encryption_utils.R"); make_page_password_hash("new password")` and paste the two printed lines over those constants.
+
 ## 4. Design decisions / assumptions made while building this
 
 - **District-level data tab, overhauled**: Disease / As of week / Case

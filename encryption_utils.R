@@ -71,3 +71,39 @@ decrypt_object_from_file <- function(path, passphrase) {
     unserialize(dec)
   }, error = function(e) NULL)
 }
+
+
+# ================================================================
+# Page-password helpers (the Somalia tab's login gate in app.R).
+# ----------------------------------------------------------------
+# The repo is public, so the password itself is never written down anywhere:
+# app.R only holds a random salt and the slow bcrypt-pbkdf hash of
+# (password, salt). To change the password, run in R from the project root:
+#
+#   source("encryption_utils.R"); make_page_password_hash("new password here")
+#
+# and paste the two printed values over SOMALIA_PAGE_PW_SALT /
+# SOMALIA_PAGE_PW_HASH near the top of app.R.
+# ================================================================
+.PAGE_PW_ROUNDS <- 64L   # ~0.25 s per check: negligible for a person, costly to brute-force
+
+.hex_to_raw <- function(h) as.raw(strtoi(substring(h, seq(1, nchar(h), 2), seq(2, nchar(h), 2)), 16L))
+
+.page_password_hash <- function(password, salt_hex) {
+  paste(as.character(openssl::bcrypt_pbkdf(charToRaw(enc2utf8(password)),
+                                           .hex_to_raw(salt_hex),
+                                           rounds = .PAGE_PW_ROUNDS, size = 32L)),
+        collapse = "")
+}
+
+make_page_password_hash <- function(password) {
+  salt_hex <- paste(as.character(openssl::rand_bytes(16)), collapse = "")
+  cat('SOMALIA_PAGE_PW_SALT <- "', salt_hex, '"\n', sep = "")
+  cat('SOMALIA_PAGE_PW_HASH <- "', .page_password_hash(password, salt_hex), '"\n', sep = "")
+  invisible(NULL)
+}
+
+check_page_password <- function(password, salt_hex, hash_hex) {
+  is.character(password) && length(password) == 1 && nzchar(password) &&
+    identical(.page_password_hash(password, salt_hex), tolower(hash_hex))
+}
