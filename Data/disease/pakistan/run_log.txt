@@ -1,17 +1,11 @@
-PAK IDSR data pipeline run -- 2026-10-28 11:11:55 UTC
+PAK IDSR data pipeline run -- 2026-10-29 11:24:39 UTC
 Mode: province-level + district-level
 
-New weeks processed: 1
+New weeks processed: 0
 Changed weeks reprocessed: 0
 
-=== WARNINGS (7) -- review recommended ===
+=== WARNINGS (1) -- review recommended ===
 (fuzzy name matches, unresolved diseases/regions, header/row parsing notes, etc.)
 
-[MESSAGE] 1 new week(s) and 0 changed week(s) to (re-)extract.
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[MESSAGE] Fuzzy matched "AD (Non- Cholera)" -> "ad (non-cholera)" (canonical: "AD (Non-Cholera)", distance: 1)
-[WARNING] District table "Table 3: District wise distribution of most frequently reported suspected cases during Week 41, Balochistan.": 3 district name(s) unmatched, kept as-is: Bashore; DBS; Tump
-[WARNING] District table "Table 3: District wise distribution of most frequently reported suspected cases during Week 41, Balochistan.": printed "Total" for Animal / Dog Bite is 87 but summing this table's own known (non-NR) district rows gives 71 -- neither can be trusted, so both were recorded as Missing rather than kept.
-[WARNING] District compliance table "Table 6: Compliance of IDSR reporting districts Week 41, Pakistan.": 3 district(s) with no resolvable region, kept with Region = NA: Dera Bugti South; Bashore; Tump
+[MESSAGE] No new or changed bulletins — dataset is already up to date.
 
