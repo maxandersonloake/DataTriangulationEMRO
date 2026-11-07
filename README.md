@@ -34,6 +34,7 @@ Case counts are mostly suspected rather than laboratory-confirmed cases, and are
 
 * **Alerts and SD shading** use a modified CDC EARS-style CUSUM/C2 aberration detection method. For each disease and location, the 9 weeks before the week being assessed are used as a baseline, the 2 most recent of those are dropped as a guard band, and the mean and standard deviation of the remaining 7 weeks set the alert thresholds (mean + 2, 3 and 4 SD). At least 10 calendar weeks of history are needed, at least 3 baseline weeks must have data, and a minimum SD of 1 is applied to flat baselines. See the Home and References tabs for the full description and papers.
 * **Projected total cases** = reported cases ÷ (compliance % ÷ 100). Left blank where compliance is 0% or missing. Somalia currently has no compliance data, so it reports case counts only.
+* **Cases per 100,000 population (Pakistan).** The weekly case trend and the regional contribution chart on the Data visualisation tab, and the Alerts tab, can be switched from total cases to cases per 100,000 population using the "Show cases as" option. On the Alerts tab the alert method is applied to the rates themselves; the minimum SD for a flat baseline is scaled to the equivalent of 1 case, so alert levels are the same in both views while populations are constant. Rates divide the reported (or projected) cases by the population of the province (for the national trend, the sum of the provinces included) from `Data/population/pakistan/PAK_Admin1_Population.csv`. In the regional contribution chart each province is divided by its own population. For now these are rough population estimates held constant over time, with the plan of moving to yearly WorldPop estimates.
 * **Non-reported provinces/regions.** A region that did not report in a week is treated as missing, not zero. When looking at national totals, a non-reporting province can either contribute only in the weeks it reported (default) or be removed from every week for a like-for-like comparison.
 * **Somalia regions.** The maps use the 18 official regions. The workbook reports at district level, so each region's weekly cases are the sum of its districts. A few workbook regions that have no boundary of their own are merged into their parent region (Marodi Jeh and Sahil into Woqooyi Galbeed, Ayn into Togdheer, Karkaar and Ras-Asayr into Bari, South Mudug into Mudug), and the dashboard lists whichever of these apply under the map. The trend plot can be filtered by state, then region, or by region across all states.
 * **Boundaries.** The Data visualisation maps use EMRO boundaries, with the EMRO disputed areas drawn as dashed lines (also on Pakistan's district map) and the WHO map disclaimer shown under every map. The district-level maps use the UN OCHA Common Operational Datasets (COD) for [Pakistan](https://data.humdata.org/dataset/cod-ab-pak) and [Somalia](https://data.humdata.org/dataset/cod-ab-som).
@@ -71,6 +72,9 @@ DataTriangulationEMRO/
     │   │   └── failed_reports.txt, run_log.txt    Pipeline logs
     │   └── somalia/
     │       └── SOM_IDSR_Data.enc                  Somalia case counts (encrypted)
+    ├── population/
+    │   └── pakistan/
+    │       └── PAK_Admin1_Population.csv         Admin-1 population by year (rough constant estimates for now)
     └── boundaries/
         ├── emro/
         │   ├── *.shp                              Raw EMRO shapefiles (input to emro_prepare_boundaries.R)
@@ -120,6 +124,10 @@ INCLUDE_DISTRICT=false Rscript scripts/pakistan_run_pipeline.R   # province leve
 ```
 
 The email settings are stored as repository secrets (`MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_TO`). New R packages needed by the extraction script must also be added to `Imports:` in `DESCRIPTION`.
+
+### Pakistan population (manual)
+
+`Data/population/pakistan/PAK_Admin1_Population.csv` has one row per year and admin-1 unit (`Year`, `Province`, `Admin1_Name`, `Population`, `Source`), where `Province` uses the same names as the case data (Punjab, Sindh, KP, Balochistan, AJK, ICT, GB). The current figures are rough estimates repeated for each year. To use yearly estimates (e.g. WorldPop), replace the `Population` values by year, or add rows for new years. If a year has no rows, the dashboard uses the closest earlier year in the file.
 
 ### Somalia data (manual)
 

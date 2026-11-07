@@ -46,6 +46,7 @@ source("encryption_utils.R")
 # The repo is public, so only a salted slow hash is stored here, never the
 # password itself. To change it: source("encryption_utils.R") and run
 # make_page_password_hash("new password"), then paste its two lines over these.
+
 SOMALIA_PAGE_PW_SALT <- "429e60872a0131abd96906f16287113d"
 SOMALIA_PAGE_PW_HASH <- "0dfe79052cd103ced020e0e0beb98847f9ea7f80e6969657a4f693d2baa5a2c7"
 SOMALIA_LOGIN_MAX_ATTEMPTS <- 5   # wrong tries allowed per browser session
@@ -108,6 +109,7 @@ who_magenta <- "#A6228C"
 
 DATA_PATH       <- "Data/disease/pakistan/PAK_IDSR_Data.csv"
 COMPLIANCE_PATH <- "Data/disease/pakistan/PAK_IDSR_Compliance.csv"
+POPULATION_PATH <- "Data/population/pakistan/PAK_Admin1_Population.csv"
 
 # ---- Alert detection method ------------------------------------
 # Modified CDC EARS-style CUSUM/C2 aberration detection method (Hutwagner
@@ -271,6 +273,72 @@ compliance_data <- read_csv(COMPLIANCE_PATH, show_col_types = FALSE) %>%
 
 disease_choices  <- sort(unique(raw_data$Disease))
 location_choices <- c("National", sort(unique(raw_data$Province[raw_data$Province != "Total"])))
+
+# ---- Population (for the "cases per 100,000 population" option) -------------
+# Admin-1 population by year, one row per Year x Province (Province uses the
+# same names as the case data: Punjab, Sindh, KP, Balochistan, AJK, ICT, GB).
+# For now these are rough estimates held constant over time; the plan is to
+# move to yearly WorldPop estimates, which can be dropped into this file in
+# the same format without any change to the app. A year with no row uses the
+# nearest earlier year in the file (or the earliest, if there is none), so a
+# new reporting year still works before its population row has been added.
+population_pak <- read_csv(POPULATION_PATH, show_col_types = FALSE) %>%
+  mutate(Year = as.integer(Year), Province = as.character(Province), Population = as.numeric(Population)) %>%
+  select(Year, Province, Population)
+
+local({
+  missing_pop <- setdiff(location_choices[location_choices != "National"], population_pak$Province)
+  if (length(missing_pop) > 0) {
+    warning("No population in ", POPULATION_PATH, " for: ", paste(missing_pop, collapse = ", "),
+            " -- cases per 100,000 will be blank for these.", call. = FALSE)
+  }
+})
+
+# Population of `location` ("National" = sum of all provinces except any in
+# `excluded`) for each element of `years`.
+get_population <- function(location, years, excluded = character(0), pop = population_pak) {
+  avail <- sort(unique(pop$Year))
+  uy <- unique(years)
+  per_year <- vapply(uy, function(yr) {
+    use <- if (any(avail <= yr)) max(avail[avail <= yr]) else min(avail)
+    p <- pop[pop$Year == use, ]
+    p <- if (identical(location, "National")) p[!p$Province %in% excluded, ] else p[p$Province == location, ]
+    if (nrow(p) == 0) NA_real_ else sum(p$Population)
+  }, numeric(1))
+  unname(per_year[match(years, uy)])
+}
+
+# Converts the Reported/Projected columns of a get_trend_data()-shaped frame
+# (needs a Year column) from case counts to cases per 100,000 population.
+to_rate_per_100k <- function(d, location, excluded = character(0)) {
+  pop_vec <- get_population(location, d$Year, excluded)
+  d %>% mutate(Reported = Reported / pop_vec * 1e5, Projected = Projected / pop_vec * 1e5)
+}
+
+# Same conversion for a get_all_disease_series()-shaped frame (all diseases,
+# one location), used by the Alerts tab. Also adds MinSD: the rate equivalent
+# of CUSUM_MIN_BASELINE_SD cases (i.e. 1 case expressed per 100,000), so that
+# the floor applied to a flat baseline is the same size in both views. (Using
+# 1 per 100,000 itself would be hundreds of cases for the larger provinces.)
+series_to_per_100k <- function(series, location, excluded = character(0)) {
+  pop_vec <- get_population(location, series$Year, excluded)
+  series %>% mutate(
+    Reported  = Reported / pop_vec * 1e5,
+    Projected = Projected / pop_vec * 1e5,
+    MinSD     = CUSUM_MIN_BASELINE_SD / pop_vec * 1e5
+  )
+}
+
+# Formats a rate for tooltips: 2 decimals, but 2 significant figures for very
+# small values so they don't all read as 0.00.
+fmt_rate <- function(x) {
+  vapply(x, function(v) {
+    if (is.na(v)) return("NA")
+    if (v == 0) return("0")
+    if (abs(v) < 0.01) return(formatC(v, format = "g", digits = 2))
+    formatC(v, format = "f", digits = 2, big.mark = ",")
+  }, character(1))
+}
 
 # ---- Load district-level data ----------------------------------------------
 # District-level breakdowns of the same weekly bulletins, used by the
@@ -1107,7 +1175,12 @@ compute_cusum_stats_at <- function(series, year, week, value_col = "Reported", c
   # Floor a flat (or near-flat) baseline's SD rather than treating it as
   # unusable -- see CUSUM_MIN_BASELINE_SD's comment above for the
   # literature basis.
-  sigma <- max(sigma_raw, CUSUM_MIN_BASELINE_SD)
+  # A series converted to a rate (see series_to_per_100k()) carries its own
+  # MinSD column -- the rate equivalent of CUSUM_MIN_BASELINE_SD cases -- so
+  # the floor means the same thing whether the series is in cases or in
+  # cases per 100,000.
+  min_sd <- if ("MinSD" %in% names(cur_row) && !is.na(cur_row$MinSD[1])) cur_row$MinSD[1] else CUSUM_MIN_BASELINE_SD
+  sigma <- max(sigma_raw, min_sd)
 
   T1 <- mu + 2 * sigma
   T2 <- mu + 3 * sigma
@@ -1159,9 +1232,14 @@ cusum_z_at <- function(series, year, week, value_col = "Reported", calendar = we
 #               province non-reporting" control (National-only) is wired
 #               in, without touching how any individual location's own
 #               alerts are evaluated.
+#   `per100k`  -- when TRUE, each location's series is converted to cases per
+#               100,000 population (see series_to_per_100k()) before the
+#               alert method is applied. `excluded` lists provinces removed
+#               from the National series (by the control above), so National
+#               is divided by the population of the provinces it contains.
 compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, national_series_override = NULL,
                                  data = raw_data, compliance = compliance_data, locations = location_choices,
-                                 calendar = week_calendar) {
+                                 calendar = week_calendar, per100k = FALSE, excluded = character(0)) {
   alert_rows      <- list()
   missing_rows    <- list()
   reported_counts <- list()
@@ -1173,6 +1251,7 @@ compute_alerts_long <- function(value_col = "Reported", sel_year, sel_week, nati
       get_all_disease_series(loc, data = data, compliance = compliance)
     }
     if (nrow(series) == 0) next
+    if (per100k) series <- series_to_per_100k(series, loc, if (identical(loc, "National")) excluded else character(0))
     diseases_here <- sort(unique(series$Disease))
     reported_count <- 0L
 
@@ -1300,7 +1379,7 @@ sd_continuous_font_colour <- function(z) {
 #
 # One series' week-by-week <td> cells (values + SD shading), shared by
 # every row of build_alert_region_table() below.
-build_alert_week_cells <- function(series, weeks_cal, value_col, calendar = week_calendar) {
+build_alert_week_cells <- function(series, weeks_cal, value_col, calendar = week_calendar, per100k = FALSE) {
   cell_at <- function(i) {
     r <- series[series$Year == weeks_cal$Year[i] & series$Week == weeks_cal$Week[i], ]
     list(
@@ -1319,6 +1398,8 @@ build_alert_week_cells <- function(series, weeks_cal, value_col, calendar = week
       tags$span(style = "color:#888; font-style:italic;", "NR")
     } else if (is.na(c_$value)) {
       ""
+    } else if (per100k) {
+      fmt_rate(c_$value)
     } else {
       format(round(c_$value), big.mark = ",")
     }
@@ -1345,7 +1426,8 @@ build_alert_week_cells <- function(series, weeks_cal, value_col, calendar = week
 # than living in a separate row/element.
 build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12,
                                       data = raw_data, compliance = compliance_data,
-                                      calendar = week_calendar, goto_input_id = "alerts_goto") {
+                                      calendar = week_calendar, goto_input_id = "alerts_goto",
+                                      per100k = FALSE) {
   weeks_cal <- weeks_up_to(asof, n_weeks, calendar = calendar)
 
   header_cells <- c(
@@ -1357,7 +1439,8 @@ build_alert_region_table <- function(dis, locs, asof, value_col, n_weeks = 12,
 
   body_rows <- lapply(locs, function(loc) {
     series <- get_all_disease_series(loc, data = data, compliance = compliance) %>% filter(Disease == dis)
-    value_cells <- build_alert_week_cells(series, weeks_cal, value_col, calendar = calendar)
+    if (per100k) series <- series_to_per_100k(series, loc)
+    value_cells <- build_alert_week_cells(series, weeks_cal, value_col, calendar = calendar, per100k = per100k)
     goto_payload <- jsonlite::toJSON(list(disease = dis, location = loc), auto_unbox = TRUE)
 
     label_cell <- tags$td(
@@ -2670,6 +2753,12 @@ ui <- tagList(
               "can be addressed using the ", strong("handling non-reported provinces"), " settings. See the ",
               strong("Home"), " tab for full details."
             ),
+            radioButtons(
+              "value_basis_alerts", "Show cases as",
+              choices = c("Total cases" = "total", "Cases per 100,000 population" = "per100k"),
+              selected = "total"
+            ),
+            uiOutput("pop_note_alerts"),
             tags$hr(),
             uiOutput("alerts_nr_control"),
             tags$p(
@@ -2740,6 +2829,12 @@ ui <- tagList(
               div(
                 class = "viz-panel-controls",
                 style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4; min-height:150px;",
+                radioButtons(
+                  "value_basis_trend", "Show cases as",
+                  choices = c("Total cases" = "total", "Cases per 100,000 population" = "per100k"),
+                  selected = "total", inline = TRUE
+                ),
+                uiOutput("pop_note_trend"),
                 uiOutput("year_selector"),
                 radioButtons(
                   "case_type", "Case counts to show",
@@ -2807,6 +2902,12 @@ ui <- tagList(
               div(
                 class = "viz-panel-controls",
                 style = "margin-top:10px; padding-top:10px; border-top:1px solid #EEF1F4;",
+                radioButtons(
+                  "value_basis_stack", "Show cases as",
+                  choices = c("Total cases" = "total", "Cases per 100,000 population" = "per100k"),
+                  selected = "total", inline = TRUE
+                ),
+                uiOutput("pop_note_stack"),
                 radioButtons(
                   "case_type_stack", "Case counts to show",
                   choices = c("Reported cases" = "reported", "Projected total cases" = "projected"),
@@ -3311,14 +3412,47 @@ server <- function(input, output, session) {
     nonreporting_control_ui("nr_mode_trend", "nr_excl_trend", info$provinces, info$summary)
   })
 
+  # Provinces removed from the national trend by "handling non-reported
+  # provinces" (none unless Location is National and "remove" is chosen).
+  trend_excluded <- reactive({
+    if (identical(input$location, "National") && identical(input$nr_mode_trend, "remove")) {
+      info <- trend_nr_info()
+      resolve_nonreporting_excluded(input$nr_mode_trend, input$nr_excl_trend, info$provinces)
+    } else {
+      character(0)
+    }
+  })
+
   trend_data_all <- reactive({
     req(input$disease, input$location)
     if (identical(input$location, "National") && identical(input$nr_mode_trend, "remove")) {
-      info     <- trend_nr_info()
-      excluded <- resolve_nonreporting_excluded(input$nr_mode_trend, input$nr_excl_trend, info$provinces)
-      get_national_trend_excluding(input$disease, excluded)
+      get_national_trend_excluding(input$disease, trend_excluded())
     } else {
       get_trend_data(input$disease, input$location)
+    }
+  })
+
+  # Note shown under the "Show cases as" option when cases per 100,000 is
+  # selected (Data visualisation tab, Pakistan).
+  pop_note_ui <- function(extra = NULL) {
+    div(
+      style = "font-size:12.5px; color:#555; margin:-4px 0 10px 0;",
+      strong("Note: "),
+      "cases per 100,000 population are calculated from rough population estimates that are ",
+      "constant over time for now. These will be replaced with yearly WorldPop estimates.",
+      extra
+    )
+  }
+  output$pop_note_trend <- renderUI({
+    if (identical(input$value_basis_trend, "per100k")) pop_note_ui()
+  })
+  output$pop_note_stack <- renderUI({
+    if (identical(input$value_basis_stack, "per100k")) {
+      pop_note_ui(paste0(
+        " Each region is shown per 100,000 of its own population, so the heights of the segments ",
+        "are comparable between regions; the total height of each bar is the sum of the regional ",
+        "rates, not the national rate."
+      ))
     }
   })
 
@@ -3339,8 +3473,14 @@ server <- function(input, output, session) {
   # body, unchanged, so it can be shared with output$trend_plot_som below.
   # `d` is already filtered to the selected years/as-of-week by the caller;
   # `year_color_map` defaults to Pakistan's YEAR_COLOR_MAP.
-  render_trend_plotly <- function(d, case_type, year_color_map = YEAR_COLOR_MAP) {
+  render_trend_plotly <- function(d, case_type, year_color_map = YEAR_COLOR_MAP, per100k = FALSE) {
     cols <- year_color_map[as.character(sort(unique(d$Year)))]
+
+    # per100k = TRUE: Reported/Projected in `d` are already cases per 100,000
+    # population, so only the tooltip and axis wording changes.
+    unit_lbl <- if (per100k) " per 100,000" else ""
+    fmt_val  <- if (per100k) fmt_rate else comma
+    fmt_proj_ytd <- if (per100k) fmt_rate else function(x) comma(round(x))
 
     # Year-to-date cumulative totals, computed per calendar year so the
     # hover box can show "how many cases so far this year" alongside the
@@ -3363,8 +3503,8 @@ server <- function(input, output, session) {
       long_list[["Reported"]] <- d %>%
         transmute(Year, Week, Series = "Reported", Cases = Reported, Compliance,
                   tooltip = paste0("Year: ", Year, "<br>Week: ", Week,
-                                    "<br>Reported cases: ", comma(Reported),
-                                    "<br>YTD reported cases: ", comma(Reported_YTD),
+                                    "<br>Reported cases", unit_lbl, ": ", fmt_val(Reported),
+                                    "<br>YTD reported cases", unit_lbl, ": ", fmt_val(Reported_YTD),
                                     ifelse(is.na(Compliance), "",
                                            paste0("<br>Reporting compliance: ", Compliance, "%"))))
     }
@@ -3372,8 +3512,8 @@ server <- function(input, output, session) {
       long_list[["Projected"]] <- d %>%
         transmute(Year, Week, Series = "Projected", Cases = Projected, Compliance,
                   tooltip = paste0("Year: ", Year, "<br>Week: ", Week,
-                                    "<br>Projected total cases: ", comma(Projected),
-                                    "<br>YTD projected cases: ", comma(round(Projected_YTD)),
+                                    "<br>Projected total cases", unit_lbl, ": ", fmt_val(Projected),
+                                    "<br>YTD projected cases", unit_lbl, ": ", fmt_proj_ytd(Projected_YTD),
                                     ifelse(is.na(Compliance), "",
                                            paste0("<br>Reporting compliance: ", Compliance, "%"))))
     }
@@ -3408,7 +3548,7 @@ server <- function(input, output, session) {
       scale_linetype_manual(values = c(Reported = "solid", Projected = "dashed"), name = "Series") +
       scale_x_continuous(breaks = week_breaks, labels = week_labels) +
       scale_y_continuous(labels = comma) +
-      labs(x = "Week", y = "Number of cases") +
+      labs(x = "Week", y = if (per100k) "Cases per 100,000 population" else "Number of cases") +
       theme_minimal(base_size = 14) +
       theme(
         text = element_text(family = "sans"),
@@ -3460,7 +3600,10 @@ server <- function(input, output, session) {
     d <- d %>% filter(Year < asof$year | (Year == asof$year & Week <= asof$week))
     validate(need(nrow(d) > 0, "No years selected."))
 
-    render_trend_plotly(d, input$case_type %||% "reported")
+    per100k <- identical(input$value_basis_trend, "per100k")
+    if (per100k) d <- to_rate_per_100k(d, input$location, trend_excluded())
+
+    render_trend_plotly(d, input$case_type %||% "reported", per100k = per100k)
   })
 
   # ---------------- Map ----------------
@@ -3703,11 +3846,17 @@ server <- function(input, output, session) {
   # Extracted from what used to be output$region_stack_plot's own
   # renderPlotly body, unchanged from `dstack <- dstack %>% mutate(...)`
   # onward, so it can be shared with output$region_stack_plot_som below.
-  render_stack_plotly <- function(dstack, asof, region_color_map = REGION_COLOR_MAP) {
+  # per100k = TRUE: `Cases` is already cases per 100,000 population (see
+  # output$region_stack_plot); only the tooltip and axis wording changes.
+  render_stack_plotly <- function(dstack, asof, region_color_map = REGION_COLOR_MAP, per100k = FALSE) {
     validate(need(nrow(dstack) > 0, "No data available for this selection."))
 
     dstack <- dstack %>% mutate(
-      tooltip = paste0("Region: ", Region, "<br>Week: ", Week, "<br>Cases: ", comma(round(Cases)))
+      tooltip = if (per100k) {
+        paste0("Region: ", Region, "<br>Week: ", Week, "<br>Cases per 100,000: ", fmt_rate(Cases))
+      } else {
+        paste0("Region: ", Region, "<br>Week: ", Week, "<br>Cases: ", comma(round(Cases)))
+      }
     )
 
     # Ticks for every week, but only every 5th week gets a text label
@@ -3720,7 +3869,7 @@ server <- function(input, output, session) {
       scale_fill_manual(values = region_color_map, name = "Region") +
       scale_x_continuous(breaks = week_breaks, labels = week_labels) +
       scale_y_continuous(labels = comma) +
-      labs(x = "Week", y = "Number of cases") +
+      labs(x = "Week", y = if (per100k) "Cases per 100,000 population" else "Number of cases") +
       theme_minimal(base_size = 14) +
       theme(
         text = element_text(family = "sans"),
@@ -3755,13 +3904,18 @@ server <- function(input, output, session) {
       locs <- setdiff(locs, excluded)
     }
 
+    per100k <- identical(input$value_basis_stack, "per100k")
+
     region_list <- lapply(locs, function(loc) {
       s <- get_trend_data(input$disease, loc) %>% filter(Year == asof$year, Week <= asof$week)
       if (nrow(s) == 0) return(NULL)
-      s %>% transmute(Region = loc, Week, Cases = .data[[metric]])
+      s <- s %>% transmute(Region = loc, Year, Week, Cases = .data[[metric]])
+      # Each region is divided by its OWN population.
+      if (per100k) s$Cases <- s$Cases / get_population(loc, s$Year) * 1e5
+      s %>% select(Region, Week, Cases)
     })
     dstack <- bind_rows(region_list) %>% filter(!is.na(Cases))
-    render_stack_plotly(dstack, asof)
+    render_stack_plotly(dstack, asof, per100k = per100k)
   })
 
   # ---------------- Weekly table tab ----------------
@@ -4395,6 +4549,7 @@ server <- function(input, output, session) {
     asof <- parse_asof(input$asof_week_alerts)
 
     national_override <- NULL
+    excluded <- character(0)
     if (identical(input$nr_mode_alerts, "remove")) {
       info     <- alerts_nr_info()
       excluded <- resolve_nonreporting_excluded(input$nr_mode_alerts, input$nr_excl_alerts, info$provinces)
@@ -4402,7 +4557,12 @@ server <- function(input, output, session) {
     }
 
     compute_alerts_long(value_col = value_col, sel_year = asof$year, sel_week = asof$week,
-                         national_series_override = national_override)
+                         national_series_override = national_override,
+                         per100k = identical(input$value_basis_alerts, "per100k"), excluded = excluded)
+  })
+
+  output$pop_note_alerts <- renderUI({
+    if (identical(input$value_basis_alerts, "per100k")) pop_note_ui()
   })
 
   # Fired by an alert's "Data Visualisation" link (see output$alerts_output
@@ -4432,15 +4592,17 @@ server <- function(input, output, session) {
   # observeEvent(input$alerts_goto...) handlers).
   render_alerts_ui <- function(result, value_col, asof, locations = location_choices,
                                 data = raw_data, compliance = compliance_data,
-                                calendar = week_calendar, goto_input_id = "alerts_goto") {
+                                calendar = week_calendar, goto_input_id = "alerts_goto",
+                                per100k = FALSE) {
     alerts  <- result$alerts
     missing <- result$missing
     label     <- if (identical(value_col, "Projected")) "projected total" else "reported"
+    case_unit <- if (per100k) " cases per 100,000 population" else " cases"
 
     note <- p(
       style = "font-size: 12.5px; color:#555;",
       "Alerts use a CUSUM aberration detection method (rolling 9-week baseline, most recent ",
-      "2 weeks dropped) applied to each location's own ", strong(label), " cases, as of ",
+      "2 weeks dropped) applied to each location's own ", strong(label), case_unit, ", as of ",
       strong(paste0("Week ", asof$week, ", ", asof$year)), "."
     )
 
@@ -4499,7 +4661,7 @@ server <- function(input, output, session) {
             style = "display:none; margin:8px 0 4px 20px;",
             build_alert_region_table(dis, as.character(d$Location), asof, value_col, n_weeks = 12,
                                       data = data, compliance = compliance, calendar = calendar,
-                                      goto_input_id = goto_input_id)
+                                      goto_input_id = goto_input_id, per100k = per100k)
           )
         )
       })
@@ -4547,7 +4709,7 @@ server <- function(input, output, session) {
     result <- alerts_reactive()
     value_col <- if (identical(input$case_type_alerts, "projected")) "Projected" else "Reported"
     asof <- parse_asof(input$asof_week_alerts)
-    render_alerts_ui(result, value_col, asof)
+    render_alerts_ui(result, value_col, asof, per100k = identical(input$value_basis_alerts, "per100k"))
   })
 
   # ==========================================================================

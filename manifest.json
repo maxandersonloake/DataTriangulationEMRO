@@ -4171,7 +4171,7 @@
   },
   "files": {
     ".github/workflows/update_data.yml": {
-      "checksum": "a4504d32f0ed4e99907c0180c8d0da59"
+      "checksum": "626351f6c11409217202364e550580a7"
     },
     ".Rbuildignore": {
       "checksum": "17f847933966777e7397760158d3dc05"
@@ -4180,10 +4180,10 @@
       "checksum": "d9ce77c2052fa09d9ffe4fd4151ec6aa"
     },
     ".Rprofile": {
-      "checksum": "6c1104422dcef9a914c1f1af5db84444"
+      "checksum": "0e86566d49c08bd8a613eca0efdee669"
     },
     "app.R": {
-      "checksum": "406cb0403751d3a028c9e8fd6cf24f35"
+      "checksum": "2e3876232d9904a4b9b1082662046a6a"
     },
     "Data/boundaries/emro/emro_disputed_areas.geojson": {
       "checksum": "a6106bc7017201f1f3465d8347c3a2d6"
@@ -4225,25 +4225,28 @@
       "checksum": "23865f4a81d46d6c00c3303ad0e924c4"
     },
     "Data/disease/pakistan/failed_reports.txt": {
-      "checksum": "121281e3229c937a89e896f6cd2b132f"
+      "checksum": "cfe1559b02a6df7bc5ed8aea03348324"
     },
     "Data/disease/pakistan/PAK_IDSR_Compliance.csv": {
-      "checksum": "56d33b8eba2f5ef36ca81a808fe69d65"
+      "checksum": "e47d5ddd9712d3c64480f7b802956833"
     },
     "Data/disease/pakistan/PAK_IDSR_Compliance_District.csv": {
-      "checksum": "915f7b61eb1fa92d91024b94bf210c2c"
+      "checksum": "50935491f63a47432d7898ec6c320c7f"
     },
     "Data/disease/pakistan/PAK_IDSR_Data.csv": {
-      "checksum": "9a7eaf718eff8602022e205674803603"
+      "checksum": "404d40ee87065bf84ae5e034b5e63541"
     },
     "Data/disease/pakistan/PAK_IDSR_Data_District.csv": {
-      "checksum": "944000e11f5db130f04ce1621c70b2f2"
+      "checksum": "a4fd234ca156eb387ae015d50c2abc81"
     },
     "Data/disease/pakistan/run_log.txt": {
-      "checksum": "78cc47d2d418d76f2c7a590ba85d4f04"
+      "checksum": "89c97b379545ae4eaec00d75a1421e7e"
     },
     "Data/disease/somalia/SOM_IDSR_Data.enc": {
       "checksum": "652ee2cd666aa91650dcaf7d8ba4406f"
+    },
+    "Data/population/pakistan/PAK_Admin1_Population.csv": {
+      "checksum": "485dbff93220241ef3e2baef9f6a3d33"
     },
     "DESCRIPTION": {
       "checksum": "3da34d46a95442991b6c7e837be611a6"
@@ -4252,10 +4255,7 @@
       "checksum": "1635ba79aa2ed6b3a0f2055cdeec755d"
     },
     "README.md": {
-      "checksum": "1295cde62162eb02cd01492e5313b2c8"
-    },
-    "README_dashboard.md": {
-      "checksum": "7802e1bf856ca862adb299aee4c52e0e"
+      "checksum": "b69bde6f3a5dbb01a4f1e3cb7aefdbcd"
     },
     "renv.lock": {
       "checksum": "69e6d90ca1c6a72b613de882c0af57f8"
