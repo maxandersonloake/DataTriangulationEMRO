@@ -282,9 +282,20 @@ location_choices <- c("National", sort(unique(raw_data$Province[raw_data$Provinc
 # the same format without any change to the app. A year with no row uses the
 # nearest earlier year in the file (or the earliest, if there is none), so a
 # new reporting year still works before its population row has been added.
-population_pak <- read_csv(POPULATION_PATH, show_col_types = FALSE) %>%
+population_raw <- read_csv(POPULATION_PATH, show_col_types = FALSE)
+population_pak <- population_raw %>%
   mutate(Year = as.integer(Year), Province = as.character(Province), Population = as.numeric(Population)) %>%
   select(Year, Province, Population)
+
+# Shown on the References tab: the years the file covers and, if the file has a
+# Retrieved column (written by scripts/worldpop_fetch_population.R), when the
+# estimates were downloaded from the WorldPop API.
+population_retrieved <- if ("Retrieved" %in% names(population_raw)) suppressWarnings(max(as.Date(population_raw$Retrieved), na.rm = TRUE)) else NA
+if (!is.na(population_retrieved) && !is.finite(as.numeric(population_retrieved))) population_retrieved <- NA
+population_retrieved_text <- if (is.na(population_retrieved)) "" else paste0(" Retrieved ", format(population_retrieved, "%d %B %Y"), ".")
+population_coverage_text <- paste0(
+  "The estimates currently loaded cover ", min(population_pak$Year), "\u2013", max(population_pak$Year), "."
+)
 
 local({
   missing_pop <- setdiff(location_choices[location_choices != "National"], population_pak$Province)
@@ -313,6 +324,25 @@ get_population <- function(location, years, excluded = character(0), pop = popul
 to_rate_per_100k <- function(d, location, excluded = character(0)) {
   pop_vec <- get_population(location, d$Year, excluded)
   d %>% mutate(Reported = Reported / pop_vec * 1e5, Projected = Projected / pop_vec * 1e5)
+}
+
+# Warning shown when cases per 100,000 is selected and any year being shown has
+# no population estimate in the file (get_population() then falls back to the
+# closest available year). NULL when every year has its own estimate.
+population_out_of_date_ui <- function(years, pop = population_pak) {
+  avail   <- sort(unique(pop$Year))
+  missing <- setdiff(sort(unique(years[!is.na(years)])), avail)
+  if (length(missing) == 0) return(NULL)
+  used <- unique(vapply(missing, function(y) if (any(avail <= y)) max(avail[avail <= y]) else min(avail), numeric(1)))
+  div(
+    style = "font-size:12.5px; color:#5A3A00; background-color:#FEF7E8; border-left:4px solid #F4A81D; padding:8px 10px; margin:0 0 10px 0;",
+    icon("triangle-exclamation", style = "color:#B0121A;"),
+    strong(" Population estimates out of date: "),
+    paste0("there is no WorldPop population estimate for ", paste(missing, collapse = ", "),
+           ", so the closest available year (", paste(used, collapse = ", "),
+           ") is used instead. Rates for ", if (length(missing) == 1) "that year" else "those years",
+           " may be slightly off until the population data is updated.")
+  )
 }
 
 # Same conversion for a get_all_disease_series()-shaped frame (all diseases,
@@ -2667,6 +2697,10 @@ ui <- tagList(
             tags$li(strong("Geographic coverage: "), "Regions match those published in the NIH IDSR bulletins: ",
                     "Balochistan, Gilgit-Baltistan, Islamabad Capital Territory (ICT), Khyber Pakhtunkhwa (KP), ",
                     "Punjab, Sindh, and Azad Jammu & Kashmir (AJK)."),
+            tags$li(strong("Population estimates: "), "Cases per 100,000 population use yearly population estimates ",
+                    "from WorldPop for each province. These are modelled from 100 m gridded data rather than taken ",
+                    "from a census, so they can differ from official population figures. See the ",
+                    strong("References"), " tab for how WorldPop's regions match the dashboard's."),
             tags$li(strong("Missing data: "), "Some regions don't report for a given week -- these are marked NR ",
                     "(Not Reported) in the bulletin. Some diseases are also missing from the table entirely for a ",
                     "given week. In this case, we also treat the values as missing rather than assuming they are zero.")
@@ -2694,6 +2728,15 @@ ui <- tagList(
             "in by hand. In that mode, projected total cases are recalculated as the sum of each remaining ",
             "province's own projection (its own reported cases divided by its own compliance), rather than using a ",
             "single national compliance percentage."),
+          h5("Cases per 100,000 population", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
+          p("The Alerts and Data visualisation tabs can show cases per 100,000 population instead of total cases, ",
+            "which allows regions of different sizes to be compared. A region's rate is its cases \u00f7 its population ",
+            "\u00d7 100,000, using the WorldPop estimate for the year of the week being shown (or the closest ",
+            "earlier year, if there is no estimate for that year). National rates divide by the combined population of ",
+            "the provinces included, so provinces removed using the ", strong("handling non-reported provinces"),
+            " settings are also removed from the population. In the regional contribution chart each province is ",
+            "divided by its own population, so the height of each stacked bar is the sum of the provincial rates, ",
+            "not the national rate. Alerts are calculated on the rates themselves, using the method below."),
           h5("CUSUM alert detection method", style = "margin-bottom: 4px; margin-top: 14px; color: var(--who-navy); font-size: 14px;"),
           p("Alerts are generated using a CUSUM/C2 aberration detection method. For a given disease and location, ",
             "we look at the 9 weeks immediately before the week being evaluated. We drop the 2 most recent of ",
@@ -3157,6 +3200,39 @@ ui <- tagList(
                   "UN OCHA Common Operational Datasets (COD) for Pakistan administrative boundaries:"),
                 tags$a(href = "https://data.humdata.org/dataset/cod-ab-pak", target = "_blank",
                        "https://data.humdata.org/dataset/cod-ab-pak"),
+                h4("Population estimates (WorldPop API)", style = "margin-top: 20px;"),
+                p("Cases per 100,000 population are calculated using yearly population estimates retrieved from the ",
+                  strong("WorldPop API (v3)"), ". The estimates are modelled from 100 m gridded data, so they are ",
+                  "estimates rather than census counts. ", population_coverage_text),
+                p(style = "margin-bottom: 4px;", strong("Reference:")),
+                p(style = "margin-left: 14px;",
+                  "WorldPop, University of Southampton. WorldPop API (v3): population estimates from 100 m gridded ",
+                  "data, 2015\u20132030. ",
+                  tags$a(href = "https://api.worldpop.org/v3/", target = "_blank", "https://api.worldpop.org/v3/"),
+                  ".", population_retrieved_text),
+                p("More about WorldPop: ",
+                  tags$a(href = "https://www.worldpop.org", target = "_blank", "https://www.worldpop.org")),
+                p(style = "margin-top: 10px;",
+                  "WorldPop reports Pakistan's first-level regions under older names, and lists FATA separately. ",
+                  "These are matched to the dashboard's regions as follows:"),
+                local({
+                  th <- "text-align:left; padding:5px 24px 5px 0; border-bottom:2px solid #C9DEF3; color:var(--who-navy);"
+                  td <- "padding:5px 24px 5px 0; border-bottom:1px solid #E5E8EB;"
+                  rows <- list(
+                    c("Punjab", "Punjab"),
+                    c("Sindh", "Sind"),
+                    c("Khyber Pakhtunkhwa (KP)", "K.P. + F.A.T.A. (FATA is now part of KP)"),
+                    c("Balochistan", "Baluchistan"),
+                    c("Azad Jammu & Kashmir (AJK)", "Azad Kashmir"),
+                    c("Islamabad Capital Territory (ICT)", "F.C.T. (Federal Capital Territory)"),
+                    c("Gilgit-Baltistan (GB)", "Northern Areas")
+                  )
+                  tags$table(
+                    style = "border-collapse:collapse; font-size:13px; margin:4px 0 4px 0;",
+                    tags$thead(tags$tr(tags$th(style = th, "Dashboard region"), tags$th(style = th, "WorldPop region"))),
+                    tags$tbody(lapply(rows, function(r) tags$tr(tags$td(style = td, r[1]), tags$td(style = td, r[2]))))
+                  )
+                }),
                 h4("Alert detection methodology", style = "margin-top: 20px;"),
                 p("The Alerts tab and the SD-based shading on the map and weekly summary table use a modified CUSUM/C2 ",
                   "aberration detection method (rolling 9-week baseline, most recent 2 weeks dropped as a guard band). ",
@@ -3434,25 +3510,35 @@ server <- function(input, output, session) {
 
   # Note shown under the "Show cases as" option when cases per 100,000 is
   # selected (Data visualisation tab, Pakistan).
-  pop_note_ui <- function(extra = NULL) {
-    div(
-      style = "font-size:12.5px; color:#555; margin:-4px 0 10px 0;",
-      strong("Note: "),
-      "cases per 100,000 population are calculated from rough population estimates that are ",
-      "constant over time for now. These will be replaced with yearly WorldPop estimates.",
-      extra
+  # `years`: the years of data being shown, used to warn if any of them has no
+  # population estimate yet (see population_out_of_date_ui()).
+  pop_note_ui <- function(extra = NULL, years = NULL) {
+    tagList(
+      div(
+        style = "font-size:12.5px; color:#555; margin:-4px 0 10px 0;",
+        strong("Note: "),
+        "cases per 100,000 population are calculated from WorldPop's yearly population estimates ",
+        "for each province (see the ", strong("References"), " tab).",
+        extra
+      ),
+      population_out_of_date_ui(years)
     )
   }
   output$pop_note_trend <- renderUI({
-    if (identical(input$value_basis_trend, "per100k")) pop_note_ui()
+    if (identical(input$value_basis_trend, "per100k")) {
+      pop_note_ui(years = tryCatch(unique(trend_window()$Year), error = function(e) NULL))
+    }
   })
   output$pop_note_stack <- renderUI({
     if (identical(input$value_basis_stack, "per100k")) {
-      pop_note_ui(paste0(
-        " Each region is shown per 100,000 of its own population, so the heights of the segments ",
-        "are comparable between regions; the total height of each bar is the sum of the regional ",
-        "rates, not the national rate."
-      ))
+      pop_note_ui(
+        paste0(
+          " Each region is shown per 100,000 of its own population, so the heights of the segments ",
+          "are comparable between regions; the total height of each bar is the sum of the regional ",
+          "rates, not the national rate."
+        ),
+        years = if (!is.null(input$asof_week_viz)) parse_asof(input$asof_week_viz)$year else NULL
+      )
     }
   })
 
@@ -4562,7 +4648,13 @@ server <- function(input, output, session) {
   })
 
   output$pop_note_alerts <- renderUI({
-    if (identical(input$value_basis_alerts, "per100k")) pop_note_ui()
+    if (identical(input$value_basis_alerts, "per100k")) {
+      yrs <- if (!is.null(input$asof_week_alerts)) {
+        asof <- parse_asof(input$asof_week_alerts)
+        unique(c(asof$year, weeks_up_to(asof, 12)$Year))
+      } else NULL
+      pop_note_ui(years = yrs)
+    }
   })
 
   # Fired by an alert's "Data Visualisation" link (see output$alerts_output

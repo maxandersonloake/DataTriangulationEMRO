@@ -1,29 +1,29 @@
-Year,Province,Admin1_Name,Population,Source
-2023,Punjab,Punjab,127688922,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,Sindh,Sindh,55696147,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,KP,Khyber Pakhtunkhwa,40856097,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,Balochistan,Balochistan,14894402,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,AJK,Azad Jammu & Kashmir,4045366,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,ICT,Islamabad Capital Territory,2363863,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2023,GB,Gilgit-Baltistan,1249000,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,Punjab,Punjab,127688922,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,Sindh,Sindh,55696147,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,KP,Khyber Pakhtunkhwa,40856097,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,Balochistan,Balochistan,14894402,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,AJK,Azad Jammu & Kashmir,4045366,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,ICT,Islamabad Capital Territory,2363863,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2024,GB,Gilgit-Baltistan,1249000,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,Punjab,Punjab,127688922,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,Sindh,Sindh,55696147,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,KP,Khyber Pakhtunkhwa,40856097,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,Balochistan,Balochistan,14894402,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,AJK,Azad Jammu & Kashmir,4045366,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,ICT,Islamabad Capital Territory,2363863,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2025,GB,Gilgit-Baltistan,1249000,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,Punjab,Punjab,127688922,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,Sindh,Sindh,55696147,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,KP,Khyber Pakhtunkhwa,40856097,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,Balochistan,Balochistan,14894402,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,AJK,Azad Jammu & Kashmir,4045366,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,ICT,Islamabad Capital Territory,2363863,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
-2026,GB,Gilgit-Baltistan,1249000,"Rough estimate, held constant over time (placeholder until yearly WorldPop estimates are used)"
+Year,Province,Admin1_Name,WorldPop_Name,Population,Source
+2023,AJK,Azad Jammu & Kashmir,Azad Kashmir,4689526,WorldPop API v3
+2023,Balochistan,Balochistan,Baluchistan,13991680,WorldPop API v3
+2023,GB,Gilgit-Baltistan,Northern Areas,1061717,WorldPop API v3
+2023,ICT,Islamabad Capital Territory,F.C.T.,3479673,WorldPop API v3
+2023,KP,Khyber Pakhtunkhwa,F.A.T.A. + K.P.,40883812,WorldPop API v3
+2023,Punjab,Punjab,Punjab,126071873,WorldPop API v3
+2023,Sindh,Sindh,Sind,55493042,WorldPop API v3
+2024,AJK,Azad Jammu & Kashmir,Azad Kashmir,4759469,WorldPop API v3
+2024,Balochistan,Balochistan,Baluchistan,14199909,WorldPop API v3
+2024,GB,Gilgit-Baltistan,Northern Areas,1077562,WorldPop API v3
+2024,ICT,Islamabad Capital Territory,F.C.T.,3530945,WorldPop API v3
+2024,KP,Khyber Pakhtunkhwa,F.A.T.A. + K.P.,41493540,WorldPop API v3
+2024,Punjab,Punjab,Punjab,127951796,WorldPop API v3
+2024,Sindh,Sindh,Sind,56320445,WorldPop API v3
+2025,AJK,Azad Jammu & Kashmir,Azad Kashmir,4833259,WorldPop API v3
+2025,Balochistan,Balochistan,Baluchistan,14419752,WorldPop API v3
+2025,GB,Gilgit-Baltistan,Northern Areas,1094314,WorldPop API v3
+2025,ICT,Islamabad Capital Territory,F.C.T.,3584738,WorldPop API v3
+2025,KP,Khyber Pakhtunkhwa,F.A.T.A. + K.P.,42137361,WorldPop API v3
+2025,Punjab,Punjab,Punjab,129937084,WorldPop API v3
+2025,Sindh,Sindh,Sind,57194209,WorldPop API v3
+2026,AJK,Azad Jammu & Kashmir,Azad Kashmir,4910288,WorldPop API v3
+2026,Balochistan,Balochistan,Baluchistan,14649067,WorldPop API v3
+2026,GB,Gilgit-Baltistan,Northern Areas,1111777,WorldPop API v3
+2026,ICT,Islamabad Capital Territory,F.C.T.,3640758,WorldPop API v3
+2026,KP,Khyber Pakhtunkhwa,F.A.T.A. + K.P.,42808808,WorldPop API v3
+2026,Punjab,Punjab,Punjab,132007722,WorldPop API v3
+2026,Sindh,Sindh,Sind,58105517,WorldPop API v3
