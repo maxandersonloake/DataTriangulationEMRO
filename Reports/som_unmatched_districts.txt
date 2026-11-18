@@ -1,10 +1,15 @@
 Somalia District values with no fuzzy match (kept as their own raw spelling)
-Generated: 2026-09-20 16:21:35 AEST
-
-None -- every raw value in this run matched a known canonical spelling.
+Generated: 2026-11-18 19:34:29 AEDT
+Total unmatched district values: 1
 
 Note: an unmatched value is NOT dropped from the data -- it's kept
 under its own raw spelling, and its case counts still flow fully into
 every rollup that doesn't key on this specific column (an unmatched
 District's Cases still reach its State/national totals; only the
-District-level consolidation is affected).
+District-level consolidation is affected). Add a confirmed duplicate-
+spelling entry to the relevant lookup above once you've identified
+what a value below should really be.
+
+Rako  (4 rows)
+  Weeks: 2026-W41, 2026-W42, 2026-W43, 2026-W45
+
